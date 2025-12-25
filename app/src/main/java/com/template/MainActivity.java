@@ -1,14 +1,14 @@
 package com.template;
 
+import android.app.Activity;
 import android.os.Bundle;
+import android.view.ViewGroup;
 import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 
-import androidx.appcompat.app.AppCompatActivity;
-
-public class MainActivity extends AppCompatActivity {
+public class MainActivity extends Activity {
 
     private WebView webView;
 
@@ -16,27 +16,37 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        webView = new WebView(this);
-        setContentView(webView);
+        try {
+            webView = new WebView(this);
 
-        WebSettings settings = webView.getSettings();
-        settings.setJavaScriptEnabled(true);
-        settings.setDomStorageEnabled(true);
-        settings.setDatabaseEnabled(true);
-        settings.setAllowFileAccess(true);
-        settings.setAllowContentAccess(true);
-        settings.setLoadWithOverviewMode(true);
-        settings.setUseWideViewPort(true);
-        settings.setMediaPlaybackRequiresUserGesture(false);
+            webView.setLayoutParams(new ViewGroup.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT
+            ));
 
-        // 🔴 ANDROID 5+ MIXED CONTENT FIX
-        settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
+            setContentView(webView);
 
-        webView.setWebViewClient(new WebViewClient());
-        webView.setWebChromeClient(new WebChromeClient());
+            WebSettings settings = webView.getSettings();
+            settings.setJavaScriptEnabled(true);
+            settings.setDomStorageEnabled(true);
+            settings.setDatabaseEnabled(true);
+            settings.setAllowFileAccess(true);
+            settings.setAllowContentAccess(true);
+            settings.setLoadWithOverviewMode(true);
+            settings.setUseWideViewPort(true);
+            settings.setMediaPlaybackRequiresUserGesture(false);
+            settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
+            settings.setSafeBrowsingEnabled(false);
 
-        // 🔴 TEST İÇİN HTTPS KULLAN
-        webView.loadUrl("https://example.com");
+            webView.setWebViewClient(new WebViewClient());
+            webView.setWebChromeClient(new WebChromeClient());
+
+            webView.loadUrl("https://example.com");
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            finish();
+        }
     }
 
     @Override
@@ -51,7 +61,11 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onDestroy() {
         if (webView != null) {
+            webView.stopLoading();
+            webView.clearHistory();
+            webView.removeAllViews();
             webView.destroy();
+            webView = null;
         }
         super.onDestroy();
     }
