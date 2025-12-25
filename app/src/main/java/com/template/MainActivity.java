@@ -9,11 +9,13 @@ import androidx.appcompat.app.AppCompatActivity;
 
 public class MainActivity extends AppCompatActivity {
 
+    private WebView webView;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        WebView webView = new WebView(this);
+        webView = new WebView(this);
         setContentView(webView);
 
         WebSettings settings = webView.getSettings();
@@ -21,16 +23,16 @@ public class MainActivity extends AppCompatActivity {
         settings.setDomStorageEnabled(true);
         settings.setLoadWithOverviewMode(true);
         settings.setUseWideViewPort(true);
+        settings.setMediaPlaybackRequiresUserGesture(false);
 
         webView.setWebViewClient(new WebViewClient());
 
-        // 🔴 BURAYI PHP'DEN OTOMATİK DEĞİŞTİRECEKSİN
+        // 🔴 PHP PANELDEN DİNAMİK DEĞİŞTİRECEĞİN YER
         webView.loadUrl("https://example.com");
     }
 
     @Override
     public void onBackPressed() {
-        WebView webView = (WebView) findViewById(android.R.id.content);
         if (webView != null && webView.canGoBack()) {
             webView.goBack();
         } else {
