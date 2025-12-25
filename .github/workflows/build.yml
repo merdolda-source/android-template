@@ -2,11 +2,11 @@ name: Build APK
 
 on:
   push:
-    branches: [ "main" ]
+    branches:
+      - main
 
 permissions:
   contents: write
-  actions: write
 
 jobs:
   build:
@@ -21,16 +21,21 @@ jobs:
         with:
           distribution: temurin
           java-version: 17
+          cache: gradle
 
       - name: Grant execute permission for gradlew
-        run: chmod +x gradlew
+        run: chmod +x ./gradlew
 
-      # 🔴 EN KRİTİK SATIR (app modülü + detaylı log)
+      # 🔴 NET: app modülü build
       - name: Build Debug APK
         run: ./gradlew :app:assembleDebug --stacktrace --info
+
+      # 🔍 APK gerçekten oluştu mu diye kontrol (debug amaçlı)
+      - name: List APK outputs
+        run: ls -la app/build/outputs/apk/debug || true
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: apk
+          name: app-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
