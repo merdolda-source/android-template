@@ -5,22 +5,16 @@ import android.os.Bundle;
 import android.view.ViewGroup;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
-import android.webkit.WebViewClient;
 
-import org.json.JSONObject;
-
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
-import java.net.HttpURLConnection;
-import java.net.URL;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.database.DataSnapshot;
+import com.google.firebase.database.DatabaseError;
+import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.database.ValueEventListener;
 
 public class MainActivity extends Activity {
 
     private WebView webView;
-
-    // 🔴 PHP CONFIG URL (HER APP İÇİN DEĞİŞİR)
-    private static final String CONFIG_URL =
-            "https://SITE.com/appsystem/config_app1.json";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -36,54 +30,42 @@ public class MainActivity extends Activity {
         WebSettings s = webView.getSettings();
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
-        s.setDatabaseEnabled(true);
-        s.setAllowFileAccess(true);
-        s.setAllowContentAccess(true);
-        s.setUseWideViewPort(true);
-        s.setLoadWithOverviewMode(true);
         s.setMediaPlaybackRequiresUserGesture(false);
-
-        // ✅ ANDROID 5+ MIXED CONTENT
         s.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
 
-        webView.setWebViewClient(new WebViewClient());
+        // 🔥 Firebase anonim giriş (tek Firebase – herkes ayrı UID)
+        FirebaseAuth.getInstance()
+                .signInAnonymously()
+                .addOnSuccessListener(result -> {
 
-        loadConfigAndOpen();
-    }
+                    String uid = result.getUser().getUid();
 
-    private void loadConfigAndOpen() {
-        new Thread(() -> {
-            try {
-                URL url = new URL(CONFIG_URL);
-                HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-                conn.setConnectTimeout(5000);
-                conn.setReadTimeout(5000);
+                    FirebaseDatabase.getInstance()
+                            .getReference("users")
+                            .child(uid)
+                            .child("site_url")
+                            .addValueEventListener(new ValueEventListener() {
 
-                BufferedReader reader = new BufferedReader(
-                        new InputStreamReader(conn.getInputStream())
-                );
+                                @Override
+                                public void onDataChange(DataSnapshot snapshot) {
+                                    if (snapshot.exists()) {
+                                        String site = snapshot.getValue(String.class);
+                                        if (site != null && !site.isEmpty()) {
+                                            webView.loadUrl(site);
+                                        }
+                                    }
+                                }
 
-                StringBuilder sb = new StringBuilder();
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    sb.append(line);
-                }
-                reader.close();
-
-                JSONObject json = new JSONObject(sb.toString());
-                String site = json.getString("site_url");
-
-                runOnUiThread(() -> webView.loadUrl(site));
-
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-        }).start();
+                                @Override
+                                public void onCancelled(DatabaseError error) {
+                                }
+                            });
+                });
     }
 
     @Override
     public void onBackPressed() {
-        if (webView != null && webView.canGoBack()) {
+        if (webView.canGoBack()) {
             webView.goBack();
         } else {
             finish();
