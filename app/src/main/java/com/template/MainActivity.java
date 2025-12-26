@@ -1,82 +1,47 @@
 package com.template;
 
-import android.app.Activity;
 import android.os.Bundle;
-import android.view.ViewGroup;
-import android.webkit.WebSettings;
 import android.webkit.WebView;
+import android.webkit.WebSettings;
+import androidx.appcompat.app.AppCompatActivity;
 
-import com.google.firebase.auth.FirebaseAuth;
-import com.google.firebase.database.DataSnapshot;
-import com.google.firebase.database.DatabaseError;
-import com.google.firebase.database.FirebaseDatabase;
-import com.google.firebase.database.ValueEventListener;
+import com.google.firebase.database.*;
 
-public class MainActivity extends Activity {
-
-    private WebView webView;
+public class MainActivity extends AppCompatActivity {
 
     @Override
-    protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
+    protected void onCreate(Bundle b) {
+        super.onCreate(b);
 
-        webView = new WebView(this);
-        webView.setLayoutParams(new ViewGroup.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT
-        ));
-        setContentView(webView);
+        WebView web = new WebView(this);
+        setContentView(web);
 
-        WebSettings s = webView.getSettings();
+        WebSettings s = web.getSettings();
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
-        s.setMediaPlaybackRequiresUserGesture(false);
-        s.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
 
-        // 🔥 Firebase anonim giriş (tek Firebase – herkes ayrı UID)
-        FirebaseAuth.getInstance()
-                .signInAnonymously()
-                .addOnSuccessListener(result -> {
+        String pkg = getPackageName();
 
-                    String uid = result.getUser().getUid();
+        DatabaseReference ref =
+            FirebaseDatabase.getInstance()
+                .getReference("apps")
+                .child(pkg);
 
-                    FirebaseDatabase.getInstance()
-                            .getReference("users")
-                            .child(uid)
-                            .child("site_url")
-                            .addValueEventListener(new ValueEventListener() {
+        ref.addValueEventListener(new ValueEventListener() {
+            @Override
+            public void onDataChange(DataSnapshot snap) {
+                if (!snap.exists()) return;
 
-                                @Override
-                                public void onDataChange(DataSnapshot snapshot) {
-                                    if (snapshot.exists()) {
-                                        String site = snapshot.getValue(String.class);
-                                        if (site != null && !site.isEmpty()) {
-                                            webView.loadUrl(site);
-                                        }
-                                    }
-                                }
+                Boolean active = snap.child("active").getValue(Boolean.class);
+                String url = snap.child("url").getValue(String.class);
 
-                                @Override
-                                public void onCancelled(DatabaseError error) {
-                                }
-                            });
-                });
-    }
+                if (active != null && active && url != null) {
+                    web.loadUrl(url);
+                }
+            }
 
-    @Override
-    public void onBackPressed() {
-        if (webView.canGoBack()) {
-            webView.goBack();
-        } else {
-            finish();
-        }
-    }
-
-    @Override
-    protected void onDestroy() {
-        if (webView != null) {
-            webView.destroy();
-        }
-        super.onDestroy();
+            @Override
+            public void onCancelled(DatabaseError e) {}
+        });
     }
 }
