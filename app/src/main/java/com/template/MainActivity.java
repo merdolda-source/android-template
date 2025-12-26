@@ -1,17 +1,17 @@
 package com.template;
 
+import android.app.Activity;
 import android.os.Bundle;
 import android.webkit.WebView;
 import android.webkit.WebSettings;
-import androidx.appcompat.app.AppCompatActivity;
 
 import com.google.firebase.database.*;
 
-public class MainActivity extends AppCompatActivity {
+public class MainActivity extends Activity {
 
     @Override
-    protected void onCreate(Bundle b) {
-        super.onCreate(b);
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
 
         WebView web = new WebView(this);
         setContentView(web);
@@ -19,13 +19,14 @@ public class MainActivity extends AppCompatActivity {
         WebSettings s = web.getSettings();
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
+        s.setMediaPlaybackRequiresUserGesture(false);
 
         String pkg = getPackageName();
 
         DatabaseReference ref =
-            FirebaseDatabase.getInstance()
-                .getReference("apps")
-                .child(pkg);
+                FirebaseDatabase.getInstance()
+                        .getReference("apps")
+                        .child(pkg);
 
         ref.addValueEventListener(new ValueEventListener() {
             @Override
@@ -41,7 +42,7 @@ public class MainActivity extends AppCompatActivity {
             }
 
             @Override
-            public void onCancelled(DatabaseError e) {}
+            public void onCancelled(DatabaseError error) {}
         });
     }
 }
