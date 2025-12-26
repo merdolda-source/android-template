@@ -1,41 +1,43 @@
-name: Build APK
+plugins {
+    id("com.android.application")
+    id("com.google.gms.google-services")
+}
 
-on:
-  push:
-    branches:
-      - main
+android {
+    namespace = "com.template"
+    compileSdk = 34
 
-permissions:
-  contents: write
+    defaultConfig {
+        applicationId = "com.template"
+        minSdk = 21
+        targetSdk = 34
+        versionCode = 1
+        versionName = "1.0"
+    }
 
-jobs:
-  build:
-    runs-on: ubuntu-latest
+    buildTypes {
+        debug {
+            isDebuggable = true
+        }
+        release {
+            isMinifyEnabled = false
+            isShrinkResources = false
+        }
+    }
 
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+}
 
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: 17
-          cache: gradle
+dependencies {
 
-      - name: Grant execute permission for gradlew
-        run: chmod +x ./gradlew
+    // 🔥 WEBVIEW
+    implementation("androidx.webkit:webkit:1.9.0")
 
-      # 🔴 NET: app modülü build
-      - name: Build Debug APK
-        run: ./gradlew :app:assembleDebug --stacktrace --info
+    // 🔥 FIREBASE (TEK FIREBASE – TÜM KULLANICILAR)
+    implementation("com.google.firebase:firebase-auth:22.3.1")
+    implementation("com.google.firebase:firebase-database:20.3.1")
 
-      # 🔍 APK gerçekten oluştu mu diye kontrol (debug amaçlı)
-      - name: List APK outputs
-        run: ls -la app/build/outputs/apk/debug || true
-
-      - name: Upload APK artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: app-debug-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+}
