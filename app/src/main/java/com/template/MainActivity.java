@@ -27,7 +27,8 @@ public class MainActivity extends Activity {
         webView.setWebViewClient(new WebViewClient());
         webView.setWebChromeClient(new WebChromeClient());
 
-        webView.loadUrl("https://example.com");
+      webView.loadUrl("$url");
+
     }
 
     @Override
