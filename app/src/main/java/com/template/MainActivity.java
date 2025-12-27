@@ -15,44 +15,24 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        try {
-            webView = new WebView(this);
-            setContentView(webView);
+        webView = new WebView(this);
+        setContentView(webView);
 
-            WebSettings s = webView.getSettings();
-            s.setJavaScriptEnabled(true);
-            s.setDomStorageEnabled(true);
-            s.setDatabaseEnabled(true);
-            s.setAllowFileAccess(true);
-            s.setAllowContentAccess(true);
-            s.setMediaPlaybackRequiresUserGesture(false);
-            s.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
+        WebSettings s = webView.getSettings();
+        s.setJavaScriptEnabled(true);
+        s.setDomStorageEnabled(true);
+        s.setMediaPlaybackRequiresUserGesture(false);
+        s.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
 
-            webView.setWebViewClient(new WebViewClient());
-            webView.setWebChromeClient(new WebChromeClient());
+        webView.setWebViewClient(new WebViewClient());
+        webView.setWebChromeClient(new WebChromeClient());
 
-            // 🔥 PANELDEN GELEN URL
-            webView.loadUrl(BuildConfig.WEB_URL);
-
-        } catch (Exception e) {
-            e.printStackTrace(); // crash olmaz
-        }
+        webView.loadUrl("https://example.com");
     }
 
     @Override
     public void onBackPressed() {
-        if (webView != null && webView.canGoBack()) {
-            webView.goBack();
-        } else {
-            finish();
-        }
-    }
-
-    @Override
-    protected void onDestroy() {
-        if (webView != null) {
-            webView.destroy();
-        }
-        super.onDestroy();
+        if (webView.canGoBack()) webView.goBack();
+        else finish();
     }
 }
