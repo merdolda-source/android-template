@@ -14,17 +14,12 @@ android {
         versionCode 1
         versionName "1.0"
 
-        // 🔥 PANELDEN GELEN APP NAME
         resValue "string", "app_name", "TEMPLATE_APP"
     }
 
     buildTypes {
-        debug {
-            debuggable true
-        }
-        release {
-            minifyEnabled false
-        }
+        debug { debuggable true }
+        release { minifyEnabled false }
     }
 
     compileOptions {
