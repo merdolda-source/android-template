@@ -26,19 +26,16 @@ public class MainActivity extends Activity {
             s.setAllowFileAccess(true);
             s.setAllowContentAccess(true);
             s.setMediaPlaybackRequiresUserGesture(false);
-
-            // 🔴 ANDROID 5+ FIX
             s.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
 
             webView.setWebViewClient(new WebViewClient());
             webView.setWebChromeClient(new WebChromeClient());
 
-            // 🔴 TEST LINK (SONRA PHP'DEN GELİYOR)
-            webView.loadUrl("https://example.com");
+            // 🔥 PANELDEN GELEN URL
+            webView.loadUrl(BuildConfig.WEB_URL);
 
         } catch (Exception e) {
-            // ❗ Crash olursa uygulama KAPANMAZ
-            e.printStackTrace();
+            e.printStackTrace(); // crash olmaz
         }
     }
 
