@@ -2,47 +2,60 @@ package com.template;
 
 import android.app.Activity;
 import android.os.Bundle;
-import android.webkit.WebView;
+import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
-
-import com.google.firebase.database.*;
+import android.webkit.WebView;
+import android.webkit.WebViewClient;
 
 public class MainActivity extends Activity {
+
+    private WebView webView;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        WebView web = new WebView(this);
-        setContentView(web);
+        try {
+            webView = new WebView(this);
+            setContentView(webView);
 
-        WebSettings s = web.getSettings();
-        s.setJavaScriptEnabled(true);
-        s.setDomStorageEnabled(true);
-        s.setMediaPlaybackRequiresUserGesture(false);
+            WebSettings s = webView.getSettings();
+            s.setJavaScriptEnabled(true);
+            s.setDomStorageEnabled(true);
+            s.setDatabaseEnabled(true);
+            s.setAllowFileAccess(true);
+            s.setAllowContentAccess(true);
+            s.setMediaPlaybackRequiresUserGesture(false);
 
-        String pkg = getPackageName();
+            // 🔴 ANDROID 5+ FIX
+            s.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
 
-        DatabaseReference ref =
-                FirebaseDatabase.getInstance()
-                        .getReference("apps")
-                        .child(pkg);
+            webView.setWebViewClient(new WebViewClient());
+            webView.setWebChromeClient(new WebChromeClient());
 
-        ref.addValueEventListener(new ValueEventListener() {
-            @Override
-            public void onDataChange(DataSnapshot snap) {
-                if (!snap.exists()) return;
+            // 🔴 TEST LINK (SONRA PHP'DEN GELİYOR)
+            webView.loadUrl("https://example.com");
 
-                Boolean active = snap.child("active").getValue(Boolean.class);
-                String url = snap.child("url").getValue(String.class);
+        } catch (Exception e) {
+            // ❗ Crash olursa uygulama KAPANMAZ
+            e.printStackTrace();
+        }
+    }
 
-                if (active != null && active && url != null) {
-                    web.loadUrl(url);
-                }
-            }
+    @Override
+    public void onBackPressed() {
+        if (webView != null && webView.canGoBack()) {
+            webView.goBack();
+        } else {
+            finish();
+        }
+    }
 
-            @Override
-            public void onCancelled(DatabaseError error) {}
-        });
+    @Override
+    protected void onDestroy() {
+        if (webView != null) {
+            webView.destroy();
+        }
+        super.onDestroy();
     }
 }
