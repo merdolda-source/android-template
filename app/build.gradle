@@ -1,61 +1,40 @@
-package com.template;
+plugins {
+    id 'com.android.application'
+    id 'com.google.gms.google-services'
+}
 
-import android.app.Activity;
-import android.os.Bundle;
-import android.webkit.WebChromeClient;
-import android.webkit.WebSettings;
-import android.webkit.WebView;
-import android.webkit.WebViewClient;
+android {
+    namespace 'com.template'
+    compileSdk 34
 
-public class MainActivity extends Activity {
+    defaultConfig {
+        applicationId "com.template"
+        minSdk 21
+        targetSdk 34
+        versionCode 1
+        versionName "1.0"
 
-    private WebView webView;
+        // 🔥 PANELDEN GELEN APP NAME
+        resValue "string", "app_name", "TEMPLATE_APP"
+    }
 
-    @Override
-    protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-
-        try {
-            webView = new WebView(this);
-            setContentView(webView);
-
-            WebSettings s = webView.getSettings();
-            s.setJavaScriptEnabled(true);
-            s.setDomStorageEnabled(true);
-            s.setDatabaseEnabled(true);
-            s.setAllowFileAccess(true);
-            s.setAllowContentAccess(true);
-            s.setMediaPlaybackRequiresUserGesture(false);
-
-            // 🔴 ANDROID 5+ FIX
-            s.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
-
-            webView.setWebViewClient(new WebViewClient());
-            webView.setWebChromeClient(new WebChromeClient());
-
-            // 🔴 TEST LINK (SONRA PHP'DEN GELİYOR)
-            webView.loadUrl("https://example.com");
-
-        } catch (Exception e) {
-            // ❗ Crash olursa uygulama KAPANMAZ
-            e.printStackTrace();
+    buildTypes {
+        debug {
+            debuggable true
+        }
+        release {
+            minifyEnabled false
         }
     }
 
-    @Override
-    public void onBackPressed() {
-        if (webView != null && webView.canGoBack()) {
-            webView.goBack();
-        } else {
-            finish();
-        }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
     }
+}
 
-    @Override
-    protected void onDestroy() {
-        if (webView != null) {
-            webView.destroy();
-        }
-        super.onDestroy();
-    }
+dependencies {
+    implementation 'androidx.webkit:webkit:1.9.0'
+    implementation 'com.google.firebase:firebase-auth:22.3.1'
+    implementation 'com.google.firebase:firebase-database:20.3.1'
 }
