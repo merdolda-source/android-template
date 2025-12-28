@@ -3,6 +3,7 @@ plugins {
     id 'com.google.gms.google-services'
 }
 
+// 🔥 gradle.properties'ten oku
 def PACKAGE = project.findProperty("PACKAGE_NAME") ?: "com.template"
 def APPNAME = project.findProperty("APP_NAME") ?: "Template App"
 def APPURL  = project.findProperty("APP_URL") ?: "https://example.com"
@@ -14,6 +15,7 @@ android {
 
     defaultConfig {
         applicationId PACKAGE
+
         minSdk 21
         targetSdk 34
 
