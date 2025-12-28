@@ -1,4 +1,4 @@
-package com.template;
+package com.ornek.myapp;
 
 import android.app.Activity;
 import android.os.Bundle;
@@ -23,6 +23,7 @@ public class MainActivity extends Activity {
         webView.setWebViewClient(new WebViewClient());
         webView.setWebChromeClient(new WebChromeClient());
 
+        // 🔥 DOĞRU KULLANIM
         webView.loadUrl(getString(R.string.app_url));
     }
 
