@@ -10,12 +10,12 @@ def APPURL  = project.findProperty("APP_URL") ?: "https://example.com"
 android {
 
     namespace PACKAGE
-    compileSdk 33
+    compileSdk 34
 
     defaultConfig {
         applicationId PACKAGE
         minSdk 21
-        targetSdk 33
+        targetSdk 34
 
         versionCode 1
         versionName "1.0"
