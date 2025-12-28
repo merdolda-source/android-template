@@ -2,13 +2,11 @@ plugins {
     id 'com.android.application'
 }
 
-// gradle.properties'ten oku
 def PACKAGE = project.findProperty("PACKAGE_NAME") ?: "com.template"
 def APPNAME = project.findProperty("APP_NAME") ?: "Template App"
 def APPURL  = project.findProperty("APP_URL") ?: "https://example.com"
 
 android {
-
     namespace PACKAGE
     compileSdk 33
 
@@ -24,21 +22,10 @@ android {
         resValue "string", "app_url", APPURL
     }
 
-    buildTypes {
-        debug {
-            debuggable true
-        }
-        release {
-            minifyEnabled false
-        }
-    }
-
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
     }
 }
 
-dependencies {
-    // WebView native – ekstra kütüphane YOK
-}
+dependencies {}
