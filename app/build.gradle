@@ -2,12 +2,11 @@ plugins {
     id 'com.android.application'
 }
 
-def PACKAGE = project.findProperty("PACKAGE_NAME") ?: "com.template"
-def APPNAME = project.findProperty("APP_NAME") ?: "Template App"
-def APPURL  = project.findProperty("APP_URL") ?: "https://example.com"
+def PACKAGE = project.findProperty("PACKAGE_NAME")
+def APPNAME = project.findProperty("APP_NAME")
+def APPURL  = project.findProperty("APP_URL")
 
 android {
-
     namespace PACKAGE
     compileSdk 33
 
@@ -35,5 +34,5 @@ android {
 }
 
 dependencies {
-    // ❌ androidx.webkit YOK
+    implementation "androidx.webkit:webkit:1.8.0"
 }
