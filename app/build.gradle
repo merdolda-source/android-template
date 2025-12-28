@@ -1,19 +1,20 @@
 plugins {
     id 'com.android.application'
-    id 'com.google.gms.google-services'
 }
+
+def PACKAGE = project.findProperty("PACKAGE_NAME") ?: "com.template"
+def APPNAME = project.findProperty("APP_NAME") ?: "Template App"
+def APPURL  = project.findProperty("APP_URL") ?: "https://example.com"
 
 android {
 
-    // ✅ gradle.properties içinden gelir
-    namespace PACKAGE_NAME
+    namespace PACKAGE
 
     compileSdk 34
 
     defaultConfig {
 
-        // ✅ her uygulama ayrı paket
-        applicationId PACKAGE_NAME
+        applicationId PACKAGE
 
         minSdk 21
         targetSdk 34
@@ -21,9 +22,8 @@ android {
         versionCode 1
         versionName "1.0"
 
-        // ✅ panelden gelenler
-        resValue "string", "app_name", APP_NAME
-        resValue "string", "app_url", APP_URL
+        resValue "string", "app_name", APPNAME
+        resValue "string", "app_url", APPURL
     }
 
     buildTypes {
