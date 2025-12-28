@@ -1,6 +1,5 @@
 plugins {
     id 'com.android.application'
-    id 'com.google.gms.google-services'
 }
 
 def PACKAGE = project.findProperty("PACKAGE_NAME") ?: "com.template"
@@ -10,13 +9,12 @@ def APPURL  = project.findProperty("APP_URL") ?: "https://example.com"
 android {
 
     namespace PACKAGE
-    compileSdk 34
+    compileSdk 33
 
     defaultConfig {
         applicationId PACKAGE
         minSdk 21
-        targetSdk 34
-
+        targetSdk 33
         versionCode 1
         versionName "1.0"
 
