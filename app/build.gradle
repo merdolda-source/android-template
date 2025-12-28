@@ -1,7 +1,5 @@
 plugins {
     id 'com.android.application'
-    // 🔴 ŞİMDİLİK KALDIR
-    // id 'com.google.gms.google-services'
 }
 
 // 🔥 gradle.properties'ten oku
@@ -22,7 +20,6 @@ android {
         versionCode 1
         versionName "1.0"
 
-        // 🔥 PANELDEN GELENLER
         resValue "string", "app_name", APPNAME
         resValue "string", "app_url", APPURL
     }
@@ -34,6 +31,13 @@ android {
 
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    // BOŞ KALABİLİR – WebView native
+}
         targetCompatibility JavaVersion.VERSION_17
     }
 }
