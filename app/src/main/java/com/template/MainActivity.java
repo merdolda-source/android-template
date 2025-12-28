@@ -1,4 +1,4 @@
-package com.template; // ⚠️ ÖNEMLİ: BU KALABİLİR
+package com.template; // ⚠️ BU KALABİLİR, problem değil
 
 import android.app.Activity;
 import android.os.Bundle;
@@ -23,7 +23,7 @@ public class MainActivity extends Activity {
         webView.setWebViewClient(new WebViewClient());
         webView.setWebChromeClient(new WebChromeClient());
 
-        // ✅ URL ARTIK BURADAN GELİR
+        // 🔥 URL ARTIK %100 PANELDEN GELİR
         webView.loadUrl(getString(R.string.app_url));
     }
 
