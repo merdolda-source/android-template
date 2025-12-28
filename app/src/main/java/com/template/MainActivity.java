@@ -1,19 +1,16 @@
-package com.template;
+package com.template; // ⚠️ ÖNEMLİ: BU KALABİLİR
 
 import android.app.Activity;
 import android.os.Bundle;
-import android.webkit.WebChromeClient;
-import android.webkit.WebSettings;
-import android.webkit.WebView;
-import android.webkit.WebViewClient;
+import android.webkit.*;
 
 public class MainActivity extends Activity {
 
-    private WebView webView;
+    WebView webView;
 
     @Override
-    protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
+    protected void onCreate(Bundle b) {
+        super.onCreate(b);
 
         webView = new WebView(this);
         setContentView(webView);
@@ -21,14 +18,13 @@ public class MainActivity extends Activity {
         WebSettings s = webView.getSettings();
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
-        s.setMediaPlaybackRequiresUserGesture(false);
         s.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
 
         webView.setWebViewClient(new WebViewClient());
         webView.setWebChromeClient(new WebChromeClient());
 
-      webView.loadUrl("$url");
-
+        // ✅ URL ARTIK BURADAN GELİR
+        webView.loadUrl(getString(R.string.app_url));
     }
 
     @Override
