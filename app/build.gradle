@@ -4,22 +4,43 @@ plugins {
 }
 
 android {
-    namespace 'com.template'
+
+    // ❌ SABİT OLMAYACAK
+    // namespace 'com.template'
+
+    // ✅ PANELDEN GELECEK (build.php ile yazdırılacak)
+    namespace "${PACKAGE_NAME}"
+
     compileSdk 34
 
     defaultConfig {
-        applicationId "com.template"
+
+        // ❌ SABİT OLMAYACAK
+        // applicationId "com.template"
+
+        // ✅ HER UYGULAMA AYRI
+        applicationId "${PACKAGE_NAME}"
+
         minSdk 21
         targetSdk 34
+
         versionCode 1
         versionName "1.0"
 
-        resValue "string", "app_name", "TEMPLATE_APP"
+        // ✅ PANELDEN GELEN APP NAME
+        resValue "string", "app_name", "${APP_NAME}"
+
+        // ✅ PANELDEN GELEN URL
+        resValue "string", "app_url", "${APP_URL}"
     }
 
     buildTypes {
-        debug { debuggable true }
-        release { minifyEnabled false }
+        debug {
+            debuggable true
+        }
+        release {
+            minifyEnabled false
+        }
     }
 
     compileOptions {
