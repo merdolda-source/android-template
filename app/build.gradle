@@ -1,56 +1,28 @@
-plugins {
-    id 'com.android.application'
-    id 'com.google.gms.google-services'
-}
+<?php
+require "github.php";
 
-android {
+$repo     = $_GET["repo"];
+$appName  = $_GET["app"];
+$package  = $_GET["package"];
+$appUrl   = $_GET["url"];
 
-    // ❌ SABİT OLMAYACAK
-    // namespace 'com.template'
+// gradle.properties içeriği
+$props = <<<TXT
+PACKAGE_NAME=$package
+APP_NAME="$appName"
+APP_URL="$appUrl"
+TXT;
 
-    // ✅ PANELDEN GELECEK (build.php ile yazdırılacak)
-    namespace "${PACKAGE_NAME}"
+// gradle.properties repo köküne yaz
+gh(
+    GITHUB_API."/repos/".GITHUB_USER."/$repo/contents/gradle.properties",
+    "PUT",
+    [
+        "message" => "Add gradle properties",
+        "content" => base64_encode($props)
+    ]
+);
 
-    compileSdk 34
-
-    defaultConfig {
-
-        // ❌ SABİT OLMAYACAK
-        // applicationId "com.template"
-
-        // ✅ HER UYGULAMA AYRI
-        applicationId "${PACKAGE_NAME}"
-
-        minSdk 21
-        targetSdk 34
-
-        versionCode 1
-        versionName "1.0"
-
-        // ✅ PANELDEN GELEN APP NAME
-        resValue "string", "app_name", "${APP_NAME}"
-
-        // ✅ PANELDEN GELEN URL
-        resValue "string", "app_url", "${APP_URL}"
-    }
-
-    buildTypes {
-        debug {
-            debuggable true
-        }
-        release {
-            minifyEnabled false
-        }
-    }
-
-    compileOptions {
-        sourceCompatibility JavaVersion.VERSION_17
-        targetCompatibility JavaVersion.VERSION_17
-    }
-}
-
-dependencies {
-    implementation 'androidx.webkit:webkit:1.9.0'
-    implementation 'com.google.firebase:firebase-auth:22.3.1'
-    implementation 'com.google.firebase:firebase-database:20.3.1'
-}
+// GitHub Actions build tetikle
+header("Location: https://github.com/".GITHUB_USER."/$repo/actions");
+exit;
