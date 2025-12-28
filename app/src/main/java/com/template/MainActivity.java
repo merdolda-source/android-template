@@ -1,3 +1,5 @@
+package com.template;
+
 import android.app.Activity;
 import android.os.Bundle;
 import android.webkit.*;
@@ -21,9 +23,7 @@ public class MainActivity extends Activity {
         webView.setWebViewClient(new WebViewClient());
         webView.setWebChromeClient(new WebChromeClient());
 
-        // 🔥 gradle'dan gelen değer
-        webView.loadUrl(getString(getResources()
-                .getIdentifier("app_url", "string", getPackageName())));
+        webView.loadUrl(getString(R.string.app_url));
     }
 
     @Override
