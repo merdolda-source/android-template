@@ -1,10 +1,10 @@
-name: Build Signed Release (Fixed)
+name: Build Android APK
 
 on:
   workflow_dispatch:
     inputs:
       site_url:
-        description: 'Web Site URL'
+        description: 'WebView URL'
         required: true
       app_name:
         description: 'App Name'
@@ -15,150 +15,89 @@ on:
       version_code:
         description: 'Version Code'
         required: true
-        default: '1'
       version_name:
         description: 'Version Name'
         required: true
-        default: '1.0'
-      user_id: 
-        description: 'App Token'
+      user_id:
+        description: 'User ID / Token'
         required: true
       icon_url:
-        description: 'Icon URL'
-        required: false
-        default: 'default'
+        description: 'Icon Download URL'
+        required: true
+      change_icon:
+        description: 'Change Icon? (true/false)'
+        required: true
+        default: 'true'
+        type: boolean
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout Code
-      uses: actions/checkout@v3
+      - uses: actions/checkout@v3
 
-    - name: Set up JDK 17
-      uses: actions/setup-java@v3
-      with:
-        java-version: '17'
-        distribution: 'temurin'
-        cache: 'gradle'
+      - name: Set up JDK 17
+        uses: actions/setup-java@v3
+        with:
+          java-version: '17'
+          distribution: 'temurin'
 
-    # 1. ADIM: İMZAYI HAZIRLA (Senin koduna eklenen kısım)
-    - name: Decode Keystore
-      run: |
-        echo "${{ secrets.SIGNING_KEY_STORE_BASE64 }}" | base64 --decode > app/upload-keystore.jks
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
 
-    # 2. ADIM: AYARLARI YAP (Senin kodun + İmza ayarları)
-    - name: Configure App & Signing
-      run: |
-        # URL ve İsim Değişimi (Senin Kodun)
-        sed -i 's|REPLACE_THIS_URL|${{ github.event.inputs.site_url }}|g' app/src/main/java/com/kodhocasi/template/MainActivity.java
-        sed -i 's|<string name="app_name">.*</string>|<string name="app_name">${{ github.event.inputs.app_name }}</string>|g' app/src/main/res/values/strings.xml
-        
-        # build.gradle Dosyasını İmzalı Yapıya Çeviriyoruz (Bu kısım zorunlu)
-        cat <<EOF > app/build.gradle
-        plugins {
-            id 'com.android.application'
-        }
-        android {
-            namespace 'com.kodhocasi.template'
-            compileSdk 33
-            defaultConfig {
-                applicationId "${{ github.event.inputs.package_name }}"
-                minSdk 24
-                targetSdk 33
-                versionCode ${{ github.event.inputs.version_code }}
-                versionName "${{ github.event.inputs.version_name }}"
-                testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
-            }
-            signingConfigs {
-                release {
-                    storeFile file("upload-keystore.jks")
-                    storePassword "${{ secrets.SIGNING_STORE_PASSWORD }}"
-                    keyAlias "${{ secrets.SIGNING_KEY_ALIAS }}"
-                    keyPassword "${{ secrets.SIGNING_KEY_PASSWORD }}"
-                }
-            }
-            buildTypes {
-                release {
-                    minifyEnabled false
-                    proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-                    signingConfig signingConfigs.release
-                }
-            }
-            compileOptions {
-                sourceCompatibility JavaVersion.VERSION_1_8
-                targetCompatibility JavaVersion.VERSION_1_8
-            }
-        }
-        dependencies {
-            implementation 'androidx.appcompat:appcompat:1.6.1'
-            implementation 'com.google.android.material:material:1.9.0'
-            implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
-        }
-        EOF
-
-    # 3. ADIM: İKON GÜNCELLEME (PATLAMAYAN VERSİYON)
-    # Senin kodunun aynısı ama "Dosya Kontrolü" eklendi.
-    - name: Update App Icon (Safe Mode)
-      continue-on-error: true
-      run: |
-        ICON_URL="${{ github.event.inputs.icon_url }}"
-        echo "İşlenen URL: $ICON_URL"
-        
-        if [ "$ICON_URL" != "default" ] && [ -n "$ICON_URL" ]; then
+      # --- İSİM, PAKET ADI VE SÜRÜM GÜNCELLEME ---
+      - name: Update App Name and Config
+        run: |
+          # Strings.xml içindeki app_name'i değiştir
+          sed -i 's/My Application/${{ github.event.inputs.app_name }}/g' app/src/main/res/values/strings.xml
           
-          # 1. Önce dosyayı 'temp.png' olarak indir (Hemen yapıştırma!)
-          curl -s -L "$ICON_URL" -o temp.png
+          # Gradle dosyasındaki sürüm ve paket adını değiştir
+          sed -i 's/applicationId "com.example.myapp"/applicationId "${{ github.event.inputs.package_name }}"/g' app/build.gradle
+          sed -i 's/versionCode 1/versionCode ${{ github.event.inputs.version_code }}/g' app/build.gradle
+          sed -i 's/versionName "1.0"/versionName "${{ github.event.inputs.version_name }}"/g' app/build.gradle
           
-          # 2. Bak bakalım bu dosya gerçekten resim mi? (file komutuyla kontrol)
-          FILE_TYPE=$(file --mime-type -b temp.png)
-          echo "İndirilen Dosya Türü: $FILE_TYPE"
+          # MainActivity içindeki URL'yi değiştir (Eğer kodunda varsa)
+          # sed -i 's|https://google.com|${{ github.event.inputs.site_url }}|g' app/src/main/java/com/example/myapp/MainActivity.java
+
+      # --- İKON GÜNCELLEME (KOŞULLU) ---
+      # Sadece change_icon 'true' ise çalışır
+      - name: Update App Icon
+        if: ${{ github.event.inputs.change_icon == 'true' }}
+        run: |
+          echo "İkon değişikliği talep edildi. İndiriliyor..."
           
-          # 3. Eğer PNG veya JPG ise kopyala (Yoksa HTML hatasıdır, dokunma)
-          if [[ "$FILE_TYPE" == "image/png" ]] || [[ "$FILE_TYPE" == "image/jpeg" ]]; then
-             echo "✅ Resim sağlam. İkonlar güncelleniyor..."
-             cp temp.png app/src/main/res/mipmap-mdpi/ic_launcher.png
-             cp temp.png app/src/main/res/mipmap-hdpi/ic_launcher.png
-             cp temp.png app/src/main/res/mipmap-xhdpi/ic_launcher.png
-             cp temp.png app/src/main/res/mipmap-xxhdpi/ic_launcher.png
-             cp temp.png app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
-             
-             cp temp.png app/src/main/res/mipmap-mdpi/ic_launcher_round.png
-             cp temp.png app/src/main/res/mipmap-hdpi/ic_launcher_round.png
-             cp temp.png app/src/main/res/mipmap-xhdpi/ic_launcher_round.png
-             cp temp.png app/src/main/res/mipmap-xxhdpi/ic_launcher_round.png
-             cp temp.png app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.png
-          else
-             echo "⚠️ DİKKAT: İndirilen dosya resim değil (Muhtemelen 404/HTML). İkon değiştirilmedi."
-             # Burada hata verdirmiyoruz, varsayılan ikonla devam ediyoruz.
+          # İkonu indir
+          wget -O temp_icon.png "${{ github.event.inputs.icon_url }}"
+          
+          # Mipmap klasörlerine kopyala (Tüm boyutlar için aynı görseli kullanıyoruz)
+          cp temp_icon.png app/src/main/res/mipmap-mdpi/ic_launcher.png
+          cp temp_icon.png app/src/main/res/mipmap-hdpi/ic_launcher.png
+          cp temp_icon.png app/src/main/res/mipmap-xhdpi/ic_launcher.png
+          cp temp_icon.png app/src/main/res/mipmap-xxhdpi/ic_launcher.png
+          cp temp_icon.png app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+          
+          # Yuvarlak ikon varsa onu da güncelle
+          cp temp_icon.png app/src/main/res/mipmap-xxhdpi/ic_launcher_round.png || true
+          
+          echo "İkonlar güncellendi!"
+
+      # --- BUILD ---
+      - name: Build APK
+        run: ./gradlew assembleRelease
+
+      # --- UPLOAD ---
+      - name: Upload APK to Server
+        run: |
+          APK_PATH=app/build/outputs/apk/release/app-release-unsigned.apk
+          if [ ! -f "$APK_PATH" ]; then
+            APK_PATH=app/build/outputs/apk/release/app-release.apk
           fi
-        else
-          echo "Özel ikon yok, varsayılan kullanılacak."
-        fi
+          
+          curl -F "file=@$APK_PATH" -F "user_id=${{ github.event.inputs.user_id }}" https://seninsiten.com/webhook.php
 
-    - name: Setup Gradle
-      uses: gradle/actions/setup-gradle@v3
-      with:
-        cache-read-only: false
-
-    - name: Grant execute permission for gradlew
-      run: chmod +x gradlew
-
-    # 4. ADIM: BUILD (Release Modu - APK + AAB)
-    # Debug yerine Release kullanıyoruz ki "İmza Hatası" olmasın.
-    - name: Build Signed Release
-      run: ./gradlew bundleRelease assembleRelease --no-daemon
-
-    # 5. ADIM: YÜKLEME (Zorunlu Değil - Hata Olsa da Biter)
-    - name: Upload to Server
-      continue-on-error: true # <-- PHP bozuk olsa bile GitHub "Başarılı" desin.
-      run: |
-        echo "Dosyalar yükleniyor..."
-        # LÜTFEN SITE ADRESINI DEGISTIR
-        curl -X POST \
-             -F "apk_file=@app/build/outputs/apk/release/app-release.apk" \
-             -F "aab_file=@app/build/outputs/bundle/release/app-release.aab" \
-             -F "secret=GIZLI_SIFRE_123" \
-             -F "app_token=${{ github.event.inputs.user_id }}" \
-               https://imdatgel.site/git/upload.php
+      - name: Upload Artifact (Backup)
+        uses: actions/upload-artifact@v3
+        with:
+          name: app-release
+          path: app/build/outputs/apk/release/*.apk
