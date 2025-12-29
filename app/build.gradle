@@ -33,24 +33,22 @@ jobs:
         cache: 'gradle'
 
     # ==================================================================
-    # 1. ADIM: PROJE AYARLARINI TAMİR ET (403 HATASI ÇÖZÜMÜ)
+    # 1. ADIM: REPO SORUNLARINI VE build.gradle HATALARINI DUZELT
     # ==================================================================
-    - name: Fix Repositories and Gradle
+    - name: Fix Project Files
       run: |
-        echo "Eski build.gradle dosyalari onariliyor..."
+        echo "Dosyalar onariliyor..."
 
-        # KOK DIZINDEKI build.gradle DOSYASINI YENIDEN YAZ (Guncel Depolar)
+        # 1. KOK BUILD.GRADLE (Temiz ve Guncel Depolar)
+        # 403 hatasini cozmek icin burayi temizliyoruz.
         cat <<EOF > build.gradle
-        // Top-level build file
         buildscript {
             repositories {
                 google()
                 mavenCentral()
-                gradlePluginPortal()
             }
             dependencies {
-                // Gradle surumunu guncelliyoruz
-                classpath 'com.android.tools.build:gradle:8.1.0'
+                classpath 'com.android.tools.build:gradle:8.1.1'
             }
         }
         allprojects {
@@ -65,18 +63,47 @@ jobs:
         }
         EOF
 
-        # APP DIZININDEKI build.gradle ICIN GEREKLI DUZENLEMELER
-        # namespace hatasini onlemek icin namespace ekliyoruz
-        sed -i 's/android {/android { namespace "com.kodhocasi.template"/g' app/build.gradle
+        # 2. APP BUILD.GRADLE (Standart Ayarlar)
+        # Senin hatani (default:) cozmek icin burayi standart hale getiriyoruz.
+        cat <<EOF > app/build.gradle
+        plugins {
+            id 'com.android.application'
+        }
+        android {
+            namespace 'com.kodhocasi.template'
+            compileSdk 33
+            defaultConfig {
+                applicationId "REPLACE_THIS_ID"
+                minSdk 24
+                targetSdk 33
+                versionCode 1
+                versionName "1.0"
+                testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+            }
+            buildTypes {
+                release {
+                    minifyEnabled false
+                    proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+                }
+            }
+            compileOptions {
+                sourceCompatibility JavaVersion.VERSION_1_8
+                targetCompatibility JavaVersion.VERSION_1_8
+            }
+        }
+        dependencies {
+            implementation 'androidx.appcompat:appcompat:1.6.1'
+            implementation 'com.google.android.material:material:1.9.0'
+            implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+        }
+        EOF
 
     # ==================================================================
-    # 2. ADIM: PROFESYONEL JAVA KODUNU GÖM (Geri Tuşu & Gezinme)
+    # 2. ADIM: PROFESYONEL JAVA KODUNU GÖM (Gezinme & Geri Tuşu)
     # ==================================================================
     - name: Inject Professional Code
       run: |
-        echo "Profesyonel Java kodu enjekte ediliyor..."
-        
-        # MainActivity.java'yı TAMAMEN YENİDEN YAZIYORUZ
+        # MainActivity.java - Gelismis WebView Ayarlari
         cat <<EOF > app/src/main/java/com/kodhocasi/template/MainActivity.java
         package com.kodhocasi.template;
 
@@ -90,7 +117,7 @@ jobs:
         public class MainActivity extends AppCompatActivity {
 
             private WebView myWebView;
-            // Burasi otomasyon tarafindan degistirilecek
+            // Bu URL asagida sed komutuyla degistirilecek
             private String targetUrl = "REPLACE_THIS_URL";
 
             @Override
@@ -109,13 +136,12 @@ jobs:
                 webSettings.setBuiltInZoomControls(true);
                 webSettings.setDisplayZoomControls(false);
                 webSettings.setAllowFileAccess(true);
-                webSettings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW); // HTTP/HTTPS karisik izin ver
+                webSettings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
                 
                 // Linklerin uygulama icinde acilmasini sagla
                 myWebView.setWebViewClient(new WebViewClient() {
                     @Override
                     public boolean shouldOverrideUrlLoading(WebView view, String url) {
-                        // Eger URL bizim sitemizle alakaliysa icerde ac, degilse (orn. PDF) disarida acilabilir
                         view.loadUrl(url);
                         return true;
                     }
@@ -143,14 +169,13 @@ jobs:
         }
         EOF
 
-        # 3. MANIFEST DUZENLEME (HTTP Izni ve Tema)
+        # MANIFEST DUZENLEME (HTTP Izni)
         cat <<EOF > app/src/main/AndroidManifest.xml
         <?xml version="1.0" encoding="utf-8"?>
         <manifest xmlns:android="http://schemas.android.com/apk/res/android"
             xmlns:tools="http://schemas.android.com/tools">
             <uses-permission android:name="android.permission.INTERNET" />
             <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-            
             <application
                 android:allowBackup="true"
                 android:icon="@mipmap/ic_launcher"
@@ -171,20 +196,21 @@ jobs:
         </manifest>
         EOF
 
-        # 4. KULLANICI AYARLARINI GOMME
-        # URL'yi yerlestir
+        # 3. KULLANICI AYARLARINI GOMME
+        echo "Kullanici bilgileri isleniyor..."
+        
+        # URL
         sed -i 's|REPLACE_THIS_URL|${{ github.event.inputs.site_url }}|g' app/src/main/java/com/kodhocasi/template/MainActivity.java
 
-        # Uygulama Adini yerlestir
+        # Uygulama Adi
         sed -i 's|<string name="app_name">.*</string>|<string name="app_name">${{ github.event.inputs.app_name }}</string>|g' app/src/main/res/values/strings.xml
 
-        # Paket Adini yerlestir
-        sed -i 's|applicationId ".*"|applicationId "${{ github.event.inputs.package_name }}"|g' app/build.gradle
+        # Paket Adi (ID)
+        sed -i 's|REPLACE_THIS_ID|${{ github.event.inputs.package_name }}|g' app/build.gradle
 
     - name: Setup Gradle
       uses: gradle/actions/setup-gradle@v3
       with:
-        gradle-version: '8.2' # Stabil surumu zorla
         cache-read-only: false
 
     - name: Grant execute permission for gradlew
