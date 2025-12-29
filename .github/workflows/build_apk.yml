@@ -1,4 +1,4 @@
-name: Build and Upload to Server
+name: Build APK with Icon
 
 on:
   workflow_dispatch:
@@ -21,19 +21,21 @@ on:
         required: true
         default: '1.0'
       user_id: 
-        description: 'App Token (Hidden)' # Dashboard buraya app_token gönderiyor
+        description: 'App Token'
         required: true
+      icon_url:
+        description: 'Icon URL' # Resim linki buradan gelecek
+        required: false
+        default: 'default'
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-    # 1. Kodları Çek
     - name: Checkout Code
       uses: actions/checkout@v3
 
-    # 2. Java Kurulumu
     - name: Set up JDK 17
       uses: actions/setup-java@v3
       with:
@@ -41,37 +43,64 @@ jobs:
         distribution: 'temurin'
         cache: 'gradle'
 
-    # 3. Ayarları Uygula
-    - name: Configure App
+    - name: Configure App (Name, Version, URL)
       run: |
-        # URL
+        # 1. URL
         sed -i 's|REPLACE_THIS_URL|${{ github.event.inputs.site_url }}|g' app/src/main/java/com/kodhocasi/template/MainActivity.java
-        # İsim
+        
+        # 2. İSİM
         sed -i 's|<string name="app_name">.*</string>|<string name="app_name">${{ github.event.inputs.app_name }}</string>|g' app/src/main/res/values/strings.xml
-        # Paket Adı, Sürüm Kodu, Sürüm Adı
+        
+        # 3. SÜRÜM & PAKET
         sed -i 's|applicationId ".*"|applicationId "${{ github.event.inputs.package_name }}"|g' app/build.gradle
         sed -i 's|versionCode .*|versionCode ${{ github.event.inputs.version_code }}|g' app/build.gradle
         sed -i 's|versionName ".*"|versionName "${{ github.event.inputs.version_name }}"|g' app/build.gradle
 
-    # 4. Gradle Hazırlık
+    # --- YENİ EKLENEN KISIM: İKON İNDİR VE DEĞİŞTİR ---
+    - name: Update App Icon
+      run: |
+        ICON_URL="${{ github.event.inputs.icon_url }}"
+        
+        if [ "$ICON_URL" != "default" ]; then
+          echo "İkon indiriliyor: $ICON_URL"
+          
+          # Resmi indir ve geçici olarak kaydet
+          curl -L "$ICON_URL" -o new_icon.png
+          
+          # Android'in tüm çözünürlük klasörlerine bu resmi kopyala
+          # (En basit ve kesin yöntem: Tüm mipmap klasörlerindeki ic_launcher.png'yi ezmek)
+          
+          cp new_icon.png app/src/main/res/mipmap-mdpi/ic_launcher.png
+          cp new_icon.png app/src/main/res/mipmap-hdpi/ic_launcher.png
+          cp new_icon.png app/src/main/res/mipmap-xhdpi/ic_launcher.png
+          cp new_icon.png app/src/main/res/mipmap-xxhdpi/ic_launcher.png
+          cp new_icon.png app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+          
+          # Yuvarlak ikonları da ezelim (Bazı telefonlar bunu kullanır)
+          cp new_icon.png app/src/main/res/mipmap-mdpi/ic_launcher_round.png
+          cp new_icon.png app/src/main/res/mipmap-hdpi/ic_launcher_round.png
+          cp new_icon.png app/src/main/res/mipmap-xhdpi/ic_launcher_round.png
+          cp new_icon.png app/src/main/res/mipmap-xxhdpi/ic_launcher_round.png
+          cp new_icon.png app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.png
+          
+          echo "İkon başarıyla güncellendi!"
+        else
+          echo "Özel ikon yok, varsayılan kullanılacak."
+        fi
+
     - name: Setup Gradle
       uses: gradle/actions/setup-gradle@v3
       with:
         cache-read-only: false
 
-    # 5. İzin Ver
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
 
-    # 6. APK OLUŞTUR
     - name: Build APK
       run: ./gradlew assembleDebug --parallel --build-cache --no-daemon
       
-    # 7. SENİN SUNUCUNA GÖNDER (TRANSFER)
     - name: Upload to My Server
       run: |
-        echo "APK sunucuya yükleniyor..."
-        # DİKKAT: Site adresini ve şifreyi upload.php ile aynı yap!
         curl -X POST -F "apk_file=@app/build/outputs/apk/debug/app-debug.apk" \
              -F "secret=GIZLI_SIFRE_123" \
              -F "app_token=${{ github.event.inputs.user_id }}" \
