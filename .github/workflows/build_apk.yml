@@ -56,18 +56,36 @@ jobs:
           sed -i 's/versionCode 1/versionCode ${{ github.event.inputs.version_code }}/g' app/build.gradle
           sed -i 's/versionName "1.0"/versionName "${{ github.event.inputs.version_name }}"/g' app/build.gradle
 
-      # --- İKON GÜNCELLEME ---
+    # --- İKON GÜNCELLEME (ImageMagick ile Garantili Yöntem) ---
       - name: Update App Icon
         if: ${{ github.event.inputs.change_icon == 'true' }}
         run: |
-          wget -O temp_icon.png "${{ github.event.inputs.icon_url }}"
+          echo "İkon indiriliyor: ${{ github.event.inputs.icon_url }}"
+          
+          # 1. Dosyayı ham olarak indir (curl -L yönlendirmeleri takip eder)
+          # Hata olursa işlem dursa bile logda görelim diye || true eklemiyoruz.
+          curl -L -o temp_icon_raw "${{ github.event.inputs.icon_url }}"
+
+          # 2. İndirilen dosya neymiş? (Debug için loga yazdır)
+          file temp_icon_raw
+          
+          # 3. ImageMagick kullanarak dosyayı GERÇEK PNG'ye çevir ve 512x512 yap
+          # Bu komut JPG, WebP veya bozuk PNG gelse bile temiz bir PNG oluşturur.
+          convert temp_icon_raw -resize 512x512! temp_icon.png
+
+          echo "Dönüştürme tamamlandı. Kopyalanıyor..."
+
+          # 4. Temizlenen dosyayı klasörlere dağıt
           cp temp_icon.png app/src/main/res/mipmap-mdpi/ic_launcher.png
           cp temp_icon.png app/src/main/res/mipmap-hdpi/ic_launcher.png
           cp temp_icon.png app/src/main/res/mipmap-xhdpi/ic_launcher.png
           cp temp_icon.png app/src/main/res/mipmap-xxhdpi/ic_launcher.png
           cp temp_icon.png app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+          
+          # Yuvarlak ikon için de aynısı
           cp temp_icon.png app/src/main/res/mipmap-xxhdpi/ic_launcher_round.png || true
-
+          
+          echo "İkonlar başarıyla işlendi!"
       # --- BUILD APK ---
       - name: Build APK
         run: ./gradlew assembleRelease
