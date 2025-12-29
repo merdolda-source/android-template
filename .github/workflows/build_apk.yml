@@ -1,10 +1,10 @@
-name: Build Multi-App APK
+name: Build and Upload to Server
 
 on:
   workflow_dispatch:
     inputs:
       site_url:
-        description: 'Router URL'
+        description: 'Web Site URL'
         required: true
       app_name:
         description: 'App Name'
@@ -13,22 +13,27 @@ on:
         description: 'Package Name'
         required: true
       version_code:
-        description: 'Version Code (Integer)'
+        description: 'Version Code'
         required: true
         default: '1'
       version_name:
-        description: 'Version Name (String)'
+        description: 'Version Name'
         required: true
         default: '1.0'
+      user_id: 
+        description: 'App Token (Hidden)' # Dashboard buraya app_token gönderiyor
+        required: true
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
+    # 1. Kodları Çek
     - name: Checkout Code
       uses: actions/checkout@v3
 
+    # 2. Java Kurulumu
     - name: Set up JDK 17
       uses: actions/setup-java@v3
       with:
@@ -36,35 +41,38 @@ jobs:
         distribution: 'temurin'
         cache: 'gradle'
 
+    # 3. Ayarları Uygula
     - name: Configure App
       run: |
-        echo "Uygulama ayarlaniyor..."
-
-        # 1. URL'yi Yerleştir (MainActivity.java içinde REPLACE_THIS_URL olmalı)
+        # URL
         sed -i 's|REPLACE_THIS_URL|${{ github.event.inputs.site_url }}|g' app/src/main/java/com/kodhocasi/template/MainActivity.java
-
-        # 2. Uygulama Adı
+        # İsim
         sed -i 's|<string name="app_name">.*</string>|<string name="app_name">${{ github.event.inputs.app_name }}</string>|g' app/src/main/res/values/strings.xml
-
-        # 3. Paket Adı, Version Code ve Version Name (build.gradle)
-        # applicationId, versionCode ve versionName satırlarını bulup değiştirir
+        # Paket Adı, Sürüm Kodu, Sürüm Adı
         sed -i 's|applicationId ".*"|applicationId "${{ github.event.inputs.package_name }}"|g' app/build.gradle
         sed -i 's|versionCode .*|versionCode ${{ github.event.inputs.version_code }}|g' app/build.gradle
         sed -i 's|versionName ".*"|versionName "${{ github.event.inputs.version_name }}"|g' app/build.gradle
 
+    # 4. Gradle Hazırlık
     - name: Setup Gradle
       uses: gradle/actions/setup-gradle@v3
       with:
         cache-read-only: false
 
+    # 5. İzin Ver
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
 
+    # 6. APK OLUŞTUR
     - name: Build APK
       run: ./gradlew assembleDebug --parallel --build-cache --no-daemon
       
-    - name: Upload APK
-      uses: actions/upload-artifact@v4
-      with:
-        name: app-release
-        path: app/build/outputs/apk/debug/app-debug.apk
+    # 7. SENİN SUNUCUNA GÖNDER (TRANSFER)
+    - name: Upload to My Server
+      run: |
+        echo "APK sunucuya yükleniyor..."
+        # DİKKAT: Site adresini ve şifreyi upload.php ile aynı yap!
+        curl -X POST -F "apk_file=@app/build/outputs/apk/debug/app-debug.apk" \
+             -F "secret=GIZLI_SIFRE_123" \
+             -F "app_token=${{ github.event.inputs.user_id }}" \
+             https://https://imdatgel.site/git/upload.php
