@@ -1,16 +1,14 @@
 package com.kodhocasi.template;
 
-import androidx.appcompat.app.AppCompatActivity;
 import android.os.Bundle;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import androidx.appcompat.app.AppCompatActivity;
 
 public class MainActivity extends AppCompatActivity {
 
     private WebView myWebView;
-    // PHP'nin değiştireceği yer
-    private String siteUrl = "DEGISTIR_URL"; 
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -18,21 +16,17 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
 
         myWebView = findViewById(R.id.webview);
-        
-        // Gelişmiş Ayarlar
         WebSettings webSettings = myWebView.getSettings();
-        webSettings.setJavaScriptEnabled(true); // JS Açık
-        webSettings.setDomStorageEnabled(true); // Veri kaydetme açık
-        webSettings.setLoadWithOverviewMode(true);
-        webSettings.setUseWideViewPort(true);
+        webSettings.setJavaScriptEnabled(true);
+        webSettings.setDomStorageEnabled(true);
 
-        // Linklerin uygulama içinde açılması için
+        // Linklerin tarayıcıda değil uygulama içinde açılmasını sağlar
         myWebView.setWebViewClient(new WebViewClient());
-        
-        myWebView.loadUrl(siteUrl);
+
+        // OTOMASYON BURADAKİ "REPLACE_THIS_URL" YAZISINI DEĞİŞTİRECEK
+        myWebView.loadUrl("REPLACE_THIS_URL");
     }
 
-    // Geri tuşuna basıldığında geçmişe git, yoksa çık
     @Override
     public void onBackPressed() {
         if (myWebView.canGoBack()) {
