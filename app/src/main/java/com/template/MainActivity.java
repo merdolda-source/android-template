@@ -1,30 +1,27 @@
-package __PACKAGE__;
+package com.ornek.webviewapp;
 
-import android.app.Activity;
 import android.os.Bundle;
-import android.webkit.*;
+import android.webkit.WebView;
+import android.webkit.WebViewClient;
+import androidx.appcompat.app.AppCompatActivity;
 
-public class MainActivity extends Activity {
-
-    @Override
-    protected void onCreate(Bundle b) {
-        super.onCreate(b);
-
-        WebView w = new WebView(this);
-        setContentView(w);
-
-        WebSettings s = w.getSettings();
-        s.setJavaScriptEnabled(true);
-        s.setDomStorageEnabled(true);
-        s.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
-
-        w.setWebViewClient(new WebViewClient());
-        w.loadUrl(getString(R.string.app_url));
-    }
+public class MainActivity extends AppCompatActivity {
+    // PHP buradaki URL'yi değiştirecek
+    private String hedefUrl = "DEGISTIR_URL"; 
 
     @Override
-    public void onBackPressed() {
-        if (w.canGoBack()) w.goBack();
-        else finish();
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        WebView webView = new WebView(this);
+        
+        // JavaScript ve DOM depolamayı aç
+        webView.getSettings().setJavaScriptEnabled(true);
+        webView.getSettings().setDomStorageEnabled(true);
+        
+        // Linklerin tarayıcıda değil uygulama içinde açılmasını sağlar
+        webView.setWebViewClient(new WebViewClient());
+        
+        webView.loadUrl(hedefUrl);
+        setContentView(webView);
     }
 }
