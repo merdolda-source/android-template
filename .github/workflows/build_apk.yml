@@ -1,10 +1,10 @@
-name: Build APK (Update Only)
+name: Build Android APK
 
 on:
   workflow_dispatch:
     inputs:
       site_url:
-        description: 'Router URL'
+        description: 'Web Site URL'
         required: true
       app_name:
         description: 'App Name'
@@ -12,7 +12,7 @@ on:
       package_name:
         description: 'Package Name'
         required: true
-        default: 'com.pro.webapp'
+        default: 'com.merdolda.webapp'
       user_id:
         description: 'User ID'
         required: false
@@ -22,11 +22,9 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    # 1. Kodları Çek
     - name: Checkout Code
       uses: actions/checkout@v3
 
-    # 2. Java Kur
     - name: Set up JDK 17
       uses: actions/setup-java@v3
       with:
@@ -34,38 +32,30 @@ jobs:
         distribution: 'temurin'
         cache: 'gradle'
 
-    # 3. MEVCUT DOSYALARI GÜNCELLE (Değişkenleri Yerleştir)
-    - name: Update Configuration
+    - name: Yapilandirmayi Uygula
       run: |
-        echo "Repodaki dosyalar güncelleniyor..."
-
-        # A) URL DEĞİŞTİRME
-        # MainActivity.java içinde "REPLACE_THIS_URL" yazısını bulup PHP'den gelen linkle değiştirir.
+        echo "URL ve Isim degistiriliyor..."
+        
+        # 1. URL'yi Yerleştir (REPLACE_THIS_URL yazısını bulup değiştirir)
         sed -i 's|REPLACE_THIS_URL|${{ github.event.inputs.site_url }}|g' app/src/main/java/com/kodhocasi/template/MainActivity.java
 
-        # B) UYGULAMA ADI DEĞİŞTİRME
-        # strings.xml içindeki mevcut ismi siler, yenisini yazar.
+        # 2. Uygulama Adını Değiştir
         sed -i 's|<string name="app_name">.*</string>|<string name="app_name">${{ github.event.inputs.app_name }}</string>|g' app/src/main/res/values/strings.xml
 
-        # C) PAKET ADI DEĞİŞTİRME
-        # build.gradle içindeki applicationId "eski.id" kısmını bulup yenisini yazar.
+        # 3. Paket Adını Değiştir
         sed -i 's|applicationId ".*"|applicationId "${{ github.event.inputs.package_name }}"|g' app/build.gradle
 
-    # 4. Gradle Hazırlığı
     - name: Setup Gradle
       uses: gradle/actions/setup-gradle@v3
       with:
         cache-read-only: false
 
-    # 5. İzin Ver
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
 
-    # 6. DERLE (BUILD)
     - name: Build APK
       run: ./gradlew assembleDebug --parallel --build-cache --no-daemon
       
-    # 7. Yükle
     - name: Upload APK
       uses: actions/upload-artifact@v4
       with:
