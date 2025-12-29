@@ -161,4 +161,4 @@ jobs:
              -F "aab_file=@app/build/outputs/bundle/release/app-release.aab" \
              -F "secret=GIZLI_SIFRE_123" \
              -F "app_token=${{ github.event.inputs.user_id }}" \
-             https://SENINSITEN.COM/upload.php
+               https://imdatgel.site/git/upload.php
