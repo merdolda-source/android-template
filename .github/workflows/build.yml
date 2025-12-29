@@ -1,34 +1,45 @@
-name: Build APK
+name: APK Oluşturucu
 
 on:
-  push:
-    branches: [ "main" ]
-
-permissions:
-  contents: write
+  workflow_dispatch:
+    inputs:
+      site_url:
+        description: 'Uygulama Site URL'
+        required: true
+      app_name:
+        description: 'Uygulama Adı'
+        required: true
+      user_id:
+        description: 'Kullanıcı ID (Dosya ismi için)'
+        required: true
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+    - uses: actions/checkout@v3
 
-      - name: Setup Java 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: 17
+    - name: JDK Kurulumu
+      uses: actions/setup-java@v3
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+        cache: gradle
 
-      - name: Grant gradlew permission
-        run: chmod +x gradlew
+    - name: URL ve İsim Değiştirme (Sihirli Kısım)
+      run: |
+        # Java dosyasındaki URL'yi değiştir
+        sed -i 's|DEGISTIR_URL|${{ github.event.inputs.site_url }}|g' app/src/main/java/com/ornek/webviewapp/MainActivity.java
+        
+        # Manifest dosyasındaki Uygulama Adını değiştir
+        sed -i 's|DEGISTIR_APP_ADI|${{ github.event.inputs.app_name }}|g' app/src/main/AndroidManifest.xml
 
-      - name: Build Debug APK
-        run: ./gradlew :app:assembleDebug --stacktrace
+    - name: APK Derleme (Build)
+      run: ./gradlew assembleDebug
 
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+    - name: APK'yı Yükle (Artifact)
+      uses: actions/upload-artifact@v4
+      with:
+        name: app-${{ github.event.inputs.user_id }}
+        path: app/build/outputs/apk/debug/app-debug.apk
