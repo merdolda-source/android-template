@@ -1,23 +1,30 @@
-name: Build Signed AAB and APK
+name: Build Signed AAB and APK (Safe Mode)
 
 on:
   workflow_dispatch:
     inputs:
       site_url:
+        description: 'Web Site URL'
         required: true
       app_name:
+        description: 'App Name'
         required: true
       package_name:
+        description: 'Package Name'
         required: true
       version_code:
+        description: 'Version Code'
         required: true
         default: '1'
       version_name:
+        description: 'Version Name'
         required: true
         default: '1.0'
       user_id: 
+        description: 'App Token'
         required: true
       icon_url:
+        description: 'Icon URL'
         required: false
         default: 'default'
 
@@ -42,7 +49,6 @@ jobs:
         echo "${{ secrets.SIGNING_KEY_STORE_BASE64 }}" | base64 --decode > app/upload-keystore.jks
 
     # 2. build.gradle'ı İMZALI OLARAK YENİDEN YAZ
-    # Bu yöntem 'sed' ile uğraşmaktan çok daha güvenlidir.
     - name: Rewrite build.gradle with Signing Config
       run: |
         cat <<EOF > app/build.gradle
@@ -87,23 +93,47 @@ jobs:
         }
         EOF
 
-    # 3. Ayarları ve İkonu İşle
+    # 3. AYARLARI YAP (URL ve İSİM)
     - name: Configure App Details
       run: |
         # URL
         sed -i 's|REPLACE_THIS_URL|${{ github.event.inputs.site_url }}|g' app/src/main/java/com/kodhocasi/template/MainActivity.java
         # İSİM
         sed -i 's|<string name="app_name">.*</string>|<string name="app_name">${{ github.event.inputs.app_name }}</string>|g' app/src/main/res/values/strings.xml
-        
-        # İKON İNDİRME
+
+    # 4. İKON GÜNCELLEME (GÜVENLİ MOD - HATA VERMEZ)
+    - name: Update App Icon (Safe Mode)
+      run: |
         ICON_URL="${{ github.event.inputs.icon_url }}"
-        if [ "$ICON_URL" != "default" ]; then
-          curl -L "$ICON_URL" -o new_icon.png
-          # Tüm boyutlara kopyala
-          for folder in mipmap-mdpi mipmap-hdpi mipmap-xhdpi mipmap-xxhdpi mipmap-xxxhdpi; do
-            cp new_icon.png app/src/main/res/$folder/ic_launcher.png
-            cp new_icon.png app/src/main/res/$folder/ic_launcher_round.png
-          done
+        echo "İkon URL: $ICON_URL"
+        
+        # Eğer ikon 'default' değilse ve boş değilse işlem yap
+        if [ "$ICON_URL" != "default" ] && [ -n "$ICON_URL" ]; then
+          
+          # Dosyayı indir
+          echo "İkon indiriliyor..."
+          curl -s -L "$ICON_URL" -o new_icon.png
+          
+          # Dosyanın gerçek türünü kontrol et (PNG mi JPG mi?)
+          FILE_TYPE=$(file --mime-type -b new_icon.png)
+          echo "Dosya Türü: $FILE_TYPE"
+
+          # Sadece resimse kopyala, değilse (HTML hatasıysa) atla
+          if [[ "$FILE_TYPE" == "image/png" ]] || [[ "$FILE_TYPE" == "image/jpeg" ]]; then
+            echo "✅ Geçerli resim bulundu. İkonlar değiştiriliyor..."
+            
+            for folder in mipmap-mdpi mipmap-hdpi mipmap-xhdpi mipmap-xxhdpi mipmap-xxxhdpi; do
+              cp new_icon.png app/src/main/res/$folder/ic_launcher.png
+              cp new_icon.png app/src/main/res/$folder/ic_launcher_round.png
+            done
+            echo "İkon başarıyla güncellendi."
+          else
+            echo "⚠️ UYARI: İndirilen dosya resim değil! (Muhtemelen bozuk link veya 404 sayfası)."
+            echo "⚠️ Varsayılan Android ikonu kullanılacak. Build devam ediyor..."
+          fi
+
+        else
+          echo "Özel ikon yok, varsayılan kullanılacak."
         fi
 
     - name: Setup Gradle
@@ -114,17 +144,19 @@ jobs:
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
 
-    # 4. HEM AAB HEM APK OLUŞTUR (İmzalı)
+    # 5. HEM AAB HEM APK OLUŞTUR (İmzalı)
     - name: Build Release AAB and APK
       run: |
         ./gradlew bundleRelease assembleRelease --no-daemon
 
-    # 5. İKİSİNİ DE SUNUCUYA GÖNDER
+    # 6. SUNUCUYA YÜKLE
     - name: Upload to Server
       run: |
+        echo "Dosyalar sunucuya gönderiliyor..."
+        # DİKKAT: Site adresini aşağıda değiştir!
         curl -X POST \
              -F "apk_file=@app/build/outputs/apk/release/app-release.apk" \
              -F "aab_file=@app/build/outputs/bundle/release/app-release.aab" \
              -F "secret=GIZLI_SIFRE_123" \
              -F "app_token=${{ github.event.inputs.user_id }}" \
-            https://imdatgel.site/git/upload.php
+             https://imdatgel.site/git/upload.php
