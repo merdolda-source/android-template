@@ -1,0 +1,72 @@
+name: Build Android APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      site_url:
+        description: 'Web Site URL'
+        required: true
+      app_name:
+        description: 'App Name'
+        required: true
+      package_name:
+        description: 'Package Name (ID)'
+        required: true
+        default: 'com.merdolda.webapp'
+      user_id:
+        description: 'User ID'
+        required: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v3
+
+    - name: Set up JDK 17
+      uses: actions/setup-java@v3
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+        cache: 'gradle'
+
+    # --- SİHİRLİ KISIM BAŞLIYOR (Otomatik Düzenleme) ---
+
+    - name: Update App Configuration
+      run: |
+        # 1. URL DEĞİŞTİRME (MainActivity içindeki linki güncelle)
+        # Önceki kodda linkin olduğu yeri bulup değiştirir.
+        sed -i 's|https://google.com|${{ github.event.inputs.site_url }}|g' app/src/main/java/com/kodhocasi/template/MainActivity.java
+        
+        # 2. HTTP İZNİ VERME (ERR_CLEARTEXT_NOT_PERMITTED Çözümü)
+        # Manifest dosyasına usesCleartextTraffic="true" ekler.
+        sed -i 's/android:allowBackup="true"/android:allowBackup="true" android:usesCleartextTraffic="true"/g' app/src/main/AndroidManifest.xml
+
+        # 3. UYGULAMA ADINI DEĞİŞTİRME
+        # strings.xml içindeki "Web App" yazısını formdan gelen isimle değiştirir.
+        sed -i 's|<string name="app_name">.*</string>|<string name="app_name">${{ github.event.inputs.app_name }}</string>|g' app/src/main/res/values/strings.xml
+
+        # 4. PAKET ADINI (APPLICATION ID) DEĞİŞTİRME
+        # build.gradle içindeki applicationId kısmını günceller.
+        sed -i 's|applicationId ".*"|applicationId "${{ github.event.inputs.package_name }}"|g' app/build.gradle
+
+    # --- SİHİRLİ KISIM BİTTİ ---
+
+    - name: Setup Gradle
+      uses: gradle/actions/setup-gradle@v3
+      with:
+        cache-read-only: false
+
+    - name: Grant execute permission for gradlew
+      run: chmod +x gradlew
+
+    - name: Build APK
+      run: ./gradlew assembleDebug --parallel --build-cache --no-daemon
+      
+    - name: Upload APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: app-debug
+        path: app/build/outputs/apk/debug/app-debug.apk
