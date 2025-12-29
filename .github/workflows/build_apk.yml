@@ -1,4 +1,4 @@
-name: Build Signed Release APK (Safe Mode)
+name: Build Signed Release APK (Final Fix)
 
 on:
   workflow_dispatch:
@@ -43,13 +43,13 @@ jobs:
         distribution: 'temurin'
         cache: 'gradle'
 
-    # 1. İMZA DOSYASINI OLUŞTUR (Base64'ten Çevir)
+    # 1. KEYSTORE OLUŞTUR
     - name: Decode Keystore
       run: |
         echo "${{ secrets.SIGNING_KEY_STORE_BASE64 }}" | base64 --decode > app/upload-keystore.jks
 
-    # 2. build.gradle'ı İMZALI AYARLARLA YENİDEN YAZ
-    - name: Rewrite build.gradle with Signing Config
+    # 2. GRADLE AYARLARINI YENİDEN YAZ (İMZALI)
+    - name: Rewrite build.gradle
       run: |
         cat <<EOF > app/build.gradle
         plugins {
@@ -99,33 +99,43 @@ jobs:
         sed -i 's|REPLACE_THIS_URL|${{ github.event.inputs.site_url }}|g' app/src/main/java/com/kodhocasi/template/MainActivity.java
         sed -i 's|<string name="app_name">.*</string>|<string name="app_name">${{ github.event.inputs.app_name }}</string>|g' app/src/main/res/values/strings.xml
 
-    # 4. İKON GÜNCELLEME (GÜVENLİ MOD)
-    # Resim bozuksa bile hata vermez, varsayılanı kullanır.
-    - name: Update App Icon (Safe Mode)
-      continue-on-error: true
+    # 4. İKON GÜNCELLEME (PATLAMAYAN MOD)
+    # Bu adım başarısız olsa bile build devam eder.
+    - name: Update App Icon (Bulletproof)
+      continue-on-error: true 
       run: |
         ICON_URL="${{ github.event.inputs.icon_url }}"
-        echo "İşlenen İkon: $ICON_URL"
+        echo "Gelen URL: $ICON_URL"
         
-        if [ "$ICON_URL" != "default" ] && [ -n "$ICON_URL" ]; then
-          # Dosyayı indir (Hata varsa durmaz)
-          curl -s -L "$ICON_URL" -o new_icon.png
+        # Link 'default' değilse ve 'http' içeriyorsa dene
+        if [[ "$ICON_URL" != "default" && "$ICON_URL" == http* ]]; then
           
-          # Dosya türünü kontrol et
-          FILE_TYPE=$(file --mime-type -b new_icon.png)
-          echo "Dosya Türü: $FILE_TYPE"
+          echo "Dosya indiriliyor..."
+          # -f: Hata varsa indirme (404 indirme)
+          # -L: Yönlendirmeleri takip et
+          curl -f -L "$ICON_URL" -o temp_icon_check.png || echo "İndirme başarısız."
 
-          if [[ "$FILE_TYPE" == "image/png" ]] || [[ "$FILE_TYPE" == "image/jpeg" ]]; then
-            echo "✅ Geçerli resim bulundu. Değiştiriliyor..."
-            for folder in mipmap-mdpi mipmap-hdpi mipmap-xhdpi mipmap-xxhdpi mipmap-xxxhdpi; do
-              cp new_icon.png app/src/main/res/$folder/ic_launcher.png
-              cp new_icon.png app/src/main/res/$folder/ic_launcher_round.png
-            done
+          # İndirme başarılıysa kontrol et
+          if [ -f temp_icon_check.png ]; then
+             FILE_TYPE=$(file --mime-type -b temp_icon_check.png)
+             echo "Dosya Tipi: $FILE_TYPE"
+
+             # Eğer GERÇEKTEN resimse kopyala
+             if [[ "$FILE_TYPE" == "image/png" || "$FILE_TYPE" == "image/jpeg" ]]; then
+                echo "✅ Resim doğrulandı. İkonlar değiştiriliyor..."
+                for folder in mipmap-mdpi mipmap-hdpi mipmap-xhdpi mipmap-xxhdpi mipmap-xxxhdpi; do
+                  cp temp_icon_check.png app/src/main/res/$folder/ic_launcher.png
+                  cp temp_icon_check.png app/src/main/res/$folder/ic_launcher_round.png
+                done
+             else
+                echo "⛔ İndirilen dosya RESİM DEĞİL (HTML olabilir). İkon değiştirilmedi."
+                # Dosyayı silmiyoruz, orijinal ikonlar kalıyor. Hata vermiyoruz.
+             fi
           else
-            echo "⚠️ İndirilen dosya resim değil (HTML veya Bozuk). Varsayılan ikon kullanılacak."
+             echo "Dosya indirilemediği için atlanıyor."
           fi
         else
-          echo "Özel ikon yok, varsayılan kullanılacak."
+          echo "Varsayılan ikon kullanılacak."
         fi
 
     - name: Setup Gradle
@@ -136,16 +146,16 @@ jobs:
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
 
-    # 5. HEM APK HEM AAB ÜRET (Play Store Uyumlu)
-    - name: Build Release AAB and APK
+    # 5. BUILD AL (APK + AAB)
+    - name: Build Release
       run: ./gradlew bundleRelease assembleRelease --no-daemon
-      
-    # 6. SUNUCUYA YÜKLE (Zorunlu Değil - Hata Olsa da Devam Eder)
-    - name: Upload to My Server
-      continue-on-error: true # <-- BU SATIR ÖNEMLİ: Upload başarısız olsa bile build "Yeşil" biter.
+
+    # 6. SUNUCUYA YÜKLE (Hata Olsa da Devam Et)
+    - name: Upload to Server
+      continue-on-error: true
       run: |
-        echo "Dosyalar sunucuya yükleniyor..."
-        # SİTE ADRESİNİ DEĞİŞTİR
+        echo "Sunucuya yükleniyor..."
+        # ADRESİ DEĞİŞTİR
         curl -X POST \
              -F "apk_file=@app/build/outputs/apk/release/app-release.apk" \
              -F "aab_file=@app/build/outputs/bundle/release/app-release.aab" \
