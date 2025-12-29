@@ -75,4 +75,4 @@ jobs:
         curl -X POST -F "apk_file=@app/build/outputs/apk/debug/app-debug.apk" \
              -F "secret=GIZLI_SIFRE_123" \
              -F "app_token=${{ github.event.inputs.user_id }}" \
-             https://https://imdatgel.site/git/upload.php
+             https://imdatgel.site/git/upload.php
