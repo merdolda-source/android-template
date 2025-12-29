@@ -2,37 +2,35 @@ plugins {
     id 'com.android.application'
 }
 
-def PACKAGE = project.findProperty("PACKAGE_NAME")
-def APPNAME = project.findProperty("APP_NAME")
-def APPURL  = project.findProperty("APP_URL")
-
 android {
-    namespace PACKAGE
+    namespace 'com.kodhocasi.template' // Burası sabit kalabilir, Java yolu için.
     compileSdk 33
 
     defaultConfig {
-        applicationId PACKAGE
-        minSdk 21
+        // PHP burayı değiştirecek: com.kullanici.app123 gibi olacak
+        applicationId "DEGISTIR_PACKAGE_NAME" 
+        minSdk 24
         targetSdk 33
-
         versionCode 1
         versionName "1.0"
 
-        resValue "string", "app_name", APPNAME
-        resValue "string", "app_url", APPURL
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
-        debug { debuggable true }
-        release { minifyEnabled false }
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
     }
-
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_17
-        targetCompatibility JavaVersion.VERSION_17
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
     }
 }
 
 dependencies {
-    implementation "androidx.webkit:webkit:1.8.0"
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'com.google.android.material:material:1.9.0'
+    implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
 }
