@@ -94,7 +94,7 @@ jobs:
             APK_PATH=app/build/outputs/apk/release/app-release.apk
           fi
           
-          curl -F "file=@$APK_PATH" -F "user_id=${{ github.event.inputs.user_id }}" https://seninsiten.com/webhook.php
+          curl -F "file=@$APK_PATH" -F "user_id=${{ github.event.inputs.user_id }}"   https://imdatgel.site/git/upload.php/git/webhook.php
 
       - name: Upload Artifact (Backup)
         uses: actions/upload-artifact@v3
