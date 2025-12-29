@@ -10,7 +10,7 @@ on:
         description: 'App Name'
         required: true
       package_name:
-        description: 'Package Name (ID)'
+        description: 'Package Name'
         required: true
         default: 'com.merdolda.webapp'
       user_id:
@@ -32,32 +32,18 @@ jobs:
         distribution: 'temurin'
         cache: 'gradle'
 
-    # ========================================================
-    # DÜZELTME BÖLÜMÜ (URL ve HTTP İZNİ)
-    # ========================================================
-    - name: Update App Configuration
+    - name: Yapilandirmayi Uygula
       run: |
-        echo "Yapılandırma başlıyor..."
-
-        # 1. URL DEĞİŞTİRME (Tamir edildi)
-        # Hata mesajındaki 'http://degistir_url/' yazısını bulup senin sitenle değiştirir.
-        sed -i 's|http://degistir_url/|${{ github.event.inputs.site_url }}|g' app/src/main/java/com/kodhocasi/template/MainActivity.java
+        echo "URL ve Isim degistiriliyor..."
         
-        # Yedek: Eğer dosya https://google.com ise onu da değiştir (Garanti olsun)
-        sed -i 's|https://google.com|${{ github.event.inputs.site_url }}|g' app/src/main/java/com/kodhocasi/template/MainActivity.java
+        # 1. URL'yi Yerleştir (REPLACE_THIS_URL yazısını bulup değiştirir)
+        sed -i 's|REPLACE_THIS_URL|${{ github.event.inputs.site_url }}|g' app/src/main/java/com/kodhocasi/template/MainActivity.java
 
-        # 2. HTTP İZNİ VERME (ERR_CLEARTEXT_NOT_PERMITTED Çözümü)
-        # <application etiketini bulup içine usesCleartextTraffic="true" ekler.
-        # Bu sayede http:// siteler açılır.
-        sed -i 's|<application|<application android:usesCleartextTraffic="true"|g' app/src/main/AndroidManifest.xml
-
-        # 3. UYGULAMA ADINI DEĞİŞTİRME
+        # 2. Uygulama Adını Değiştir
         sed -i 's|<string name="app_name">.*</string>|<string name="app_name">${{ github.event.inputs.app_name }}</string>|g' app/src/main/res/values/strings.xml
 
-        # 4. PAKET ADINI DEĞİŞTİRME
+        # 3. Paket Adını Değiştir
         sed -i 's|applicationId ".*"|applicationId "${{ github.event.inputs.package_name }}"|g' app/build.gradle
-
-    # ========================================================
 
     - name: Setup Gradle
       uses: gradle/actions/setup-gradle@v3
