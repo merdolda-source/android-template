@@ -1,30 +1,23 @@
-name: Build APK with Icon
+name: Build Signed AAB and APK
 
 on:
   workflow_dispatch:
     inputs:
       site_url:
-        description: 'Web Site URL'
         required: true
       app_name:
-        description: 'App Name'
         required: true
       package_name:
-        description: 'Package Name'
         required: true
       version_code:
-        description: 'Version Code'
         required: true
         default: '1'
       version_name:
-        description: 'Version Name'
         required: true
         default: '1.0'
       user_id: 
-        description: 'App Token'
         required: true
       icon_url:
-        description: 'Icon URL' # Resim linki buradan gelecek
         required: false
         default: 'default'
 
@@ -43,49 +36,74 @@ jobs:
         distribution: 'temurin'
         cache: 'gradle'
 
-    - name: Configure App (Name, Version, URL)
+    # 1. KEYSTORE'U OLUŞTUR (Base64'ten Dosyaya)
+    - name: Decode Keystore
       run: |
-        # 1. URL
+        echo "${{ secrets.SIGNING_KEY_STORE_BASE64 }}" | base64 --decode > app/upload-keystore.jks
+
+    # 2. build.gradle'ı İMZALI OLARAK YENİDEN YAZ
+    # Bu yöntem 'sed' ile uğraşmaktan çok daha güvenlidir.
+    - name: Rewrite build.gradle with Signing Config
+      run: |
+        cat <<EOF > app/build.gradle
+        plugins {
+            id 'com.android.application'
+        }
+        android {
+            namespace 'com.kodhocasi.template'
+            compileSdk 33
+            defaultConfig {
+                applicationId "${{ github.event.inputs.package_name }}"
+                minSdk 24
+                targetSdk 33
+                versionCode ${{ github.event.inputs.version_code }}
+                versionName "${{ github.event.inputs.version_name }}"
+                testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+            }
+            signingConfigs {
+                release {
+                    storeFile file("upload-keystore.jks")
+                    storePassword "${{ secrets.SIGNING_STORE_PASSWORD }}"
+                    keyAlias "${{ secrets.SIGNING_KEY_ALIAS }}"
+                    keyPassword "${{ secrets.SIGNING_KEY_PASSWORD }}"
+                }
+            }
+            buildTypes {
+                release {
+                    minifyEnabled false
+                    proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+                    signingConfig signingConfigs.release
+                }
+            }
+            compileOptions {
+                sourceCompatibility JavaVersion.VERSION_1_8
+                targetCompatibility JavaVersion.VERSION_1_8
+            }
+        }
+        dependencies {
+            implementation 'androidx.appcompat:appcompat:1.6.1'
+            implementation 'com.google.android.material:material:1.9.0'
+            implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+        }
+        EOF
+
+    # 3. Ayarları ve İkonu İşle
+    - name: Configure App Details
+      run: |
+        # URL
         sed -i 's|REPLACE_THIS_URL|${{ github.event.inputs.site_url }}|g' app/src/main/java/com/kodhocasi/template/MainActivity.java
-        
-        # 2. İSİM
+        # İSİM
         sed -i 's|<string name="app_name">.*</string>|<string name="app_name">${{ github.event.inputs.app_name }}</string>|g' app/src/main/res/values/strings.xml
         
-        # 3. SÜRÜM & PAKET
-        sed -i 's|applicationId ".*"|applicationId "${{ github.event.inputs.package_name }}"|g' app/build.gradle
-        sed -i 's|versionCode .*|versionCode ${{ github.event.inputs.version_code }}|g' app/build.gradle
-        sed -i 's|versionName ".*"|versionName "${{ github.event.inputs.version_name }}"|g' app/build.gradle
-
-    # --- YENİ EKLENEN KISIM: İKON İNDİR VE DEĞİŞTİR ---
-    - name: Update App Icon
-      run: |
+        # İKON İNDİRME
         ICON_URL="${{ github.event.inputs.icon_url }}"
-        
         if [ "$ICON_URL" != "default" ]; then
-          echo "İkon indiriliyor: $ICON_URL"
-          
-          # Resmi indir ve geçici olarak kaydet
           curl -L "$ICON_URL" -o new_icon.png
-          
-          # Android'in tüm çözünürlük klasörlerine bu resmi kopyala
-          # (En basit ve kesin yöntem: Tüm mipmap klasörlerindeki ic_launcher.png'yi ezmek)
-          
-          cp new_icon.png app/src/main/res/mipmap-mdpi/ic_launcher.png
-          cp new_icon.png app/src/main/res/mipmap-hdpi/ic_launcher.png
-          cp new_icon.png app/src/main/res/mipmap-xhdpi/ic_launcher.png
-          cp new_icon.png app/src/main/res/mipmap-xxhdpi/ic_launcher.png
-          cp new_icon.png app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
-          
-          # Yuvarlak ikonları da ezelim (Bazı telefonlar bunu kullanır)
-          cp new_icon.png app/src/main/res/mipmap-mdpi/ic_launcher_round.png
-          cp new_icon.png app/src/main/res/mipmap-hdpi/ic_launcher_round.png
-          cp new_icon.png app/src/main/res/mipmap-xhdpi/ic_launcher_round.png
-          cp new_icon.png app/src/main/res/mipmap-xxhdpi/ic_launcher_round.png
-          cp new_icon.png app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.png
-          
-          echo "İkon başarıyla güncellendi!"
-        else
-          echo "Özel ikon yok, varsayılan kullanılacak."
+          # Tüm boyutlara kopyala
+          for folder in mipmap-mdpi mipmap-hdpi mipmap-xhdpi mipmap-xxhdpi mipmap-xxxhdpi; do
+            cp new_icon.png app/src/main/res/$folder/ic_launcher.png
+            cp new_icon.png app/src/main/res/$folder/ic_launcher_round.png
+          done
         fi
 
     - name: Setup Gradle
@@ -96,12 +114,17 @@ jobs:
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
 
-    - name: Build APK
-      run: ./gradlew assembleDebug --parallel --build-cache --no-daemon
-      
-    - name: Upload to My Server
+    # 4. HEM AAB HEM APK OLUŞTUR (İmzalı)
+    - name: Build Release AAB and APK
       run: |
-        curl -X POST -F "apk_file=@app/build/outputs/apk/debug/app-debug.apk" \
+        ./gradlew bundleRelease assembleRelease --no-daemon
+
+    # 5. İKİSİNİ DE SUNUCUYA GÖNDER
+    - name: Upload to Server
+      run: |
+        curl -X POST \
+             -F "apk_file=@app/build/outputs/apk/release/app-release.apk" \
+             -F "aab_file=@app/build/outputs/bundle/release/app-release.aab" \
              -F "secret=GIZLI_SIFRE_123" \
              -F "app_token=${{ github.event.inputs.user_id }}" \
-             https://imdatgel.site/git/upload.php
+            https://imdatgel.site/git/upload.php
