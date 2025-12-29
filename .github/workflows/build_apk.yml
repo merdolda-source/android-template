@@ -1,4 +1,4 @@
-name: Build Pro Android APK
+name: Build APK (Update Only)
 
 on:
   workflow_dispatch:
@@ -22,9 +22,11 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+    # 1. Kodları Çek
     - name: Checkout Code
       uses: actions/checkout@v3
 
+    # 2. Java Kur
     - name: Set up JDK 17
       uses: actions/setup-java@v3
       with:
@@ -32,127 +34,38 @@ jobs:
         distribution: 'temurin'
         cache: 'gradle'
 
-    - name: Inject Professional Code
+    # 3. MEVCUT DOSYALARI GÜNCELLE (Değişkenleri Yerleştir)
+    - name: Update Configuration
       run: |
-        echo "Profesyonel Java kodu enjekte ediliyor..."
-        
-        # 1. MainActivity.java'yı TAMAMEN YENİDEN YAZIYORUZ
-        # Bu kod sayesinde geri tuşu çalışır, linkler uygulama içinde açılır.
-        
-        cat <<EOF > app/src/main/java/com/kodhocasi/template/MainActivity.java
-        package com.kodhocasi.template;
+        echo "Repodaki dosyalar güncelleniyor..."
 
-        import android.os.Bundle;
-        import android.view.KeyEvent;
-        import android.webkit.WebSettings;
-        import android.webkit.WebView;
-        import android.webkit.WebViewClient;
-        import androidx.appcompat.app.AppCompatActivity;
-
-        public class MainActivity extends AppCompatActivity {
-
-            private WebView myWebView;
-            // Burasi dinamik degisecek
-            private String targetUrl = "REPLACE_THIS_URL";
-
-            @Override
-            protected void onCreate(Bundle savedInstanceState) {
-                super.onCreate(savedInstanceState);
-                setContentView(R.layout.activity_main);
-
-                myWebView = findViewById(R.id.webview);
-                WebSettings webSettings = myWebView.getSettings();
-                
-                // TUM OZELLIKLERI AC (Full Access)
-                webSettings.setJavaScriptEnabled(true);
-                webSettings.setDomStorageEnabled(true);
-                webSettings.setLoadWithOverviewMode(true);
-                webSettings.setUseWideViewPort(true);
-                webSettings.setBuiltInZoomControls(true);
-                webSettings.setDisplayZoomControls(false);
-                webSettings.setAllowFileAccess(true);
-                
-                // Linklerin uygulama icinde acilmasini saglayan kod
-                myWebView.setWebViewClient(new WebViewClient() {
-                    @Override
-                    public boolean shouldOverrideUrlLoading(WebView view, String url) {
-                        view.loadUrl(url);
-                        return true;
-                    }
-                });
-
-                myWebView.loadUrl(targetUrl);
-            }
-
-            // Geri tusuna basinca uygulamadan cikmak yerine onceki sayfaya git
-            @Override
-            public boolean onKeyDown(int keyCode, KeyEvent event) {
-                if (event.getAction() == KeyEvent.ACTION_DOWN) {
-                    switch (keyCode) {
-                        case KeyEvent.KEYCODE_BACK:
-                            if (myWebView.canGoBack()) {
-                                myWebView.goBack();
-                            } else {
-                                finish();
-                            }
-                            return true;
-                    }
-                }
-                return super.onKeyDown(keyCode, event);
-            }
-        }
-        EOF
-
-        # 2. MANIFEST DUZENLEME (HTTP Izni ve Tema)
-        # Mevcut manifesti silip temiz bir tane yaziyoruz.
-        cat <<EOF > app/src/main/AndroidManifest.xml
-        <?xml version="1.0" encoding="utf-8"?>
-        <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-            xmlns:tools="http://schemas.android.com/tools">
-            <uses-permission android:name="android.permission.INTERNET" />
-            <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-            
-            <application
-                android:allowBackup="true"
-                android:icon="@mipmap/ic_launcher"
-                android:label="@string/app_name"
-                android:supportsRtl="true"
-                android:usesCleartextTraffic="true"
-                android:theme="@style/Theme.AppCompat.Light.NoActionBar"
-                tools:targetApi="31">
-                <activity
-                    android:name=".MainActivity"
-                    android:exported="true">
-                    <intent-filter>
-                        <action android:name="android.intent.action.MAIN" />
-                        <category android:name="android.intent.category.LAUNCHER" />
-                    </intent-filter>
-                </activity>
-            </application>
-        </manifest>
-        EOF
-
-        # 3. KULLANICI AYARLARINI GOMME (sed komutlari)
-        # URL'yi yerlestir
+        # A) URL DEĞİŞTİRME
+        # MainActivity.java içinde "REPLACE_THIS_URL" yazısını bulup PHP'den gelen linkle değiştirir.
         sed -i 's|REPLACE_THIS_URL|${{ github.event.inputs.site_url }}|g' app/src/main/java/com/kodhocasi/template/MainActivity.java
 
-        # Uygulama Adini yerlestir
+        # B) UYGULAMA ADI DEĞİŞTİRME
+        # strings.xml içindeki mevcut ismi siler, yenisini yazar.
         sed -i 's|<string name="app_name">.*</string>|<string name="app_name">${{ github.event.inputs.app_name }}</string>|g' app/src/main/res/values/strings.xml
 
-        # Paket Adini yerlestir
+        # C) PAKET ADI DEĞİŞTİRME
+        # build.gradle içindeki applicationId "eski.id" kısmını bulup yenisini yazar.
         sed -i 's|applicationId ".*"|applicationId "${{ github.event.inputs.package_name }}"|g' app/build.gradle
 
+    # 4. Gradle Hazırlığı
     - name: Setup Gradle
       uses: gradle/actions/setup-gradle@v3
       with:
         cache-read-only: false
 
+    # 5. İzin Ver
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
 
+    # 6. DERLE (BUILD)
     - name: Build APK
       run: ./gradlew assembleDebug --parallel --build-cache --no-daemon
       
+    # 7. Yükle
     - name: Upload APK
       uses: actions/upload-artifact@v4
       with:
