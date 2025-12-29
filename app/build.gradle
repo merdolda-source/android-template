@@ -1,42 +1,200 @@
-plugins {
-    id 'com.android.application'
-}
+name: Build Pro Android APK
 
-android {
-    // DİKKAT: Kodların çalışması için burası 'com.kodhocasi.template' olmalı.
-    // Çünkü Java dosyan fiziksel olarak bu klasörde duruyor.
-    namespace 'com.kodhocasi.template' 
-    compileSdk 33
+on:
+  workflow_dispatch:
+    inputs:
+      site_url:
+        description: 'Router URL'
+        required: true
+      app_name:
+        description: 'App Name'
+        required: true
+      package_name:
+        description: 'Package Name'
+        required: true
+        default: 'com.pro.webapp'
+      user_id:
+        description: 'User ID'
+        required: false
 
-    defaultConfig {
-        // DİKKAT: Burası senin istediğin yeni isim olarak kalacak.
-        // Google Play ve telefon bu ismi görecek.
-        applicationId "com.merdolda.webapp" 
-        minSdk 24
-        targetSdk 33
-        versionCode 1
-        versionName "1.0"
+jobs:
+  build:
+    runs-on: ubuntu-latest
 
-        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
-    }
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v3
 
-    buildTypes {
-        release {
-            minifyEnabled false
-            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+    - name: Set up JDK 17
+      uses: actions/setup-java@v3
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+        cache: 'gradle'
+
+    # ==================================================================
+    # 1. ADIM: PROJE AYARLARINI TAMİR ET (403 HATASI ÇÖZÜMÜ)
+    # ==================================================================
+    - name: Fix Repositories and Gradle
+      run: |
+        echo "Eski build.gradle dosyalari onariliyor..."
+
+        # KOK DIZINDEKI build.gradle DOSYASINI YENIDEN YAZ (Guncel Depolar)
+        cat <<EOF > build.gradle
+        // Top-level build file
+        buildscript {
+            repositories {
+                google()
+                mavenCentral()
+                gradlePluginPortal()
+            }
+            dependencies {
+                // Gradle surumunu guncelliyoruz
+                classpath 'com.android.tools.build:gradle:8.1.0'
+            }
         }
-    }
-    compileOptions {
-        sourceCompatibility JavaVersion.VERSION_1_8
-        targetCompatibility JavaVersion.VERSION_1_8
-    }
-}
+        allprojects {
+            repositories {
+                google()
+                mavenCentral()
+                maven { url "https://jitpack.io" }
+            }
+        }
+        task clean(type: Delete) {
+            delete rootProject.buildDir
+        }
+        EOF
 
-dependencies {
-    implementation 'androidx.appcompat:appcompat:1.6.1'
-    implementation 'com.google.android.material:material:1.9.0'
-    implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
-    testImplementation 'junit:junit:4.13.2'
-    androidTestImplementation 'androidx.test.ext:junit:1.1.5'
-    androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
-}
+        # APP DIZININDEKI build.gradle ICIN GEREKLI DUZENLEMELER
+        # namespace hatasini onlemek icin namespace ekliyoruz
+        sed -i 's/android {/android { namespace "com.kodhocasi.template"/g' app/build.gradle
+
+    # ==================================================================
+    # 2. ADIM: PROFESYONEL JAVA KODUNU GÖM (Geri Tuşu & Gezinme)
+    # ==================================================================
+    - name: Inject Professional Code
+      run: |
+        echo "Profesyonel Java kodu enjekte ediliyor..."
+        
+        # MainActivity.java'yı TAMAMEN YENİDEN YAZIYORUZ
+        cat <<EOF > app/src/main/java/com/kodhocasi/template/MainActivity.java
+        package com.kodhocasi.template;
+
+        import android.os.Bundle;
+        import android.view.KeyEvent;
+        import android.webkit.WebSettings;
+        import android.webkit.WebView;
+        import android.webkit.WebViewClient;
+        import androidx.appcompat.app.AppCompatActivity;
+
+        public class MainActivity extends AppCompatActivity {
+
+            private WebView myWebView;
+            // Burasi otomasyon tarafindan degistirilecek
+            private String targetUrl = "REPLACE_THIS_URL";
+
+            @Override
+            protected void onCreate(Bundle savedInstanceState) {
+                super.onCreate(savedInstanceState);
+                setContentView(R.layout.activity_main);
+
+                myWebView = findViewById(R.id.webview);
+                WebSettings webSettings = myWebView.getSettings();
+                
+                // TUM OZELLIKLERI AC
+                webSettings.setJavaScriptEnabled(true);
+                webSettings.setDomStorageEnabled(true);
+                webSettings.setLoadWithOverviewMode(true);
+                webSettings.setUseWideViewPort(true);
+                webSettings.setBuiltInZoomControls(true);
+                webSettings.setDisplayZoomControls(false);
+                webSettings.setAllowFileAccess(true);
+                webSettings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW); // HTTP/HTTPS karisik izin ver
+                
+                // Linklerin uygulama icinde acilmasini sagla
+                myWebView.setWebViewClient(new WebViewClient() {
+                    @Override
+                    public boolean shouldOverrideUrlLoading(WebView view, String url) {
+                        // Eger URL bizim sitemizle alakaliysa icerde ac, degilse (orn. PDF) disarida acilabilir
+                        view.loadUrl(url);
+                        return true;
+                    }
+                });
+
+                myWebView.loadUrl(targetUrl);
+            }
+
+            // Geri tusuna basinca uygulamadan cikmak yerine onceki sayfaya git
+            @Override
+            public boolean onKeyDown(int keyCode, KeyEvent event) {
+                if (event.getAction() == KeyEvent.ACTION_DOWN) {
+                    switch (keyCode) {
+                        case KeyEvent.KEYCODE_BACK:
+                            if (myWebView.canGoBack()) {
+                                myWebView.goBack();
+                            } else {
+                                finish();
+                            }
+                            return true;
+                    }
+                }
+                return super.onKeyDown(keyCode, event);
+            }
+        }
+        EOF
+
+        # 3. MANIFEST DUZENLEME (HTTP Izni ve Tema)
+        cat <<EOF > app/src/main/AndroidManifest.xml
+        <?xml version="1.0" encoding="utf-8"?>
+        <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+            xmlns:tools="http://schemas.android.com/tools">
+            <uses-permission android:name="android.permission.INTERNET" />
+            <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+            
+            <application
+                android:allowBackup="true"
+                android:icon="@mipmap/ic_launcher"
+                android:label="@string/app_name"
+                android:supportsRtl="true"
+                android:usesCleartextTraffic="true"
+                android:theme="@style/Theme.AppCompat.Light.NoActionBar"
+                tools:targetApi="31">
+                <activity
+                    android:name=".MainActivity"
+                    android:exported="true">
+                    <intent-filter>
+                        <action android:name="android.intent.action.MAIN" />
+                        <category android:name="android.intent.category.LAUNCHER" />
+                    </intent-filter>
+                </activity>
+            </application>
+        </manifest>
+        EOF
+
+        # 4. KULLANICI AYARLARINI GOMME
+        # URL'yi yerlestir
+        sed -i 's|REPLACE_THIS_URL|${{ github.event.inputs.site_url }}|g' app/src/main/java/com/kodhocasi/template/MainActivity.java
+
+        # Uygulama Adini yerlestir
+        sed -i 's|<string name="app_name">.*</string>|<string name="app_name">${{ github.event.inputs.app_name }}</string>|g' app/src/main/res/values/strings.xml
+
+        # Paket Adini yerlestir
+        sed -i 's|applicationId ".*"|applicationId "${{ github.event.inputs.package_name }}"|g' app/build.gradle
+
+    - name: Setup Gradle
+      uses: gradle/actions/setup-gradle@v3
+      with:
+        gradle-version: '8.2' # Stabil surumu zorla
+        cache-read-only: false
+
+    - name: Grant execute permission for gradlew
+      run: chmod +x gradlew
+
+    - name: Build APK
+      run: ./gradlew assembleDebug --parallel --build-cache --no-daemon
+      
+    - name: Upload APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: app-debug
+        path: app/build/outputs/apk/debug/app-debug.apk
