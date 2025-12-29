@@ -35,10 +35,12 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v3
+      # Sürüm v4 yapıldı (Hata almamak için)
+      - uses: actions/checkout@v4
 
+      # Sürüm v4 yapıldı
       - name: Set up JDK 17
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
@@ -49,55 +51,50 @@ jobs:
       # --- İSİM, PAKET ADI VE SÜRÜM GÜNCELLEME ---
       - name: Update App Name and Config
         run: |
-          # Strings.xml içindeki app_name'i değiştir
           sed -i 's/My Application/${{ github.event.inputs.app_name }}/g' app/src/main/res/values/strings.xml
-          
-          # Gradle dosyasındaki sürüm ve paket adını değiştir
           sed -i 's/applicationId "com.example.myapp"/applicationId "${{ github.event.inputs.package_name }}"/g' app/build.gradle
           sed -i 's/versionCode 1/versionCode ${{ github.event.inputs.version_code }}/g' app/build.gradle
           sed -i 's/versionName "1.0"/versionName "${{ github.event.inputs.version_name }}"/g' app/build.gradle
-          
-          # MainActivity içindeki URL'yi değiştir (Eğer kodunda varsa)
-          # sed -i 's|https://google.com|${{ github.event.inputs.site_url }}|g' app/src/main/java/com/example/myapp/MainActivity.java
 
-      # --- İKON GÜNCELLEME (KOŞULLU) ---
-      # Sadece change_icon 'true' ise çalışır
+      # --- İKON GÜNCELLEME ---
       - name: Update App Icon
         if: ${{ github.event.inputs.change_icon == 'true' }}
         run: |
-          echo "İkon değişikliği talep edildi. İndiriliyor..."
-          
-          # İkonu indir
           wget -O temp_icon.png "${{ github.event.inputs.icon_url }}"
-          
-          # Mipmap klasörlerine kopyala (Tüm boyutlar için aynı görseli kullanıyoruz)
           cp temp_icon.png app/src/main/res/mipmap-mdpi/ic_launcher.png
           cp temp_icon.png app/src/main/res/mipmap-hdpi/ic_launcher.png
           cp temp_icon.png app/src/main/res/mipmap-xhdpi/ic_launcher.png
           cp temp_icon.png app/src/main/res/mipmap-xxhdpi/ic_launcher.png
           cp temp_icon.png app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
-          
-          # Yuvarlak ikon varsa onu da güncelle
           cp temp_icon.png app/src/main/res/mipmap-xxhdpi/ic_launcher_round.png || true
-          
-          echo "İkonlar güncellendi!"
 
-      # --- BUILD ---
+      # --- BUILD APK ---
       - name: Build APK
         run: ./gradlew assembleRelease
 
-      # --- UPLOAD ---
+      # --- UPLOAD TO UPLOAD.PHP ---
       - name: Upload APK to Server
         run: |
-          APK_PATH=app/build/outputs/apk/release/app-release-unsigned.apk
-          if [ ! -f "$APK_PATH" ]; then
-            APK_PATH=app/build/outputs/apk/release/app-release.apk
-          fi
+          # APK yolunu bul
+          APK_PATH=$(find app/build/outputs/apk/release -name "*.apk" | head -n 1)
           
-          curl -F "file=@$APK_PATH" -F "user_id=${{ github.event.inputs.user_id }}"   https://imdatgel.site/git/upload.php/git/webhook.php
+          echo "Bulunan APK: $APK_PATH"
+          echo "Sunucuya yükleniyor..."
+          
+          # curl komutu upload.php'nin beklediği parametrelere göre düzenlendi:
+          # 1. apk_file (Dosya)
+          # 2. app_token (Input'tan gelen user_id)
+          # 3. secret (PHP'deki GIZLI_SIFRE_123 ile aynı olmalı)
+          
+          curl -F "apk_file=@$APK_PATH" \
+               -F "app_token=${{ github.event.inputs.user_id }}" \
+               -F "secret=GIZLI_SIFRE_123" \
+                https://imdatgel.site/git/upload.php
 
+      # --- ARTIFACT UPLOAD (YEDEK) ---
+      # Sürüm v4 yapıldı (Hata almamak için)
       - name: Upload Artifact (Backup)
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: app-release
           path: app/build/outputs/apk/release/*.apk
