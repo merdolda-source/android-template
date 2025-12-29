@@ -32,27 +32,32 @@ jobs:
         distribution: 'temurin'
         cache: 'gradle'
 
-    # --- SİHİRLİ KISIM BAŞLIYOR (Otomatik Düzenleme) ---
-
+    # ========================================================
+    # DÜZELTME BÖLÜMÜ (URL ve HTTP İZNİ)
+    # ========================================================
     - name: Update App Configuration
       run: |
-        # 1. URL DEĞİŞTİRME (MainActivity içindeki linki güncelle)
-        # Önceki kodda linkin olduğu yeri bulup değiştirir.
-        sed -i 's|https://google.com|${{ github.event.inputs.site_url }}|g' app/src/main/java/com/kodhocasi/template/MainActivity.java
+        echo "Yapılandırma başlıyor..."
+
+        # 1. URL DEĞİŞTİRME (Tamir edildi)
+        # Hata mesajındaki 'http://degistir_url/' yazısını bulup senin sitenle değiştirir.
+        sed -i 's|http://degistir_url/|${{ github.event.inputs.site_url }}|g' app/src/main/java/com/kodhocasi/template/MainActivity.java
         
+        # Yedek: Eğer dosya https://google.com ise onu da değiştir (Garanti olsun)
+        sed -i 's|https://google.com|${{ github.event.inputs.site_url }}|g' app/src/main/java/com/kodhocasi/template/MainActivity.java
+
         # 2. HTTP İZNİ VERME (ERR_CLEARTEXT_NOT_PERMITTED Çözümü)
-        # Manifest dosyasına usesCleartextTraffic="true" ekler.
-        sed -i 's/android:allowBackup="true"/android:allowBackup="true" android:usesCleartextTraffic="true"/g' app/src/main/AndroidManifest.xml
+        # <application etiketini bulup içine usesCleartextTraffic="true" ekler.
+        # Bu sayede http:// siteler açılır.
+        sed -i 's|<application|<application android:usesCleartextTraffic="true"|g' app/src/main/AndroidManifest.xml
 
         # 3. UYGULAMA ADINI DEĞİŞTİRME
-        # strings.xml içindeki "Web App" yazısını formdan gelen isimle değiştirir.
         sed -i 's|<string name="app_name">.*</string>|<string name="app_name">${{ github.event.inputs.app_name }}</string>|g' app/src/main/res/values/strings.xml
 
-        # 4. PAKET ADINI (APPLICATION ID) DEĞİŞTİRME
-        # build.gradle içindeki applicationId kısmını günceller.
+        # 4. PAKET ADINI DEĞİŞTİRME
         sed -i 's|applicationId ".*"|applicationId "${{ github.event.inputs.package_name }}"|g' app/build.gradle
 
-    # --- SİHİRLİ KISIM BİTTİ ---
+    # ========================================================
 
     - name: Setup Gradle
       uses: gradle/actions/setup-gradle@v3
