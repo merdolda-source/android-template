@@ -32,78 +32,13 @@ jobs:
         distribution: 'temurin'
         cache: 'gradle'
 
-    # ==================================================================
-    # 1. ADIM: REPO SORUNLARINI VE build.gradle HATALARINI DUZELT
-    # ==================================================================
-    - name: Fix Project Files
-      run: |
-        echo "Dosyalar onariliyor..."
-
-        # 1. KOK BUILD.GRADLE (Temiz ve Guncel Depolar)
-        # 403 hatasini cozmek icin burayi temizliyoruz.
-        cat <<EOF > build.gradle
-        buildscript {
-            repositories {
-                google()
-                mavenCentral()
-            }
-            dependencies {
-                classpath 'com.android.tools.build:gradle:8.1.1'
-            }
-        }
-        allprojects {
-            repositories {
-                google()
-                mavenCentral()
-                maven { url "https://jitpack.io" }
-            }
-        }
-        task clean(type: Delete) {
-            delete rootProject.buildDir
-        }
-        EOF
-
-        # 2. APP BUILD.GRADLE (Standart Ayarlar)
-        # Senin hatani (default:) cozmek icin burayi standart hale getiriyoruz.
-        cat <<EOF > app/build.gradle
-        plugins {
-            id 'com.android.application'
-        }
-        android {
-            namespace 'com.kodhocasi.template'
-            compileSdk 33
-            defaultConfig {
-                applicationId "REPLACE_THIS_ID"
-                minSdk 24
-                targetSdk 33
-                versionCode 1
-                versionName "1.0"
-                testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
-            }
-            buildTypes {
-                release {
-                    minifyEnabled false
-                    proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-                }
-            }
-            compileOptions {
-                sourceCompatibility JavaVersion.VERSION_1_8
-                targetCompatibility JavaVersion.VERSION_1_8
-            }
-        }
-        dependencies {
-            implementation 'androidx.appcompat:appcompat:1.6.1'
-            implementation 'com.google.android.material:material:1.9.0'
-            implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
-        }
-        EOF
-
-    # ==================================================================
-    # 2. ADIM: PROFESYONEL JAVA KODUNU GÖM (Gezinme & Geri Tuşu)
-    # ==================================================================
     - name: Inject Professional Code
       run: |
-        # MainActivity.java - Gelismis WebView Ayarlari
+        echo "Profesyonel Java kodu enjekte ediliyor..."
+        
+        # 1. MainActivity.java'yı TAMAMEN YENİDEN YAZIYORUZ
+        # Bu kod sayesinde geri tuşu çalışır, linkler uygulama içinde açılır.
+        
         cat <<EOF > app/src/main/java/com/kodhocasi/template/MainActivity.java
         package com.kodhocasi.template;
 
@@ -117,7 +52,7 @@ jobs:
         public class MainActivity extends AppCompatActivity {
 
             private WebView myWebView;
-            // Bu URL asagida sed komutuyla degistirilecek
+            // Burasi dinamik degisecek
             private String targetUrl = "REPLACE_THIS_URL";
 
             @Override
@@ -128,7 +63,7 @@ jobs:
                 myWebView = findViewById(R.id.webview);
                 WebSettings webSettings = myWebView.getSettings();
                 
-                // TUM OZELLIKLERI AC
+                // TUM OZELLIKLERI AC (Full Access)
                 webSettings.setJavaScriptEnabled(true);
                 webSettings.setDomStorageEnabled(true);
                 webSettings.setLoadWithOverviewMode(true);
@@ -136,9 +71,8 @@ jobs:
                 webSettings.setBuiltInZoomControls(true);
                 webSettings.setDisplayZoomControls(false);
                 webSettings.setAllowFileAccess(true);
-                webSettings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
                 
-                // Linklerin uygulama icinde acilmasini sagla
+                // Linklerin uygulama icinde acilmasini saglayan kod
                 myWebView.setWebViewClient(new WebViewClient() {
                     @Override
                     public boolean shouldOverrideUrlLoading(WebView view, String url) {
@@ -169,13 +103,15 @@ jobs:
         }
         EOF
 
-        # MANIFEST DUZENLEME (HTTP Izni)
+        # 2. MANIFEST DUZENLEME (HTTP Izni ve Tema)
+        # Mevcut manifesti silip temiz bir tane yaziyoruz.
         cat <<EOF > app/src/main/AndroidManifest.xml
         <?xml version="1.0" encoding="utf-8"?>
         <manifest xmlns:android="http://schemas.android.com/apk/res/android"
             xmlns:tools="http://schemas.android.com/tools">
             <uses-permission android:name="android.permission.INTERNET" />
             <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+            
             <application
                 android:allowBackup="true"
                 android:icon="@mipmap/ic_launcher"
@@ -196,17 +132,15 @@ jobs:
         </manifest>
         EOF
 
-        # 3. KULLANICI AYARLARINI GOMME
-        echo "Kullanici bilgileri isleniyor..."
-        
-        # URL
+        # 3. KULLANICI AYARLARINI GOMME (sed komutlari)
+        # URL'yi yerlestir
         sed -i 's|REPLACE_THIS_URL|${{ github.event.inputs.site_url }}|g' app/src/main/java/com/kodhocasi/template/MainActivity.java
 
-        # Uygulama Adi
+        # Uygulama Adini yerlestir
         sed -i 's|<string name="app_name">.*</string>|<string name="app_name">${{ github.event.inputs.app_name }}</string>|g' app/src/main/res/values/strings.xml
 
-        # Paket Adi (ID)
-        sed -i 's|REPLACE_THIS_ID|${{ github.event.inputs.package_name }}|g' app/build.gradle
+        # Paket Adini yerlestir
+        sed -i 's|applicationId ".*"|applicationId "${{ github.event.inputs.package_name }}"|g' app/build.gradle
 
     - name: Setup Gradle
       uses: gradle/actions/setup-gradle@v3
