@@ -1,16 +1,19 @@
-name: APK Oluşturucu
+name: Profesyonel APK Oluşturucu
 
 on:
   workflow_dispatch:
     inputs:
       site_url:
-        description: 'Uygulama Site URL'
+        description: 'Site URL'
         required: true
       app_name:
         description: 'Uygulama Adı'
         required: true
-      user_id:
-        description: 'Kullanıcı ID (Dosya ismi için)'
+      package_name:
+        description: 'Paket Adı (örn: com.user.app1)'
+        required: true
+      build_id:
+        description: 'Benzersiz ID'
         required: true
 
 jobs:
@@ -20,26 +23,38 @@ jobs:
     steps:
     - uses: actions/checkout@v3
 
-    - name: JDK Kurulumu
+    - name: JDK 17 Kurulumu
       uses: actions/setup-java@v3
       with:
         java-version: '17'
         distribution: 'temurin'
         cache: gradle
 
-    - name: URL ve İsim Değiştirme (Sihirli Kısım)
+    - name: Gradle İznini Ver (Hata Çözücü)
+      run: chmod +x gradlew
+
+    - name: Parametreleri İşle
       run: |
-        # Java dosyasındaki URL'yi değiştir
-        sed -i 's|DEGISTIR_URL|${{ github.event.inputs.site_url }}|g' app/src/main/java/com/ornek/webviewapp/MainActivity.java
+        echo "Değişiklikler yapılıyor..."
         
-        # Manifest dosyasındaki Uygulama Adını değiştir
+        # 1. URL Değiştir
+        # Dosya yolunu kesin bildiğimiz için direkt yolu veriyoruz
+        sed -i 's|DEGISTIR_URL|${{ github.event.inputs.site_url }}|g' app/src/main/java/com/kodhocasi/template/MainActivity.java
+        
+        # 2. Uygulama Adı Değiştir
         sed -i 's|DEGISTIR_APP_ADI|${{ github.event.inputs.app_name }}|g' app/src/main/AndroidManifest.xml
+        
+        # 3. Paket Adı (Application ID) Değiştir - EN ÖNEMLİSİ
+        # Sadece app/build.gradle içindeki applicationId kısmını değiştirir
+        sed -i 's|applicationId "DEGISTIR_PACKAGE_NAME"|applicationId "${{ github.event.inputs.package_name }}"|g' app/build.gradle
+        
+        echo "Tüm ayarlar tamamlandı."
 
-    - name: APK Derleme (Build)
-      run: ./gradlew assembleDebug
+    - name: APK Derle (Release Modu Benzeri Debug)
+      run: ./gradlew assembleDebug --stacktrace
 
-    - name: APK'yı Yükle (Artifact)
+    - name: APK Yükle
       uses: actions/upload-artifact@v4
       with:
-        name: app-${{ github.event.inputs.user_id }}
+        name: app-${{ github.event.inputs.build_id }}
         path: app/build/outputs/apk/debug/app-debug.apk
