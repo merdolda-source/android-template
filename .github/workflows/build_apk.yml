@@ -56,21 +56,23 @@ jobs:
           sed -i 's/versionCode 1/versionCode ${{ github.event.inputs.version_code }}/g' app/build.gradle
           sed -i 's/versionName "1.0"/versionName "${{ github.event.inputs.version_name }}"/g' app/build.gradle
 
-    # --- İKON GÜNCELLEME (ImageMagick ile Garantili Yöntem) ---
+  # --- İKON GÜNCELLEME (ImageMagick Yüklemeli & Garantili) ---
       - name: Update App Icon
         if: ${{ github.event.inputs.change_icon == 'true' }}
         run: |
+          echo "Gerekli araçlar yükleniyor..."
+          sudo apt-get update && sudo apt-get install -y imagemagick
+
           echo "İkon indiriliyor: ${{ github.event.inputs.icon_url }}"
           
-          # 1. Dosyayı ham olarak indir (curl -L yönlendirmeleri takip eder)
-          # Hata olursa işlem dursa bile logda görelim diye || true eklemiyoruz.
+          # 1. Dosyayı indir
           curl -L -o temp_icon_raw "${{ github.event.inputs.icon_url }}"
 
-          # 2. İndirilen dosya neymiş? (Debug için loga yazdır)
+          # 2. Dosya türünü kontrol et (Loglarda görmek için)
           file temp_icon_raw
           
-          # 3. ImageMagick kullanarak dosyayı GERÇEK PNG'ye çevir ve 512x512 yap
-          # Bu komut JPG, WebP veya bozuk PNG gelse bile temiz bir PNG oluşturur.
+          # 3. Dosyayı zorla PNG formatına ve 512x512 boyutuna çevir
+          # (convert komutu artık çalışacak çünkü yukarıda yükledik)
           convert temp_icon_raw -resize 512x512! temp_icon.png
 
           echo "Dönüştürme tamamlandı. Kopyalanıyor..."
