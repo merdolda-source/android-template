@@ -1,10 +1,10 @@
-name: Build Android APK
+name: Build Pro Android APK
 
 on:
   workflow_dispatch:
     inputs:
       site_url:
-        description: 'Web Site URL'
+        description: 'Router URL'
         required: true
       app_name:
         description: 'App Name'
@@ -12,7 +12,7 @@ on:
       package_name:
         description: 'Package Name'
         required: true
-        default: 'com.merdolda.webapp'
+        default: 'com.pro.webapp'
       user_id:
         description: 'User ID'
         required: false
@@ -32,17 +32,114 @@ jobs:
         distribution: 'temurin'
         cache: 'gradle'
 
-    - name: Yapilandirmayi Uygula
+    - name: Inject Professional Code
       run: |
-        echo "URL ve Isim degistiriliyor..."
+        echo "Profesyonel Java kodu enjekte ediliyor..."
         
-        # 1. URL'yi Yerleştir (REPLACE_THIS_URL yazısını bulup değiştirir)
+        # 1. MainActivity.java'yı TAMAMEN YENİDEN YAZIYORUZ
+        # Bu kod sayesinde geri tuşu çalışır, linkler uygulama içinde açılır.
+        
+        cat <<EOF > app/src/main/java/com/kodhocasi/template/MainActivity.java
+        package com.kodhocasi.template;
+
+        import android.os.Bundle;
+        import android.view.KeyEvent;
+        import android.webkit.WebSettings;
+        import android.webkit.WebView;
+        import android.webkit.WebViewClient;
+        import androidx.appcompat.app.AppCompatActivity;
+
+        public class MainActivity extends AppCompatActivity {
+
+            private WebView myWebView;
+            // Burasi dinamik degisecek
+            private String targetUrl = "REPLACE_THIS_URL";
+
+            @Override
+            protected void onCreate(Bundle savedInstanceState) {
+                super.onCreate(savedInstanceState);
+                setContentView(R.layout.activity_main);
+
+                myWebView = findViewById(R.id.webview);
+                WebSettings webSettings = myWebView.getSettings();
+                
+                // TUM OZELLIKLERI AC (Full Access)
+                webSettings.setJavaScriptEnabled(true);
+                webSettings.setDomStorageEnabled(true);
+                webSettings.setLoadWithOverviewMode(true);
+                webSettings.setUseWideViewPort(true);
+                webSettings.setBuiltInZoomControls(true);
+                webSettings.setDisplayZoomControls(false);
+                webSettings.setAllowFileAccess(true);
+                
+                // Linklerin uygulama icinde acilmasini saglayan kod
+                myWebView.setWebViewClient(new WebViewClient() {
+                    @Override
+                    public boolean shouldOverrideUrlLoading(WebView view, String url) {
+                        view.loadUrl(url);
+                        return true;
+                    }
+                });
+
+                myWebView.loadUrl(targetUrl);
+            }
+
+            // Geri tusuna basinca uygulamadan cikmak yerine onceki sayfaya git
+            @Override
+            public boolean onKeyDown(int keyCode, KeyEvent event) {
+                if (event.getAction() == KeyEvent.ACTION_DOWN) {
+                    switch (keyCode) {
+                        case KeyEvent.KEYCODE_BACK:
+                            if (myWebView.canGoBack()) {
+                                myWebView.goBack();
+                            } else {
+                                finish();
+                            }
+                            return true;
+                    }
+                }
+                return super.onKeyDown(keyCode, event);
+            }
+        }
+        EOF
+
+        # 2. MANIFEST DUZENLEME (HTTP Izni ve Tema)
+        # Mevcut manifesti silip temiz bir tane yaziyoruz.
+        cat <<EOF > app/src/main/AndroidManifest.xml
+        <?xml version="1.0" encoding="utf-8"?>
+        <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+            xmlns:tools="http://schemas.android.com/tools">
+            <uses-permission android:name="android.permission.INTERNET" />
+            <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+            
+            <application
+                android:allowBackup="true"
+                android:icon="@mipmap/ic_launcher"
+                android:label="@string/app_name"
+                android:supportsRtl="true"
+                android:usesCleartextTraffic="true"
+                android:theme="@style/Theme.AppCompat.Light.NoActionBar"
+                tools:targetApi="31">
+                <activity
+                    android:name=".MainActivity"
+                    android:exported="true">
+                    <intent-filter>
+                        <action android:name="android.intent.action.MAIN" />
+                        <category android:name="android.intent.category.LAUNCHER" />
+                    </intent-filter>
+                </activity>
+            </application>
+        </manifest>
+        EOF
+
+        # 3. KULLANICI AYARLARINI GOMME (sed komutlari)
+        # URL'yi yerlestir
         sed -i 's|REPLACE_THIS_URL|${{ github.event.inputs.site_url }}|g' app/src/main/java/com/kodhocasi/template/MainActivity.java
 
-        # 2. Uygulama Adını Değiştir
+        # Uygulama Adini yerlestir
         sed -i 's|<string name="app_name">.*</string>|<string name="app_name">${{ github.event.inputs.app_name }}</string>|g' app/src/main/res/values/strings.xml
 
-        # 3. Paket Adını Değiştir
+        # Paket Adini yerlestir
         sed -i 's|applicationId ".*"|applicationId "${{ github.event.inputs.package_name }}"|g' app/build.gradle
 
     - name: Setup Gradle
