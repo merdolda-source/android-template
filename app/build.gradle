@@ -3,11 +3,15 @@ plugins {
 }
 
 android {
-    namespace 'com.merdolda.webapp' // BURASI NOKTALI OLMALI
+    // DİKKAT: Kodların çalışması için burası 'com.kodhocasi.template' olmalı.
+    // Çünkü Java dosyan fiziksel olarak bu klasörde duruyor.
+    namespace 'com.kodhocasi.template' 
     compileSdk 33
 
     defaultConfig {
-        applicationId "com.merdolda.webapp" // BURASI DA NOKTALI OLMALI
+        // DİKKAT: Burası senin istediğin yeni isim olarak kalacak.
+        // Google Play ve telefon bu ismi görecek.
+        applicationId "com.merdolda.webapp" 
         minSdk 24
         targetSdk 33
         versionCode 1
