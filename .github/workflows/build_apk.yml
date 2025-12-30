@@ -1,4 +1,4 @@
-name: Build Android APK Only
+name: Build APK and AAB
 
 on:
   workflow_dispatch:
@@ -19,10 +19,10 @@ on:
         description: 'Version Name'
         required: true
       user_id:
-        description: 'User ID (App Token)'
+        description: 'User ID / Token'
         required: true
       icon_url:
-        description: 'Icon URL'
+        description: 'Icon Download URL'
         required: true
       change_icon:
         description: 'Change Icon? (true/false)'
@@ -43,7 +43,7 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      # ImageMagick Kurulumu (İkon hatasını önler)
+      # İkon Hatası İçin Gerekli Araç
       - name: Install ImageMagick
         run: sudo apt-get update && sudo apt-get install -y imagemagick
 
@@ -58,13 +58,15 @@ jobs:
           sed -i 's/versionCode 1/versionCode ${{ github.event.inputs.version_code }}/g' app/build.gradle
           sed -i 's/versionName "1.0"/versionName "${{ github.event.inputs.version_name }}"/g' app/build.gradle
 
-      # İkon İşleme (Garantili Yöntem)
-      - name: Update Icon
+      # İkon Güncelleme (Garantili Yöntem)
+      - name: Update App Icon
         if: ${{ github.event.inputs.change_icon == 'true' }}
         run: |
           curl -L -o temp_icon_raw "${{ github.event.inputs.icon_url }}"
+          # Dosyayı temizle ve PNG yap
           convert temp_icon_raw -resize 512x512! temp_icon.png
           
+          # Klasörlere dağıt
           cp temp_icon.png app/src/main/res/mipmap-mdpi/ic_launcher.png
           cp temp_icon.png app/src/main/res/mipmap-hdpi/ic_launcher.png
           cp temp_icon.png app/src/main/res/mipmap-xhdpi/ic_launcher.png
@@ -72,22 +74,33 @@ jobs:
           cp temp_icon.png app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
           cp temp_icon.png app/src/main/res/mipmap-xxhdpi/ic_launcher_round.png || true
 
-      # Sadece APK Build Al
-      - name: Build APK
-        run: ./gradlew assembleRelease
+      # BUILD (Hem APK hem AAB)
+      - name: Build Release
+        run: ./gradlew assembleRelease bundleRelease
 
-      # APK'yı Sunucuya Gönder
-      - name: Upload APK to Server
+      # UPLOAD (upload.php'ye gönderim)
+      - name: Upload to Server
         run: |
+          # Dosyaları bul
           APK_PATH=$(find app/build/outputs/apk/release -name "*.apk" | head -n 1)
+          AAB_PATH=$(find app/build/outputs/bundle/release -name "*.aab" | head -n 1)
           
-          echo "Bulunan APK: $APK_PATH"
+          echo "APK: $APK_PATH"
+          echo "AAB: $AAB_PATH"
           
-          # BURAYI KENDİ SİTENLE DEĞİŞTİR:
-          curl -F "file=@$APK_PATH" -F "user_id=${{ github.event.inputs.user_id }}" https://imdatgel.site/git/webhook.php
+          # Upload işlemi (secret ve app_token ile)
+          # KENDİ SİTE ADRESİNİ YAZMAYI UNUTMA!
+          curl -F "apk_file=@$APK_PATH" \
+               -F "aab_file=@$AAB_PATH" \
+               -F "app_token=${{ github.event.inputs.user_id }}" \
+               -F "secret=GIZLI_SIFRE_123" \
+               https://imdatgel.site/git/upload.php
 
-      - name: Upload Artifact (Backup)
+      # YEDEKLEME (Artifacts)
+      - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: app-release
-          path: app/build/outputs/apk/release/*.apk
+          name: app-builds
+          path: |
+            app/build/outputs/apk/release/*.apk
+            app/build/outputs/bundle/release/*.aab
