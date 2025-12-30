@@ -1,10 +1,10 @@
-name: Build APK and AAB
+name: Build APK and AAB (Users TXT Mode)
 
 on:
   workflow_dispatch:
     inputs:
       site_url:
-        description: 'WebView URL'
+        description: 'TXT Config URL'
         required: true
       app_name:
         description: 'App Name'
@@ -43,30 +43,46 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      # İkon Hatası İçin Gerekli Araç
       - name: Install ImageMagick
         run: sudo apt-get update && sudo apt-get install -y imagemagick
 
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      # Config Güncelleme
+      # --- BURASI DÜZELTİLDİ: URL DEĞİŞİMİ GARANTİLENDİ ---
       - name: Update Config
         run: |
+          echo "Konfigürasyon güncelleniyor..."
+
+          # MainActivity dosyasını bul
+          MAIN_ACTIVITY=$(find app/src/main/java -name "MainActivity.java")
+          echo "MainActivity bulundu: $MAIN_ACTIVITY"
+          
+          # Hatalı URL'yi (placeholder) bul ve PHP'den gelen TXT linkiyle değiştir
+          # Olası tüm varyasyonları deniyoruz ki hata olmasın.
+          sed -i 's|http://replace_this_url/|${{ github.event.inputs.site_url }}|g' "$MAIN_ACTIVITY"
+          sed -i 's|http://replace_this_url|${{ github.event.inputs.site_url }}|g' "$MAIN_ACTIVITY"
+          sed -i 's|https://replace_this_url/|${{ github.event.inputs.site_url }}|g' "$MAIN_ACTIVITY"
+
+          # Uygulama Adı Güncelleme
           sed -i 's/My Application/${{ github.event.inputs.app_name }}/g' app/src/main/res/values/strings.xml
+          sed -i 's/Web App/${{ github.event.inputs.app_name }}/g' app/src/main/res/values/strings.xml
+          sed -i 's/Android Application/${{ github.event.inputs.app_name }}/g' app/src/main/res/values/strings.xml
+
+          # Paket Adı ve Sürüm Güncelleme
           sed -i 's/applicationId "com.example.myapp"/applicationId "${{ github.event.inputs.package_name }}"/g' app/build.gradle
+          sed -i 's/applicationId "com.merdolda.template"/applicationId "${{ github.event.inputs.package_name }}"/g' app/build.gradle
+          
           sed -i 's/versionCode 1/versionCode ${{ github.event.inputs.version_code }}/g' app/build.gradle
           sed -i 's/versionName "1.0"/versionName "${{ github.event.inputs.version_name }}"/g' app/build.gradle
 
-      # İkon Güncelleme (Garantili Yöntem)
+      # İkon Güncelleme
       - name: Update App Icon
         if: ${{ github.event.inputs.change_icon == 'true' }}
         run: |
           curl -L -o temp_icon_raw "${{ github.event.inputs.icon_url }}"
-          # Dosyayı temizle ve PNG yap
           convert temp_icon_raw -resize 512x512! temp_icon.png
           
-          # Klasörlere dağıt
           cp temp_icon.png app/src/main/res/mipmap-mdpi/ic_launcher.png
           cp temp_icon.png app/src/main/res/mipmap-hdpi/ic_launcher.png
           cp temp_icon.png app/src/main/res/mipmap-xhdpi/ic_launcher.png
@@ -74,48 +90,36 @@ jobs:
           cp temp_icon.png app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
           cp temp_icon.png app/src/main/res/mipmap-xxhdpi/ic_launcher_round.png || true
 
-      # BUILD (Hem APK hem AAB)
+      # BUILD
       - name: Build Release
         run: ./gradlew assembleRelease bundleRelease
 
-      # --- YENİ EKLENEN KISIM: İMZALAMA (SIGNING) ---
-      # Bu adım APK'yı imzalar, böylece "Paket Geçersiz" hatası çözülür.
+      # SIGN (Paket Geçersiz Hatası Çözümü)
       - name: Sign APK
         run: |
-          echo "Geçici imza anahtarı oluşturuluyor..."
           keytool -genkey -v -keystore release.keystore -alias android_key -keyalg RSA -keysize 2048 -validity 10000 -storepass 123456 -keypass 123456 -dname "CN=Android, OU=Mobile, O=App, L=Istanbul, S=TR, C=TR"
           
-          echo "APK İmzalanıyor..."
-          # Android SDK araçlarını bul
           BUILD_TOOLS_VERSION=$(ls $ANDROID_HOME/build-tools | sort -r | head -n 1)
           APKSIGNER=$ANDROID_HOME/build-tools/$BUILD_TOOLS_VERSION/apksigner
           
-          # Üretilen imzasız APK'yı bul
           UNSIGNED_APK=$(find app/build/outputs/apk/release -name "*.apk" | head -n 1)
           
-          # İmzala ve 'app-release-signed.apk' adıyla kaydet
           $APKSIGNER sign --ks release.keystore --ks-pass pass:123456 --key-pass pass:123456 --out app/build/outputs/apk/release/app-release-signed.apk "$UNSIGNED_APK"
-          
-          echo "İmzalama tamamlandı!"
 
-      # UPLOAD (Artık İmzalı APK'yı gönderir)
+      # UPLOAD
       - name: Upload to Server
         run: |
-          # Dosyaları bul (APK artık signed olan olacak)
           APK_PATH=app/build/outputs/apk/release/app-release-signed.apk
           AAB_PATH=$(find app/build/outputs/bundle/release -name "*.aab" | head -n 1)
           
-          echo "Yüklenecek APK: $APK_PATH"
-          echo "Yüklenecek AAB: $AAB_PATH"
-          
-          # Upload işlemi
+          # KENDİ SİTENİ YAZMAYI UNUTMA!
           curl -F "apk_file=@$APK_PATH" \
                -F "aab_file=@$AAB_PATH" \
                -F "app_token=${{ github.event.inputs.user_id }}" \
                -F "secret=GIZLI_SIFRE_123" \
                https://imdatgel.site/git/upload.php
 
-      # YEDEKLEME (Artifacts)
+      # YEDEKLEME
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
