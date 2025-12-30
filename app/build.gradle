@@ -12,15 +12,18 @@ android {
         targetSdk 34
         versionCode 1
         versionName "1.0"
-        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
 
-    // Çakışan Kotlin sınıflarını temizle
+    // Kotlin Çakışma Çözümü (Duplicate Class hatalarını engeller)
     configurations.all {
         exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib-jdk7'
         exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib-jdk8'
     }
 
+    // Resim ve Lint hatalarının build'i durdurmasını engeller
+    aaptOptions {
+        noCompress 'png'
+    }
     lintOptions {
         checkReleaseBuilds false
         abortOnError false
@@ -40,7 +43,7 @@ android {
 }
 
 dependencies {
-    // Kotlin stdlib'i tek bir yerden zorla
+    // Çakışmayı önlemek için sabit Kotlin kütüphanesi
     implementation "org.jetbrains.kotlin:kotlin-stdlib:1.8.22"
     
     implementation 'androidx.core:core:1.12.0'
