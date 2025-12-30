@@ -43,14 +43,12 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      # İkon Hatasını Önleyen Araç
       - name: Install ImageMagick
         run: sudo apt-get update && sudo apt-get install -y imagemagick
 
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      # Ayarları Güncelle
       - name: Update Config
         run: |
           sed -i 's/My Application/${{ github.event.inputs.app_name }}/g' app/src/main/res/values/strings.xml
@@ -58,59 +56,61 @@ jobs:
           sed -i 's/versionCode 1/versionCode ${{ github.event.inputs.version_code }}/g' app/build.gradle
           sed -i 's/versionName "1.0"/versionName "${{ github.event.inputs.version_name }}"/g' app/build.gradle
 
-      # İkon Güncelleme (Garantili Yöntem)
+      # --- İKON MANTIĞI GÜNCELLENDİ: BOZUKSA DOKUNMA, ESKİSİ KALSIN ---
       - name: Update App Icon
         if: ${{ github.event.inputs.change_icon == 'true' }}
         run: |
-          curl -L -o temp_icon_raw "${{ github.event.inputs.icon_url }}"
-          convert temp_icon_raw -resize 512x512! temp_icon.png
+          echo "İkon indiriliyor: ${{ github.event.inputs.icon_url }}"
           
-          cp temp_icon.png app/src/main/res/mipmap-mdpi/ic_launcher.png
-          cp temp_icon.png app/src/main/res/mipmap-hdpi/ic_launcher.png
-          cp temp_icon.png app/src/main/res/mipmap-xhdpi/ic_launcher.png
-          cp temp_icon.png app/src/main/res/mipmap-xxhdpi/ic_launcher.png
-          cp temp_icon.png app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
-          cp temp_icon.png app/src/main/res/mipmap-xxhdpi/ic_launcher_round.png || true
+          # İndirmeyi dene
+          curl -L -A "Mozilla/5.0" -o temp_icon_raw "${{ github.event.inputs.icon_url }}" || echo "İndirme uyarısı"
 
-      # BUILD İŞLEMİ (APK ve AAB Oluştur)
+          # Dosya kontrolü: Sadece GERÇEK RESİMSE değiştir
+          if file temp_icon_raw | grep -qE 'image|bitmap'; then
+              echo "Resim doğrulandı. Güncelleniyor..."
+              
+              # Temizle ve boyutlandır
+              convert temp_icon_raw -resize 512x512! temp_icon.png
+              
+              # Klasörlere kopyala
+              cp temp_icon.png app/src/main/res/mipmap-mdpi/ic_launcher.png
+              cp temp_icon.png app/src/main/res/mipmap-hdpi/ic_launcher.png
+              cp temp_icon.png app/src/main/res/mipmap-xhdpi/ic_launcher.png
+              cp temp_icon.png app/src/main/res/mipmap-xxhdpi/ic_launcher.png
+              cp temp_icon.png app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+              cp temp_icon.png app/src/main/res/mipmap-xxhdpi/ic_launcher_round.png || true
+              
+              echo "İkon başarıyla güncellendi."
+          else
+              echo "UYARI: İndirilen dosya resim değil veya bozuk!"
+              echo "HİÇBİR DEĞİŞİKLİK YAPILMADI. VARSAYILAN (ESKİ) İKON KORUNDU."
+          fi
+
+      # BUILD
       - name: Build Release
         run: ./gradlew assembleRelease bundleRelease
 
-      # --- YENİ EKLENEN KISIM: OTOMATİK İMZALAMA ---
-      # Bu adım APK'yı imzalar, böylece telefon "Paket Geçersiz" demez.
+      # SIGN (Paket Geçersiz Hatasını Çözer)
       - name: Sign APK
         run: |
-          echo "İmza anahtarı oluşturuluyor..."
           keytool -genkey -v -keystore release.keystore -alias android_key -keyalg RSA -keysize 2048 -validity 10000 -storepass 123456 -keypass 123456 -dname "CN=Android, OU=Mobile, O=App, L=Istanbul, S=TR, C=TR"
           
-          echo "APK İmzalanıyor..."
-          # Android SDK içindeki apksigner'ı bul
           BUILD_TOOLS_VERSION=$(ls $ANDROID_HOME/build-tools | sort -r | head -n 1)
           APKSIGNER=$ANDROID_HOME/build-tools/$BUILD_TOOLS_VERSION/apksigner
           
-          # İmzasız APK'yı bul
           UNSIGNED_APK=$(find app/build/outputs/apk/release -name "*-unsigned.apk" | head -n 1)
-          if [ -z "$UNSIGNED_APK" ]; then
-             UNSIGNED_APK=$(find app/build/outputs/apk/release -name "*.apk" | head -n 1)
-          fi
+          if [ -z "$UNSIGNED_APK" ]; then UNSIGNED_APK=$(find app/build/outputs/apk/release -name "*.apk" | head -n 1); fi
           
-          # İmzala ve 'app-release-signed.apk' olarak kaydet
           $APKSIGNER sign --ks release.keystore --ks-pass pass:123456 --key-pass pass:123456 --out app/build/outputs/apk/release/app-release-signed.apk "$UNSIGNED_APK"
-          
-          echo "İmzalama tamamlandı!"
 
-      # UPLOAD (İmzalanmış APK'yı gönderir)
+      # UPLOAD
       - name: Upload to Server
         run: |
-          # İmzalanmış APK'yı seç
           APK_PATH=app/build/outputs/apk/release/app-release-signed.apk
           AAB_PATH=$(find app/build/outputs/bundle/release -name "*.aab" | head -n 1)
           
           echo "Yüklenecek APK: $APK_PATH"
-          echo "Yüklenecek AAB: $AAB_PATH"
           
-          # Upload
-          # KENDİ SİTE ADRESİNİ YAZMAYI UNUTMA!
           curl -F "apk_file=@$APK_PATH" \
                -F "aab_file=@$AAB_PATH" \
                -F "app_token=${{ github.event.inputs.user_id }}" \
