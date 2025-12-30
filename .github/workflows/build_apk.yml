@@ -1,16 +1,30 @@
-name: SaaS APK Generator
+name: SaaS APK Builder
 
 on:
-  repository_dispatch:
-    # PHP panelinden 'build_app' event'i geldiğinde çalışır
-    types: [build_app]
+  workflow_dispatch:
+    inputs:
+      package_name:
+        description: 'Uygulama Paket Adı (Örn: com.user.app1)'
+        required: true
+        default: 'com.kodhocasi.template'
+      app_name:
+        description: 'Uygulama Görünen Adı'
+        required: true
+        default: 'My App'
+      version_code:
+        description: 'Versiyon Kodu'
+        required: true
+        default: '1'
+      version_name:
+        description: 'Versiyon Adı'
+        required: true
+        default: '1.0'
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    
     steps:
-      - name: Checkout Code
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
       - name: Set up JDK 17
@@ -20,44 +34,27 @@ jobs:
           distribution: 'temurin'
           cache: gradle
 
-      - name: Update App Identity (SaaS Logic)
+      - name: Dynamic Branding (Sed ile Güncelleme)
         run: |
-          # PHP'den gelen payload verilerini al
-          APP_NAME="${{ github.event.client_payload.app_name }}"
-          PACKAGE_NAME="${{ github.event.client_payload.package_name }}"
-          ICON_URL="${{ github.event.client_payload.icon_url }}"
+          # Paket adını build.gradle içinde değiştir
+          sed -i "s/applicationId \".*\"/applicationId \"${{ github.event.inputs.package_name }}\"/" app/build.gradle
           
-          echo "Building: $APP_NAME ($PACKAGE_NAME)"
+          # Uygulama adını strings.xml içinde değiştir (res/values/strings.xml dosyanız olduğunu varsayıyorum)
+          # Eğer yoksa PHP ile bu dosyayı da oluşturtabiliriz.
+          sed -i "s/<string name=\"app_name\">.*<\/string>/<string name=\"app_name\">${{ github.event.inputs.app_name }}<\/string>/" app/src/main/res/values/strings.xml
+          
+          # Versiyonları güncelle
+          sed -i "s/versionCode .*/versionCode ${{ github.event.inputs.version_code }}/" app/build.gradle
+          sed -i "s/versionName \".*\"/versionName \"${{ github.event.inputs.version_name }}\"/" app/build.gradle
 
-          # 1. build.gradle içindeki applicationId'yi güncelle
-          sed -i "s/applicationId \".*\"/applicationId \"$PACKAGE_NAME\"/" app/build.gradle
-          
-          # 2. strings.xml içindeki uygulama ismini güncelle
-          # Not: Theme styles kullanmadığımız için sadece ismi değiştiriyoruz
-          sed -i "s/<string name=\"app_name\">.*<\/string>/<string name=\"app_name\">$APP_NAME<\/string>/" app/src/main/res/values/strings.xml
-          
-          # 3. İkonu indir ve mevcut olanla değiştir (Eğer bir URL gönderildiyse)
-          if [ "$ICON_URL" != "" ]; then
-            curl -L "$ICON_URL" -o app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
-            curl -L "$ICON_URL" -o app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.png
-          fi
-
-      - name: Grant Execute Permission
+      - name: Grant Execute Permission for Gradlew
         run: chmod +x gradlew
 
       - name: Build Release APK
-        # --no-daemon kullanarak belleği verimli kullanıyoruz
-        run: ./gradlew assembleRelease --no-daemon
+        run: ./gradlew assembleRelease
 
-      - name: Upload APK to Artifacts
+      - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ github.event.client_payload.package_name }}-release
-          path: app/build/outputs/apk/release/app-release.apk
-
-      - name: Notify PHP Panel (Optional)
-        # Build bittiğinde kendi sitene "Bitti" bilgisi gönderebilirsin
-        run: |
-          curl -X POST -H "Content-Type: application/json" \
-          -d '{"status": "completed", "package": "${{ github.event.client_payload.package_name }}"}' \
-          https://imdatgel.site/git/api/build-status-update.php
+          name: ${{ github.event.inputs.app_name }}-release
+          path: app/build/outputs/apk/release/*.apk
