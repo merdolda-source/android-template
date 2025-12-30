@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       package_name:
-        description: 'Uygulama Paket Adı (Örn: com.kullanici.app)'
+        description: 'Uygulama Paket Adı'
         required: true
       app_name:
         description: 'Uygulama Görünür Adı'
@@ -23,12 +23,13 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Change Package Name & App Name
+      - name: Change Package Name & Cleanup Resources
         run: |
-          # build.gradle içindeki hem namespace'i hem applicationId'yi tek seferde değiştirir
-          sed -i "s/com.kodhocasi.template/${{ github.event.inputs.package_name }}/g" app/build.gradle
+          # 1. Bozuk eski ikon klasörlerini tamamen temizliyoruz (Kritik hata çözümü)
+          rm -rf app/src/main/res/mipmap-*
           
-          # strings.xml içindeki uygulama ismini değiştirir
+          # 2. Paket adını ve uygulama ismini dinamik olarak basıyoruz
+          sed -i "s/com.kodhocasi.template/${{ github.event.inputs.package_name }}/g" app/build.gradle
           sed -i "s/TemplateApp/${{ github.event.inputs.app_name }}/g" app/src/main/res/values/strings.xml
 
       - name: Grant Execute Permission for Gradlew
