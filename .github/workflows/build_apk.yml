@@ -1,60 +1,39 @@
-name: SaaS APK Builder
+name: Build Custom SaaS App
 
 on:
   workflow_dispatch:
     inputs:
       package_name:
-        description: 'Uygulama Paket Adı (Örn: com.user.app1)'
+        description: 'Uygulama Paket Adı (Örn: com.kullanici.ozelapp)'
         required: true
-        default: 'com.kodhocasi.template'
       app_name:
-        description: 'Uygulama Görünen Adı'
+        description: 'Uygulama Görünür Adı'
         required: true
-        default: 'My App'
-      version_code:
-        description: 'Versiyon Kodu'
-        required: true
-        default: '1'
-      version_name:
-        description: 'Versiyon Adı'
-        required: true
-        default: '1.0'
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v3
 
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
+      - name: Set up JDK 11
+        uses: actions/setup-java@v3
         with:
-          java-version: '17'
+          java-version: '11'
           distribution: 'temurin'
-          cache: gradle
 
-      - name: Dynamic Branding (Sed ile Güncelleme)
+      - name: Change Package Name & App Name
         run: |
           # Paket adını build.gradle içinde değiştir
-          sed -i "s/applicationId \".*\"/applicationId \"${{ github.event.inputs.package_name }}\"/" app/build.gradle
-          
-          # Uygulama adını strings.xml içinde değiştir (res/values/strings.xml dosyanız olduğunu varsayıyorum)
-          # Eğer yoksa PHP ile bu dosyayı da oluşturtabiliriz.
-          sed -i "s/<string name=\"app_name\">.*<\/string>/<string name=\"app_name\">${{ github.event.inputs.app_name }}<\/string>/" app/src/main/res/values/strings.xml
-          
-          # Versiyonları güncelle
-          sed -i "s/versionCode .*/versionCode ${{ github.event.inputs.version_code }}/" app/build.gradle
-          sed -i "s/versionName \".*\"/versionName \"${{ github.event.inputs.version_name }}\"/" app/build.gradle
+          sed -i "s/com.kodhocasi.template/${{ github.event.inputs.package_name }}/g" app/build.gradle
+          # Uygulama ismini strings.xml içinde değiştir
+          sed -i "s/TemplateApp/${{ github.event.inputs.app_name }}/g" app/src/main/res/values/strings.xml
 
-      - name: Grant Execute Permission for Gradlew
-        run: chmod +x gradlew
-
-      - name: Build Release APK
+      - name: Build with Gradle
         run: ./gradlew assembleRelease
 
-      - name: Upload APK Artifact
-        uses: actions/upload-artifact@v4
+      - name: Upload APK
+        uses: actions/upload-artifact@v3
         with:
-          name: ${{ github.event.inputs.app_name }}-release
+          name: ${{ github.event.inputs.app_name }}-Release
           path: app/build/outputs/apk/release/*.apk
