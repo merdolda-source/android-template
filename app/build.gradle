@@ -3,14 +3,13 @@ plugins {
 }
 
 android {
-    namespace 'com.seninsiten.appbuilder' // Sabit kalsın, sorun değil
+    namespace 'com.kodhocasi.template'
     compileSdk 34
 
     defaultConfig {
-        // GitHub Actions (sed komutu) tam olarak bu satırı hedef alacak:
-        applicationId "com.template.app" 
-        
-        minSdk 21
+        // Burası PHP otomasyonu ile değiştirilecek
+        applicationId "com.kodhocasi.template" 
+        minSdk 24
         targetSdk 34
         versionCode 1
         versionName "1.0"
@@ -22,29 +21,16 @@ android {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-            
-            // İmzalama ayarlarını buraya ekleyebilirsin
         }
     }
-    
-    compileOptions {
-        sourceCompatibility JavaVersion.VERSION_17
-        targetCompatibility JavaVersion.VERSION_17
-    }
-
-    // JSON ve Video işlemleri için gerekli kütüphaneler buraya gelecek
 }
 
 dependencies {
     implementation 'androidx.appcompat:appcompat:1.6.1'
     implementation 'com.google.android.material:material:1.9.0'
     implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
-
-    // API İstekleri için OkHttp
-    implementation 'com.squareup.okhttp3:okhttp:4.10.0'
-
-    // Video Player (ExoPlayer) - Canlı TV ve M3U için
+    // Video Player için ExoPlayer ekliyoruz
     implementation 'com.google.android.exoplayer:exoplayer:2.19.1'
-    implementation 'com.google.android.exoplayer:exoplayer-ui:2.19.1'
-    implementation 'com.google.android.exoplayer:exoplayer-hls:2.19.1' // Canlı yayınlar için
+    // JSON ve API işlemleri için Retrofit/Volley eklenebilir
+    implementation 'com.android.volley:volley:1.2.1'
 }
