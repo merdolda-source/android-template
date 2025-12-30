@@ -1,22 +1,15 @@
-plugins {
-    id 'com.android.application'
-}
+apply plugin: 'com.android.application'
 
 android {
-    namespace 'com.kodhocasi.template'
-    compileSdk 34
-
+    compileSdkVersion 33
     defaultConfig {
-        // Burası PHP otomasyonu ile değiştirilecek
+        // Bu alan GitHub Actions tarafından dinamik olarak değiştirilecek
         applicationId "com.kodhocasi.template" 
-        minSdk 24
-        targetSdk 34
+        minSdkVersion 21
+        targetSdkVersion 33
         versionCode 1
         versionName "1.0"
-
-        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
-
     buildTypes {
         release {
             minifyEnabled false
@@ -29,8 +22,8 @@ dependencies {
     implementation 'androidx.appcompat:appcompat:1.6.1'
     implementation 'com.google.android.material:material:1.9.0'
     implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
-    // Video Player için ExoPlayer ekliyoruz
-    implementation 'com.google.android.exoplayer:exoplayer:2.19.1'
-    // JSON ve API işlemleri için Retrofit/Volley eklenebilir
-    implementation 'com.android.volley:volley:1.2.1'
+    
+    // Video Player ve API için kütüphaneler
+    implementation 'com.google.android.exoplayer:exoplayer:2.18.7'
+    implementation 'com.squareup.okhttp3:okhttp:4.10.0'
 }
