@@ -1,4 +1,4 @@
-name: Build APK and AAB
+name: Build Signed APK and AAB
 
 on:
   workflow_dispatch:
@@ -43,14 +43,14 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      # İkon Hatası İçin Gerekli Araç
+      # İkon Hatasını Önleyen Araç
       - name: Install ImageMagick
         run: sudo apt-get update && sudo apt-get install -y imagemagick
 
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      # Config Güncelleme
+      # Ayarları Güncelle
       - name: Update Config
         run: |
           sed -i 's/My Application/${{ github.event.inputs.app_name }}/g' app/src/main/res/values/strings.xml
@@ -63,10 +63,8 @@ jobs:
         if: ${{ github.event.inputs.change_icon == 'true' }}
         run: |
           curl -L -o temp_icon_raw "${{ github.event.inputs.icon_url }}"
-          # Dosyayı temizle ve PNG yap
           convert temp_icon_raw -resize 512x512! temp_icon.png
           
-          # Klasörlere dağıt
           cp temp_icon.png app/src/main/res/mipmap-mdpi/ic_launcher.png
           cp temp_icon.png app/src/main/res/mipmap-hdpi/ic_launcher.png
           cp temp_icon.png app/src/main/res/mipmap-xhdpi/ic_launcher.png
@@ -74,21 +72,44 @@ jobs:
           cp temp_icon.png app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
           cp temp_icon.png app/src/main/res/mipmap-xxhdpi/ic_launcher_round.png || true
 
-      # BUILD (Hem APK hem AAB)
+      # BUILD İŞLEMİ (APK ve AAB Oluştur)
       - name: Build Release
         run: ./gradlew assembleRelease bundleRelease
 
-      # UPLOAD (upload.php'ye gönderim)
+      # --- YENİ EKLENEN KISIM: OTOMATİK İMZALAMA ---
+      # Bu adım APK'yı imzalar, böylece telefon "Paket Geçersiz" demez.
+      - name: Sign APK
+        run: |
+          echo "İmza anahtarı oluşturuluyor..."
+          keytool -genkey -v -keystore release.keystore -alias android_key -keyalg RSA -keysize 2048 -validity 10000 -storepass 123456 -keypass 123456 -dname "CN=Android, OU=Mobile, O=App, L=Istanbul, S=TR, C=TR"
+          
+          echo "APK İmzalanıyor..."
+          # Android SDK içindeki apksigner'ı bul
+          BUILD_TOOLS_VERSION=$(ls $ANDROID_HOME/build-tools | sort -r | head -n 1)
+          APKSIGNER=$ANDROID_HOME/build-tools/$BUILD_TOOLS_VERSION/apksigner
+          
+          # İmzasız APK'yı bul
+          UNSIGNED_APK=$(find app/build/outputs/apk/release -name "*-unsigned.apk" | head -n 1)
+          if [ -z "$UNSIGNED_APK" ]; then
+             UNSIGNED_APK=$(find app/build/outputs/apk/release -name "*.apk" | head -n 1)
+          fi
+          
+          # İmzala ve 'app-release-signed.apk' olarak kaydet
+          $APKSIGNER sign --ks release.keystore --ks-pass pass:123456 --key-pass pass:123456 --out app/build/outputs/apk/release/app-release-signed.apk "$UNSIGNED_APK"
+          
+          echo "İmzalama tamamlandı!"
+
+      # UPLOAD (İmzalanmış APK'yı gönderir)
       - name: Upload to Server
         run: |
-          # Dosyaları bul
-          APK_PATH=$(find app/build/outputs/apk/release -name "*.apk" | head -n 1)
+          # İmzalanmış APK'yı seç
+          APK_PATH=app/build/outputs/apk/release/app-release-signed.apk
           AAB_PATH=$(find app/build/outputs/bundle/release -name "*.aab" | head -n 1)
           
-          echo "APK: $APK_PATH"
-          echo "AAB: $AAB_PATH"
+          echo "Yüklenecek APK: $APK_PATH"
+          echo "Yüklenecek AAB: $AAB_PATH"
           
-          # Upload işlemi (secret ve app_token ile)
+          # Upload
           # KENDİ SİTE ADRESİNİ YAZMAYI UNUTMA!
           curl -F "apk_file=@$APK_PATH" \
                -F "aab_file=@$AAB_PATH" \
@@ -96,11 +117,11 @@ jobs:
                -F "secret=GIZLI_SIFRE_123" \
                https://imdatgel.site/git/upload.php
 
-      # YEDEKLEME (Artifacts)
+      # YEDEKLEME
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: app-builds
+          name: signed-app-builds
           path: |
-            app/build/outputs/apk/release/*.apk
+            app/build/outputs/apk/release/app-release-signed.apk
             app/build/outputs/bundle/release/*.aab
