@@ -1,129 +1,63 @@
-name: Build APK and AAB (Users TXT Mode)
+name: SaaS APK Generator
 
 on:
-  workflow_dispatch:
-    inputs:
-      site_url:
-        description: 'TXT Config URL'
-        required: true
-      app_name:
-        description: 'App Name'
-        required: true
-      package_name:
-        description: 'Package Name'
-        required: true
-      version_code:
-        description: 'Version Code'
-        required: true
-      version_name:
-        description: 'Version Name'
-        required: true
-      user_id:
-        description: 'User ID / Token'
-        required: true
-      icon_url:
-        description: 'Icon Download URL'
-        required: true
-      change_icon:
-        description: 'Change Icon? (true/false)'
-        required: true
-        default: 'true'
-        type: boolean
+  repository_dispatch:
+    # PHP panelinden 'build_app' event'i geldiğinde çalışır
+    types: [build_app]
 
 jobs:
   build:
     runs-on: ubuntu-latest
-
+    
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Code
+        uses: actions/checkout@v4
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
+          cache: gradle
 
-      - name: Install ImageMagick
-        run: sudo apt-get update && sudo apt-get install -y imagemagick
+      - name: Update App Identity (SaaS Logic)
+        run: |
+          # PHP'den gelen payload verilerini al
+          APP_NAME="${{ github.event.client_payload.app_name }}"
+          PACKAGE_NAME="${{ github.event.client_payload.package_name }}"
+          ICON_URL="${{ github.event.client_payload.icon_url }}"
+          
+          echo "Building: $APP_NAME ($PACKAGE_NAME)"
 
-      - name: Grant execute permission for gradlew
+          # 1. build.gradle içindeki applicationId'yi güncelle
+          sed -i "s/applicationId \".*\"/applicationId \"$PACKAGE_NAME\"/" app/build.gradle
+          
+          # 2. strings.xml içindeki uygulama ismini güncelle
+          # Not: Theme styles kullanmadığımız için sadece ismi değiştiriyoruz
+          sed -i "s/<string name=\"app_name\">.*<\/string>/<string name=\"app_name\">$APP_NAME<\/string>/" app/src/main/res/values/strings.xml
+          
+          # 3. İkonu indir ve mevcut olanla değiştir (Eğer bir URL gönderildiyse)
+          if [ "$ICON_URL" != "" ]; then
+            curl -L "$ICON_URL" -o app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+            curl -L "$ICON_URL" -o app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.png
+          fi
+
+      - name: Grant Execute Permission
         run: chmod +x gradlew
 
-      # --- BURASI DÜZELTİLDİ: URL DEĞİŞİMİ GARANTİLENDİ ---
-      - name: Update Config
-        run: |
-          echo "Konfigürasyon güncelleniyor..."
+      - name: Build Release APK
+        # --no-daemon kullanarak belleği verimli kullanıyoruz
+        run: ./gradlew assembleRelease --no-daemon
 
-          # MainActivity dosyasını bul
-          MAIN_ACTIVITY=$(find app/src/main/java -name "MainActivity.java")
-          echo "MainActivity bulundu: $MAIN_ACTIVITY"
-          
-          # Hatalı URL'yi (placeholder) bul ve PHP'den gelen TXT linkiyle değiştir
-          # Olası tüm varyasyonları deniyoruz ki hata olmasın.
-          sed -i 's|http://replace_this_url/|${{ github.event.inputs.site_url }}|g' "$MAIN_ACTIVITY"
-          sed -i 's|http://replace_this_url|${{ github.event.inputs.site_url }}|g' "$MAIN_ACTIVITY"
-          sed -i 's|https://replace_this_url/|${{ github.event.inputs.site_url }}|g' "$MAIN_ACTIVITY"
-
-          # Uygulama Adı Güncelleme
-          sed -i 's/My Application/${{ github.event.inputs.app_name }}/g' app/src/main/res/values/strings.xml
-          sed -i 's/Web App/${{ github.event.inputs.app_name }}/g' app/src/main/res/values/strings.xml
-          sed -i 's/Android Application/${{ github.event.inputs.app_name }}/g' app/src/main/res/values/strings.xml
-
-          # Paket Adı ve Sürüm Güncelleme
-          sed -i 's/applicationId "com.example.myapp"/applicationId "${{ github.event.inputs.package_name }}"/g' app/build.gradle
-          sed -i 's/applicationId "com.merdolda.template"/applicationId "${{ github.event.inputs.package_name }}"/g' app/build.gradle
-          
-          sed -i 's/versionCode 1/versionCode ${{ github.event.inputs.version_code }}/g' app/build.gradle
-          sed -i 's/versionName "1.0"/versionName "${{ github.event.inputs.version_name }}"/g' app/build.gradle
-
-      # İkon Güncelleme
-      - name: Update App Icon
-        if: ${{ github.event.inputs.change_icon == 'true' }}
-        run: |
-          curl -L -o temp_icon_raw "${{ github.event.inputs.icon_url }}"
-          convert temp_icon_raw -resize 512x512! temp_icon.png
-          
-          cp temp_icon.png app/src/main/res/mipmap-mdpi/ic_launcher.png
-          cp temp_icon.png app/src/main/res/mipmap-hdpi/ic_launcher.png
-          cp temp_icon.png app/src/main/res/mipmap-xhdpi/ic_launcher.png
-          cp temp_icon.png app/src/main/res/mipmap-xxhdpi/ic_launcher.png
-          cp temp_icon.png app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
-          cp temp_icon.png app/src/main/res/mipmap-xxhdpi/ic_launcher_round.png || true
-
-      # BUILD
-      - name: Build Release
-        run: ./gradlew assembleRelease bundleRelease
-
-      # SIGN (Paket Geçersiz Hatası Çözümü)
-      - name: Sign APK
-        run: |
-          keytool -genkey -v -keystore release.keystore -alias android_key -keyalg RSA -keysize 2048 -validity 10000 -storepass 123456 -keypass 123456 -dname "CN=Android, OU=Mobile, O=App, L=Istanbul, S=TR, C=TR"
-          
-          BUILD_TOOLS_VERSION=$(ls $ANDROID_HOME/build-tools | sort -r | head -n 1)
-          APKSIGNER=$ANDROID_HOME/build-tools/$BUILD_TOOLS_VERSION/apksigner
-          
-          UNSIGNED_APK=$(find app/build/outputs/apk/release -name "*.apk" | head -n 1)
-          
-          $APKSIGNER sign --ks release.keystore --ks-pass pass:123456 --key-pass pass:123456 --out app/build/outputs/apk/release/app-release-signed.apk "$UNSIGNED_APK"
-
-      # UPLOAD
-      - name: Upload to Server
-        run: |
-          APK_PATH=app/build/outputs/apk/release/app-release-signed.apk
-          AAB_PATH=$(find app/build/outputs/bundle/release -name "*.aab" | head -n 1)
-          
-          # KENDİ SİTENİ YAZMAYI UNUTMA!
-          curl -F "apk_file=@$APK_PATH" \
-               -F "aab_file=@$AAB_PATH" \
-               -F "app_token=${{ github.event.inputs.user_id }}" \
-               -F "secret=GIZLI_SIFRE_123" \
-               https://imdatgel.site/git/upload.php
-
-      # YEDEKLEME
-      - name: Upload Artifacts
+      - name: Upload APK to Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: app-builds
-          path: |
-            app/build/outputs/apk/release/app-release-signed.apk
-            app/build/outputs/bundle/release/*.aab
+          name: ${{ github.event.client_payload.package_name }}-release
+          path: app/build/outputs/apk/release/app-release.apk
+
+      - name: Notify PHP Panel (Optional)
+        # Build bittiğinde kendi sitene "Bitti" bilgisi gönderebilirsin
+        run: |
+          curl -X POST -H "Content-Type: application/json" \
+          -d '{"status": "completed", "package": "${{ github.event.client_payload.package_name }}"}' \
+          https://imdatgel.site/git/api/build-status-update.php
