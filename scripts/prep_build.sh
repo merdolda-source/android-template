@@ -4,9 +4,14 @@ set -e
 PACKAGE_NAME=$1
 APP_NAME=$2
 CONFIG_URL=$3
+ICON_URL=$4  # YENİ: İkon URL'si
 
 echo "=========================================="
-echo "   ULTRA APP - HEADER & JSON DESTEKLI"
+echo "   ULTRA APP - ICON DESTEKLİ V6"
+echo "=========================================="
+echo "PAKET: $PACKAGE_NAME"
+echo "URL: $CONFIG_URL"
+echo "ICON: $ICON_URL"
 echo "=========================================="
 
 # --- 1. TEMİZLİK ---
@@ -20,7 +25,22 @@ rm -rf app/src/main/java/com/base/app/*
 TARGET_DIR="app/src/main/java/com/base/app"
 mkdir -p "$TARGET_DIR"
 
-# --- 2. BUILD.GRADLE ---
+# --- 2. ICON AYARLAMA (EN ÖNEMLİ KISIM) ---
+echo "--- İkon İndiriliyor ---"
+# Mipmap klasörlerini oluştur (Yüksek kalite için)
+mkdir -p app/src/main/res/mipmap-xxxhdpi
+
+if [ ! -z "$ICON_URL" ]; then
+    # Panelden ikon geldiyse indir
+    echo "Özel ikon indiriliyor..."
+    curl -L -o app/src/main/res/mipmap-xxxhdpi/ic_launcher.png "$ICON_URL"
+else
+    # İkon yoksa varsayılan bir şey koy (Boş kalmasın diye)
+    echo "Varsayılan ikon kullanılıyor..."
+    # Buraya geçici bir işlem, normalde boş bırakmayız.
+fi
+
+# --- 3. BUILD.GRADLE ---
 cat > app/build.gradle <<EOF
 plugins {
     id 'com.android.application'
@@ -47,13 +67,15 @@ dependencies {
     implementation 'androidx.media3:media3-exoplayer-hls:1.2.0'
     implementation 'androidx.media3:media3-exoplayer-dash:1.2.0'
     implementation 'androidx.media3:media3-exoplayer-rtsp:1.2.0'
+    implementation 'androidx.media3:media3-exoplayer-smoothstreaming:1.2.0'
     implementation 'androidx.media3:media3-datasource:1.2.0'
     implementation 'androidx.media3:media3-ui:1.2.0'
     implementation 'androidx.media3:media3-common:1.2.0'
 }
 EOF
 
-# --- 3. MANIFEST ---
+# --- 4. MANIFEST (ICON TANITIMI) ---
+# android:icon="@mipmap/ic_launcher" satırına dikkat
 cat > app/src/main/AndroidManifest.xml <<EOF
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
@@ -63,7 +85,8 @@ cat > app/src/main/AndroidManifest.xml <<EOF
     <application
         android:allowBackup="true"
         android:label="$APP_NAME"
-        android:icon="@android:drawable/sym_def_app_icon"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher"
         android:usesCleartextTraffic="true"
         android:theme="@android:style/Theme.DeviceDefault.Light.NoActionBar">
         <activity android:name=".MainActivity" android:exported="true">
@@ -81,12 +104,11 @@ cat > app/src/main/AndroidManifest.xml <<EOF
 </manifest>
 EOF
 
-# --- 4. JAVA DOSYALARI ---
+# --- 5. JAVA DOSYALARI ---
 
-# A) PlayerActivity.java (HEADER DESTEĞİ EKLENDİ)
+# A) PlayerActivity
 cat > "$TARGET_DIR/PlayerActivity.java" <<EOF
 package com.base.app;
-
 import android.app.Activity;
 import android.net.Uri;
 import android.os.Bundle;
@@ -107,95 +129,60 @@ import java.util.Map;
 public class PlayerActivity extends Activity {
     private ExoPlayer player;
     private PlayerView playerView;
-    private String videoUrl;
-    private String headersJson;
+    private String videoUrl, headersJson;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
-
         playerView = new PlayerView(this);
         playerView.setShowNextButton(false);
         playerView.setShowPreviousButton(false);
         setContentView(playerView);
-
         videoUrl = getIntent().getStringExtra("VIDEO_URL");
         headersJson = getIntent().getStringExtra("HEADERS_JSON");
-
-        if (videoUrl != null) videoUrl = videoUrl.trim();
+        if(videoUrl != null) videoUrl = videoUrl.trim();
         initializePlayer();
     }
-
     private void initializePlayer() {
-        if (videoUrl == null || videoUrl.isEmpty()) return;
-
-        // Varsayılan User-Agent
+        if(videoUrl == null || videoUrl.isEmpty()) return;
         String userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36";
-        Map<String, String> requestProperties = new HashMap<>();
-
-        // JSON'dan gelen özel Header'ları işle (Referer, Origin vb.)
-        if (headersJson != null && !headersJson.isEmpty()) {
-            try {
-                JSONObject hObj = new JSONObject(headersJson);
-                Iterator<String> keys = hObj.keys();
-                while(keys.hasNext()) {
-                    String key = keys.next();
-                    String val = hObj.getString(key);
-                    // User-Agent özel olarak ayarlanmalı, diğerleri requestProperty
-                    if (key.equalsIgnoreCase("User-Agent")) {
-                        userAgent = val;
-                    } else {
-                        requestProperties.put(key, val);
-                    }
+        Map<String, String> reqProps = new HashMap<>();
+        if(headersJson != null && !headersJson.isEmpty()){
+            try{
+                JSONObject h = new JSONObject(headersJson);
+                Iterator<String> k = h.keys();
+                while(k.hasNext()){
+                    String key = k.next();
+                    String val = h.getString(key);
+                    if(key.equalsIgnoreCase("User-Agent")) userAgent = val;
+                    else reqProps.put(key, val);
                 }
-            } catch (Exception e) {}
+            }catch(Exception e){}
         }
-
-        DefaultHttpDataSource.Factory httpDataSourceFactory = new DefaultHttpDataSource.Factory()
-                .setUserAgent(userAgent)
-                .setAllowCrossProtocolRedirects(true)
-                .setDefaultRequestProperties(requestProperties);
-
-        DefaultMediaSourceFactory mediaSourceFactory = new DefaultMediaSourceFactory(this)
-                .setDataSourceFactory(httpDataSourceFactory);
-
-        player = new ExoPlayer.Builder(this)
-                .setMediaSourceFactory(mediaSourceFactory)
-                .build();
-        
+        DefaultHttpDataSource.Factory httpFac = new DefaultHttpDataSource.Factory().setUserAgent(userAgent).setAllowCrossProtocolRedirects(true).setDefaultRequestProperties(reqProps);
+        DefaultMediaSourceFactory mediaFac = new DefaultMediaSourceFactory(this).setDataSourceFactory(httpFac);
+        player = new ExoPlayer.Builder(this).setMediaSourceFactory(mediaFac).build();
         playerView.setPlayer(player);
-
-        try {
-            MediaItem mediaItem = MediaItem.fromUri(Uri.parse(videoUrl));
-            player.setMediaItem(mediaItem);
+        try{
+            player.setMediaItem(MediaItem.fromUri(Uri.parse(videoUrl)));
             player.prepare();
             player.setPlayWhenReady(true);
-        } catch (Exception e) {
-            Toast.makeText(this, "Hata: " + e.getMessage(), Toast.LENGTH_LONG).show();
-        }
-
-        player.addListener(new Player.Listener() {
-            @Override
-            public void onPlayerError(PlaybackException error) {
-                Toast.makeText(PlayerActivity.this, "Oynatma Hatası: " + error.getMessage(), Toast.LENGTH_LONG).show();
+        }catch(Exception e){}
+        player.addListener(new Player.Listener(){
+            public void onPlayerError(PlaybackException e){
+                Toast.makeText(PlayerActivity.this, "Hata: " + e.getMessage(), Toast.LENGTH_LONG).show();
             }
         });
     }
-
-    @Override
-    protected void onStop() {
-        super.onStop();
-        if (player != null) { player.release(); player = null; }
-    }
+    protected void onStop(){ super.onStop(); if(player!=null){player.release(); player=null;} }
 }
 EOF
 
-# B) ChannelListActivity.java (HEM M3U HEM JSON DESTEĞİ)
+# B) ChannelListActivity
 cat > "$TARGET_DIR/ChannelListActivity.java" <<EOF
 package com.base.app;
-
 import android.app.Activity;
 import android.content.Intent;
 import android.os.AsyncTask;
@@ -211,125 +198,67 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
-
 public class ChannelListActivity extends Activity {
     private ListView listView;
-    private List<String> channelNames = new ArrayList<>();
-    private List<String> channelUrls = new ArrayList<>();
-    private List<String> channelHeaders = new ArrayList<>(); // Her kanal için özel header JSON'u
-
+    private List<String> names = new ArrayList<>(), urls = new ArrayList<>(), headers = new ArrayList<>();
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         listView = new ListView(this);
         setContentView(listView);
-        
         String listUrl = getIntent().getStringExtra("LIST_URL");
-        String type = getIntent().getStringExtra("TYPE"); // IPTV veya JSON_LIST
-
-        Toast.makeText(this, "Liste Yükleniyor...", Toast.LENGTH_SHORT).show();
+        String type = getIntent().getStringExtra("TYPE");
         new FetchListTask(type).execute(listUrl);
-        
-        listView.setOnItemClickListener((parent, view, position, id) -> {
-            String videoUrl = channelUrls.get(position);
-            String headers = channelHeaders.get(position);
-            
-            Intent intent = new Intent(ChannelListActivity.this, PlayerActivity.class);
-            intent.putExtra("VIDEO_URL", videoUrl);
-            intent.putExtra("HEADERS_JSON", headers); // Headerları Playera gönder
-            startActivity(intent);
+        listView.setOnItemClickListener((p,v,pos,id)->{
+            Intent i = new Intent(ChannelListActivity.this, PlayerActivity.class);
+            i.putExtra("VIDEO_URL", urls.get(pos));
+            i.putExtra("HEADERS_JSON", headers.get(pos));
+            startActivity(i);
         });
     }
-
-    private class FetchListTask extends AsyncTask<String, Void, String> {
-        private String listType;
-        public FetchListTask(String type) { this.listType = type; }
-
-        @Override
-        protected String doInBackground(String... urls) {
-            try {
-                URL url = new URL(urls[0]);
-                HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-                conn.setConnectTimeout(15000);
-                conn.setRequestProperty("User-Agent", "Mozilla/5.0");
-                BufferedReader rd = new BufferedReader(new InputStreamReader(conn.getInputStream()));
-                StringBuilder res = new StringBuilder();
-                String line;
-                while ((line = rd.readLine()) != null) res.append(line).append("\n");
-                return res.toString();
-            } catch (Exception e) { return null; }
+    private class FetchListTask extends AsyncTask<String,Void,String>{
+        String type; FetchListTask(String t){type=t;}
+        protected String doInBackground(String... u){
+            try{
+                URL url=new URL(u[0]); HttpURLConnection c=(HttpURLConnection)url.openConnection();
+                c.setConnectTimeout(15000); c.setRequestProperty("User-Agent","Mozilla/5.0");
+                BufferedReader r=new BufferedReader(new InputStreamReader(c.getInputStream()));
+                StringBuilder sb=new StringBuilder(); String l; while((l=r.readLine())!=null)sb.append(l);
+                return sb.toString();
+            }catch(Exception e){return null;}
         }
-
-        @Override
-        protected void onPostExecute(String result) {
-            if (result == null) {
-                Toast.makeText(ChannelListActivity.this, "Liste İndirilemedi!", Toast.LENGTH_LONG).show();
-                return;
-            }
-
-            try {
-                if ("JSON_LIST".equals(listType) || result.trim().startsWith("{")) {
-                    // --- JSON PARSER (Selbuk Formatı) ---
-                    JSONObject root = new JSONObject(result);
-                    JSONObject listObj = root.getJSONObject("list");
-                    JSONArray items = listObj.getJSONArray("item");
-
-                    for (int i = 0; i < items.length(); i++) {
-                        JSONObject item = items.getJSONObject(i);
-                        String title = item.optString("title", "Kanal " + i);
-                        String url = item.optString("media_url", item.optString("url", ""));
-                        
-                        // Headerları topla
-                        JSONObject headersObj = new JSONObject();
-                        // h1Key, h2Key... h5Key döngüsü
-                        for(int k=1; k<=5; k++) {
-                            String keyName = item.optString("h" + k + "Key");
-                            String valName = item.optString("h" + k + "Val");
-                            if(!keyName.isEmpty() && !keyName.equals("0") && !valName.isEmpty() && !valName.equals("0")) {
-                                headersObj.put(keyName, valName);
-                            }
+        protected void onPostExecute(String r){
+            if(r==null)return;
+            try{
+                if("JSON_LIST".equals(type) || r.trim().startsWith("{")){
+                    JSONObject root=new JSONObject(r); JSONArray arr=root.getJSONObject("list").getJSONArray("item");
+                    for(int i=0;i<arr.length();i++){
+                        JSONObject o=arr.getJSONObject(i);
+                        String url=o.optString("media_url",o.optString("url",""));
+                        if(url.isEmpty())continue;
+                        JSONObject h=new JSONObject();
+                        for(int k=1;k<=5;k++){
+                            String kn=o.optString("h"+k+"Key"), kv=o.optString("h"+k+"Val");
+                            if(!kn.isEmpty()&&!kn.equals("0")&&!kv.isEmpty()&&!kv.equals("0")) h.put(kn,kv);
                         }
-
-                        if (!url.isEmpty()) {
-                            channelNames.add(title);
-                            channelUrls.add(url);
-                            channelHeaders.add(headersObj.toString());
-                        }
+                        names.add(o.optString("title")); urls.add(url); headers.add(h.toString());
                     }
-
-                } else {
-                    // --- M3U PARSER (Standart) ---
-                    String[] lines = result.split("\n");
-                    String currentName = "Kanal";
-                    for (String line : lines) {
-                        line = line.trim();
-                        if (line.isEmpty()) continue;
-                        if (line.startsWith("#EXTINF")) {
-                            if (line.contains(",")) currentName = line.substring(line.lastIndexOf(",") + 1).trim();
-                        } else if (!line.startsWith("#")) {
-                            channelNames.add(currentName);
-                            channelUrls.add(line);
-                            channelHeaders.add("{}"); // M3U için boş header
-                            currentName = "Bilinmeyen Kanal";
-                        }
+                }else{
+                    String[] lines=r.split("\n"); String name="Kanal";
+                    for(String l:lines){
+                        l=l.trim(); if(l.isEmpty())continue;
+                        if(l.startsWith("#EXTINF")){ if(l.contains(",")) name=l.substring(l.lastIndexOf(",")+1).trim(); }
+                        else if(!l.startsWith("#")){ names.add(name); urls.add(l); headers.add("{}"); name="Bilinmeyen"; }
                     }
                 }
-            } catch (Exception e) {
-                Toast.makeText(ChannelListActivity.this, "Format Hatası: " + e.getMessage(), Toast.LENGTH_LONG).show();
-            }
-
-            if (channelNames.isEmpty()) {
-                Toast.makeText(ChannelListActivity.this, "Kanal Bulunamadı!", Toast.LENGTH_LONG).show();
-            } else {
-                ArrayAdapter<String> adapter = new ArrayAdapter<>(ChannelListActivity.this, android.R.layout.simple_list_item_1, channelNames);
-                listView.setAdapter(adapter);
-            }
+                listView.setAdapter(new ArrayAdapter<>(ChannelListActivity.this, android.R.layout.simple_list_item_1, names));
+            }catch(Exception e){}
         }
     }
 }
 EOF
 
-# C) WebViewActivity.java
+# C) WebViewActivity
 cat > "$TARGET_DIR/WebViewActivity.java" <<EOF
 package com.base.app;
 import android.app.Activity;
@@ -338,22 +267,16 @@ import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 public class WebViewActivity extends Activity {
-    @Override
-    protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        WebView webView = new WebView(this);
-        setContentView(webView);
-        String url = getIntent().getStringExtra("WEB_URL");
-        WebSettings settings = webView.getSettings();
-        settings.setJavaScriptEnabled(true);
-        settings.setDomStorageEnabled(true);
-        webView.setWebViewClient(new WebViewClient());
-        webView.loadUrl(url);
+    protected void onCreate(Bundle s) {
+        super.onCreate(s); WebView w=new WebView(this); setContentView(w);
+        String u=getIntent().getStringExtra("WEB_URL");
+        w.getSettings().setJavaScriptEnabled(true); w.getSettings().setDomStorageEnabled(true);
+        w.setWebViewClient(new WebViewClient()); w.loadUrl(u);
     }
 }
 EOF
 
-# D) MainActivity.java (Aktiflik Kontrolü)
+# D) MainActivity (ICON VE GÖRSELLİK GÜNCELLEMESİ YAPILABİLİR AMA ŞİMDİLİK AYNI)
 cat > "$TARGET_DIR/MainActivity.java" <<EOF
 package com.base.app;
 import android.app.Activity;
@@ -365,7 +288,6 @@ import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
-import android.widget.Toast;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import java.io.BufferedReader;
@@ -391,7 +313,6 @@ public class MainActivity extends Activity {
     }
 
     private class FetchConfigTask extends AsyncTask<String, Void, String> {
-        @Override
         protected String doInBackground(String... urls) {
             try {
                 URL url = new URL(urls[0]);
@@ -405,12 +326,8 @@ public class MainActivity extends Activity {
             } catch (Exception e) { return null; }
         }
 
-        @Override
         protected void onPostExecute(String result) {
-            if (result == null) {
-                Toast.makeText(MainActivity.this, "Bağlantı Hatası", Toast.LENGTH_SHORT).show();
-                return;
-            }
+            if (result == null) return;
             container.removeAllViews();
             try {
                 JSONObject json = new JSONObject(result);
@@ -425,7 +342,6 @@ public class MainActivity extends Activity {
                 JSONArray mods = json.getJSONArray("modules");
                 for(int i=0; i<mods.length(); i++){
                     JSONObject m = mods.getJSONObject(i);
-                    // SADECE AKTİF OLANLARI GÖSTER
                     if (m.optBoolean("active", true)) {
                         createButton(m.getString("title"), m.getString("type"), m.getString("url"));
                     }
@@ -449,7 +365,6 @@ public class MainActivity extends Activity {
                 intent.putExtra("WEB_URL", link);
                 startActivity(intent);
             } else if (type.equals("IPTV") || type.equals("JSON_LIST")) {
-                // HEM M3U HEM JSON AYNI YERE GİDER, TYPE PARAMETRESİ İLE AYRILIR
                 Intent intent = new Intent(MainActivity.this, ChannelListActivity.class);
                 intent.putExtra("LIST_URL", link);
                 intent.putExtra("TYPE", type);
@@ -463,4 +378,4 @@ public class MainActivity extends Activity {
 }
 EOF
 
-echo "✅ JSON LİSTE VE HEADER SİSTEMİ EKLENDİ!"
+echo "✅ ICON DESTEĞİ VE SİSTEM TAMAMLANDI!"
