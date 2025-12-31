@@ -6,7 +6,6 @@ import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.view.Gravity;
-import android.view.View;
 import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
@@ -21,35 +20,33 @@ import java.net.URL;
 
 public class MainActivity extends Activity {
 
-    // SCRIPT BU SATIRI GÜNCELLEYECEK
+    // EĞER SİTEN HTTP İSE (SADECE http://) ANDROID BUNU ENGELLER!
+    // GÜVENLİK İÇİN HTTPS:// OLMASI GEREKİR.
     private String CONFIG_URL = "REPLACE_THIS_URL"; 
     
     private LinearLayout container;
+    private TextView statusText;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        // Dinamik Arayüz (XML Yok)
         ScrollView scrollView = new ScrollView(this);
-        scrollView.setBackgroundColor(0xFFF5F5F5); // Hafif Gri Arkaplan
+        scrollView.setBackgroundColor(0xFFF0F0F0);
         
         container = new LinearLayout(this);
         container.setOrientation(LinearLayout.VERTICAL);
-        container.setPadding(40, 60, 40, 40);
+        container.setPadding(50, 50, 50, 50);
         container.setGravity(Gravity.CENTER_HORIZONTAL);
         scrollView.addView(container);
         setContentView(scrollView);
 
-        // Yükleniyor Mesajı
-        TextView loading = new TextView(this);
-        loading.setText("Yükleniyor...\nLütfen Bekleyin");
-        loading.setTextSize(18);
-        loading.setGravity(Gravity.CENTER);
-        loading.setPadding(0, 100, 0, 0);
-        container.addView(loading);
+        statusText = new TextView(this);
+        statusText.setText("Bağlantı deneniyor...\n\nURL: " + CONFIG_URL);
+        statusText.setTextSize(14);
+        statusText.setGravity(Gravity.CENTER);
+        container.addView(statusText);
 
-        // Config Çekme İşlemi
         new FetchConfigTask().execute(CONFIG_URL);
     }
 
@@ -58,16 +55,22 @@ public class MainActivity extends Activity {
         protected String doInBackground(String... urls) {
             StringBuilder result = new StringBuilder();
             try {
-                if (urls[0].equals("REPLACE_THIS_URL")) return null; // Script çalışmamışsa
+                if (urls[0].contains("REPLACE_THIS_URL")) {
+                    return "HATA: URL Değişmemiş! Script çalışmıyor.";
+                }
 
                 URL url = new URL(urls[0]);
                 HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-                conn.setConnectTimeout(8000);
-                conn.setReadTimeout(8000);
+                conn.setConnectTimeout(10000);
+                conn.setReadTimeout(10000);
                 conn.setRequestMethod("GET");
-                conn.setRequestProperty("User-Agent", "AppFactory-Android");
-                
-                if (conn.getResponseCode() != 200) return "ERROR_NET";
+                // User Agent ekliyoruz (Bazı hostingler botsanırsa engeller)
+                conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Android)");
+
+                int responseCode = conn.getResponseCode();
+                if (responseCode != 200) {
+                    return "SUNUCU HATASI: Kod " + responseCode;
+                }
 
                 BufferedReader rd = new BufferedReader(new InputStreamReader(conn.getInputStream()));
                 String line;
@@ -76,86 +79,77 @@ public class MainActivity extends Activity {
                 }
                 rd.close();
                 return result.toString();
+
+            } catch (java.net.UnknownHostException e) {
+                return "DNS HATASI: Site adresi bulunamadı.\nHosting adresini kontrol et.";
+            } catch (java.io.IOException e) {
+                if (e.getMessage().contains("Cleartext HTTP traffic")) {
+                    return "GÜVENLİK HATASI: Siteniz 'HTTP'.\nAndroid sadece 'HTTPS' kabul eder.\nManifest ayarı yapılmalı.";
+                }
+                return "BAĞLANTI HATASI: " + e.getMessage();
             } catch (Exception e) {
-                return null;
+                return "GENEL HATA: " + e.toString();
             }
         }
 
         @Override
         protected void onPostExecute(String result) {
             if (isFinishing()) return;
-            container.removeAllViews();
 
-            if (result == null || result.equals("ERROR_NET")) {
-                showError("Bağlantı Hatası!\nİnternetinizi kontrol edin.");
+            // Eğer sonuç JSON değilse HATA mesajıdır
+            if (result == null || !result.trim().startsWith("{")) {
+                statusText.setText("⚠️ BAŞARISIZ OLDU ⚠️\n\n" + result);
+                statusText.setTextColor(0xFFFF0000); // Kırmızı
                 return;
             }
 
+            // Başarılıysa ekranı temizle ve butonları koy
+            container.removeAllViews();
             try {
                 JSONObject json = new JSONObject(result);
-                String appTitle = json.optString("app_name", "Uygulamam");
+                String appTitle = json.optString("app_name", "Uygulama");
                 
-                // Başlık
                 TextView titleView = new TextView(MainActivity.this);
                 titleView.setText(appTitle);
-                titleView.setTextSize(26);
-                titleView.setPadding(0, 0, 0, 60);
+                titleView.setTextSize(24);
+                titleView.setPadding(0, 0, 0, 50);
                 titleView.setGravity(Gravity.CENTER);
-                titleView.setTextColor(0xFF222222);
+                titleView.setTextColor(0xFF000000);
                 container.addView(titleView);
 
-                // Modülleri Listele
                 JSONArray modules = json.getJSONArray("modules");
                 for (int i = 0; i < modules.length(); i++) {
                     JSONObject item = modules.getJSONObject(i);
-                    // active: true ise veya active alanı hiç yoksa göster
                     if (item.optBoolean("active", true)) {
                         createButton(item.getString("title"), item.getString("type"), item.getString("url"));
                     }
                 }
             } catch (Exception e) {
-                showError("Veri Hatası!\n" + e.getMessage());
+                statusText.setText("JSON BOZUK: " + e.getMessage() + "\n\nGelen Veri: " + result);
+                container.addView(statusText);
             }
         }
-    }
-
-    private void showError(String msg) {
-        TextView err = new TextView(this);
-        err.setText(msg);
-        err.setTextColor(0xFFFF0000);
-        err.setTextSize(16);
-        err.setGravity(Gravity.CENTER);
-        container.addView(err);
     }
 
     private void createButton(String text, final String type, final String link) {
         Button btn = new Button(this);
         btn.setText(text);
-        btn.setTextSize(16);
-        btn.setPadding(40, 30, 40, 30);
-        
-        // Buton Tasarımı
-        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, 
-                LinearLayout.LayoutParams.WRAP_CONTENT
-        );
-        params.setMargins(0, 0, 0, 30); // Alt boşluk
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        params.setMargins(0, 10, 0, 20);
         btn.setLayoutParams(params);
 
         btn.setOnClickListener(v -> {
             try {
-                if (type.equals("WEB") || type.equals("TELEGRAM")) {
-                    // Linki tarayıcıda aç
-                    Intent browserIntent = new Intent(Intent.ACTION_VIEW, Uri.parse(link));
-                    startActivity(browserIntent);
-                } else if (type.equals("IPTV")) {
-                    // M3U Linkini DAHİLİ PLAYER ile aç
+                if (type.equals("IPTV")) {
                     Intent intent = new Intent(MainActivity.this, PlayerActivity.class);
                     intent.putExtra("VIDEO_URL", link);
                     startActivity(intent);
+                } else {
+                    Intent browserIntent = new Intent(Intent.ACTION_VIEW, Uri.parse(link));
+                    startActivity(browserIntent);
                 }
             } catch (Exception e) {
-                Toast.makeText(MainActivity.this, "İşlem yapılamadı", Toast.LENGTH_SHORT).show();
+                Toast.makeText(MainActivity.this, "Hata", Toast.LENGTH_SHORT).show();
             }
         });
         container.addView(btn);
