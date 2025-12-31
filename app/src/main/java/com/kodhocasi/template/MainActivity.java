@@ -1,64 +1,128 @@
 package com.base.app;
 
+import android.content.Intent;
+import android.net.Uri;
+import android.os.AsyncTask;
 import android.os.Bundle;
+import android.view.Gravity;
 import android.widget.Button;
+import android.widget.LinearLayout;
+import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
+import org.json.JSONArray;
 import org.json.JSONObject;
-import java.io.InputStream;
-import java.nio.charset.StandardCharsets;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.URL;
 
 public class MainActivity extends AppCompatActivity {
 
-    private String m3uUrl = "";
-    private String appName = "";
+    // SCRIPT BURAYI DEGISTIRECEK
+    private String CONFIG_URL = "https://panel.siteniz.com/default.json";
+    
+    private LinearLayout container;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        
-        // Basit bir arayüz oluşturuyoruz (Layout XML kullanmadan kodla)
-        // Normalde layout dosyası kullanılır ama tek dosya istediğin için buraya gömdüm.
-        setContentView(R.layout.activity_main); 
-        
-        TextView titleView = findViewById(R.id.txtTitle);
-        TextView urlView = findViewById(R.id.txtUrl);
-        Button playButton = findViewById(R.id.btnPlay);
 
-        // 1. Config Yükle
-        loadConfig();
+        // Dinamik Layout (XML Kullanmadan)
+        ScrollView scrollView = new ScrollView(this);
+        container = new LinearLayout(this);
+        container.setOrientation(LinearLayout.VERTICAL);
+        container.setPadding(50, 50, 50, 50);
+        container.setGravity(Gravity.CENTER_HORIZONTAL);
+        scrollView.addView(container);
+        setContentView(scrollView);
 
-        // 2. Verileri Ekrana Bas
-        titleView.setText(appName);
-        urlView.setText(m3uUrl);
+        // Yükleniyor yazısı
+        TextView loading = new TextView(this);
+        loading.setText("Menü Yükleniyor...");
+        loading.setTextSize(20);
+        container.addView(loading);
 
-        // 3. Buton Aksiyonu
-        playButton.setOnClickListener(v -> {
-            Toast.makeText(this, "Oynatılıyor: " + m3uUrl, Toast.LENGTH_SHORT).show();
-            // BURAYA VIDEO PLAYER ACILMA KODU GELECEK
-        });
+        // Config Çek
+        new FetchConfigTask().execute(CONFIG_URL);
     }
 
-    private void loadConfig() {
-        try {
-            // assets/config.json dosyasını oku
-            InputStream is = getAssets().open("config.json");
-            int size = is.available();
-            byte[] buffer = new byte[size];
-            is.read(buffer);
-            is.close();
-
-            String jsonString = new String(buffer, StandardCharsets.UTF_8);
-            JSONObject jsonObject = new JSONObject(jsonString);
-
-            appName = jsonObject.optString("app_name", "Varsayılan Uygulama");
-            m3uUrl = jsonObject.optString("m3u_url", "");
-
-        } catch (Exception e) {
-            e.printStackTrace();
-            appName = "Hata Oluştu";
-            m3uUrl = "Config Okunamadı";
+    // Arka Planda JSON Çekme İşlemi
+    private class FetchConfigTask extends AsyncTask<String, Void, String> {
+        @Override
+        protected String doInBackground(String... urls) {
+            StringBuilder result = new StringBuilder();
+            try {
+                URL url = new URL(urls[0]);
+                HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                BufferedReader rd = new BufferedReader(new InputStreamReader(conn.getInputStream()));
+                String line;
+                while ((line = rd.readLine()) != null) {
+                    result.append(line);
+                }
+                rd.close();
+                return result.toString();
+            } catch (Exception e) {
+                return null;
+            }
         }
+
+        @Override
+        protected void onPostExecute(String result) {
+            container.removeAllViews();
+            if (result != null) {
+                try {
+                    JSONObject json = new JSONObject(result);
+                    String appTitle = json.optString("app_name", "Uygulamam");
+                    
+                    // Başlık Ekle
+                    TextView titleView = new TextView(MainActivity.this);
+                    titleView.setText(appTitle);
+                    titleView.setTextSize(24);
+                    titleView.setGravity(Gravity.CENTER);
+                    titleView.setPadding(0, 0, 0, 50);
+                    container.addView(titleView);
+
+                    // Butonları Oluştur
+                    JSONArray modules = json.getJSONArray("modules");
+                    for (int i = 0; i < modules.length(); i++) {
+                        JSONObject item = modules.getJSONObject(i);
+                        if (item.getBoolean("active")) {
+                            createButton(item.getString("title"), item.getString("type"), item.getString("url"));
+                        }
+                    }
+
+                } catch (Exception e) {
+                    Toast.makeText(MainActivity.this, "JSON Hatası", Toast.LENGTH_SHORT).show();
+                }
+            } else {
+                Toast.makeText(MainActivity.this, "İnternet Bağlantısı Yok", Toast.LENGTH_SHORT).show();
+            }
+        }
+    }
+
+    private void createButton(String text, final String type, final String link) {
+        Button btn = new Button(this);
+        btn.setText(text);
+        btn.setPadding(20, 20, 20, 20);
+        
+        btn.setOnClickListener(v -> {
+            if (type.equals("WEB") || type.equals("TELEGRAM")) {
+                // Tarayıcıda veya Telegramda aç
+                Intent browserIntent = new Intent(Intent.ACTION_VIEW, Uri.parse(link));
+                startActivity(browserIntent);
+            } else if (type.equals("IPTV")) {
+                // Video Player'da aç (VLC vb.)
+                Intent videoIntent = new Intent(Intent.ACTION_VIEW);
+                videoIntent.setDataAndType(Uri.parse(link), "video/*");
+                try {
+                    startActivity(videoIntent);
+                } catch (Exception e) {
+                    Toast.makeText(MainActivity.this, "Video oynatıcı bulunamadı!", Toast.LENGTH_SHORT).show();
+                }
+            }
+        });
+        container.addView(btn);
     }
 }
