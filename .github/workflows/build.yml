@@ -9,33 +9,39 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Code
+      - name: Kodları Çek
         uses: actions/checkout@v3
 
-      - name: Set up JDK 17
+      - name: Java Kurulumu (JDK 17)
         uses: actions/setup-java@v3
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: gradle
 
-      - name: Grant execute permission for gradlew
-        run: chmod +x gradlew
+      # --- HIZLANDIRMA (CACHE) ADIMI BURASI ---
+      # Bu adım Gradle dosyalarını önbelleğe alır.
+      - name: Setup Gradle & Cache
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: current
+          cache-read-only: false # Cache'e yazmasına izin ver
 
-      # SCRIPTI CALISTIR
-      - name: Configure App
+      - name: Script İzinlerini Ver
+        run: chmod +x scripts/prep_build.sh
+
+      # SCRIPTI ÇALIŞTIR
+      - name: Uygulamayı Yapılandır
         run: |
-          chmod +x scripts/prep_build.sh
           ./scripts/prep_build.sh \
             "${{ github.event.client_payload.package_name }}" \
             "${{ github.event.client_payload.app_name }}" \
             "${{ github.event.client_payload.m3u_url }}"
 
-      # DERLEME KOMUTU (Native Android için)
-      - name: Build with Gradle
-        run: ./gradlew assembleRelease
+      # DERLEME (Gradle Cache Kullanarak)
+      - name: Build APK (Release)
+        run: ./gradlew assembleRelease --no-daemon
 
-      # APK YUKLEME
+      # APK YÜKLEME
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
