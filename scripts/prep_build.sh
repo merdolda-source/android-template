@@ -6,50 +6,184 @@ APP_NAME=$2
 CONFIG_URL=$3
 
 echo "=========================================="
-echo "      FABRİKA SCRIPTI - FINAL SÜRÜM"
+echo "   OTOMATİK KOD ÜRETİCİ (GENERATOR) V1"
 echo "=========================================="
 echo "PAKET: $PACKAGE_NAME"
-echo "APP ADI: $APP_NAME"
 echo "URL: $CONFIG_URL"
 echo "=========================================="
 
-# 1. Dosyayı Bul
-TARGET_FILE=$(find app/src/main/java -name "MainActivity.java" | head -n 1)
-
-if [ -z "$TARGET_FILE" ]; then
-    echo "❌ HATA: MainActivity.java bulunamadı!"
-    find . -name "MainActivity.java"
-    exit 1
-fi
-echo "✅ Dosya bulundu: $TARGET_FILE"
-
-# 2. Windows Satır Sonlarını Temizle (KRİTİK ADIM)
-# Dosyayı Linux formatına zorluyoruz ki aranan kelime bulunsun.
-sed -i 's/\r$//' "$TARGET_FILE"
-
-# 3. URL Değiştirme (Perl Kullanarak - Daha Güvenli)
-# Sed bazen URL'lerdeki // işaretlerinde hata verir, Perl vermez.
-perl -pi -e "s|REPLACE_THIS_URL|$CONFIG_URL|g" "$TARGET_FILE"
-
-# 4. Kontrol Et
-if grep -q "$CONFIG_URL" "$TARGET_FILE"; then
-    echo "✅ BAŞARILI: URL değiştirildi."
-else
-    echo "⚠️ UYARI: URL değişmemiş görünüyor. Zorla yazılıyor..."
-    # Eğer yukarıdaki çalışmazsa, dosyayı tamamen yeniden yazarız (Acil durum planı)
-    sed -i "s|REPLACE_THIS_URL|$CONFIG_URL|g" "$TARGET_FILE"
-fi
-
-# 5. Temizlik
-echo "--- Temizlik Yapılıyor ---"
+# 1. TEMİZLİK
+echo "--- 1. Temizlik Yapılıyor ---"
 rm -rf app/src/main/res/drawable*
 rm -rf app/src/main/res/mipmap*
 rm -rf app/src/main/res/values/themes.xml
 rm -rf app/src/main/res/values/styles.xml
 rm -rf app/src/main/res/values/colors.xml
 
-# 6. Kimlik Güncelleme
+# 2. KİMLİK GÜNCELLEME
+echo "--- 2. Kimlikler Güncelleniyor ---"
 sed -i "s/applicationId \"com.base.app\"/applicationId \"$PACKAGE_NAME\"/g" app/build.gradle
 sed -i "s/android:label=\"BASE_APP_NAME\"/android:label=\"$APP_NAME\"/g" app/src/main/AndroidManifest.xml
 
+# 3. MAIN ACTIVITY DOSYASINI SIFIRDAN YAZ (EN GARANTİ YÖNTEM)
+echo "--- 3. MainActivity.java Yeniden Oluşturuluyor ---"
+
+TARGET_DIR="app/src/main/java/com/base/app"
+mkdir -p "$TARGET_DIR" # Klasör yoksa oluştur
+
+# Dosyayı sıfırdan yazıyoruz. CONFIG_URL değişkenini doğrudan içine gömüyoruz.
+cat > "$TARGET_DIR/MainActivity.java" <<EOF
+package com.base.app;
+
+import android.app.Activity;
+import android.content.Intent;
+import android.net.Uri;
+import android.os.AsyncTask;
+import android.os.Bundle;
+import android.view.Gravity;
+import android.widget.Button;
+import android.widget.LinearLayout;
+import android.widget.ScrollView;
+import android.widget.TextView;
+import android.widget.Toast;
+import org.json.JSONArray;
+import org.json.JSONObject;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.URL;
+
+public class MainActivity extends Activity {
+
+    // SCRIPT TARAFINDAN OTOMATIK GIRILEN URL:
+    private String CONFIG_URL = "$CONFIG_URL"; 
+    
+    private LinearLayout container;
+    private TextView statusText;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+
+        ScrollView scrollView = new ScrollView(this);
+        scrollView.setBackgroundColor(0xFFFFFFFF);
+        
+        container = new LinearLayout(this);
+        container.setOrientation(LinearLayout.VERTICAL);
+        container.setPadding(50, 80, 50, 50);
+        container.setGravity(Gravity.CENTER_HORIZONTAL);
+        scrollView.addView(container);
+        setContentView(scrollView);
+
+        statusText = new TextView(this);
+        statusText.setText("Yükleniyor...\n" + CONFIG_URL);
+        statusText.setTextSize(14);
+        statusText.setGravity(Gravity.CENTER);
+        statusText.setTextColor(0xFF555555);
+        container.addView(statusText);
+
+        new FetchConfigTask().execute(CONFIG_URL);
+    }
+
+    private class FetchConfigTask extends AsyncTask<String, Void, String> {
+        @Override
+        protected String doInBackground(String... urls) {
+            StringBuilder result = new StringBuilder();
+            try {
+                if (urls[0].contains("REPLACE_THIS_URL")) {
+                    return "SETUP_ERROR";
+                }
+
+                URL url = new URL(urls[0]);
+                HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                conn.setConnectTimeout(15000);
+                conn.setReadTimeout(15000);
+                conn.setRequestMethod("GET");
+                conn.setRequestProperty("User-Agent", "AppBuilder");
+                
+                int responseCode = conn.getResponseCode();
+                if (responseCode != 200) {
+                    return "HTTP_ERROR:" + responseCode;
+                }
+
+                BufferedReader rd = new BufferedReader(new InputStreamReader(conn.getInputStream()));
+                String line;
+                while ((line = rd.readLine()) != null) {
+                    result.append(line);
+                }
+                rd.close();
+                return result.toString();
+
+            } catch (Exception e) {
+                return "EXCEPTION:" + e.getMessage();
+            }
+        }
+
+        @Override
+        protected void onPostExecute(String result) {
+            if (isFinishing()) return;
+
+            if (result == null || result.startsWith("EXCEPTION") || result.startsWith("HTTP_ERROR") || result.equals("SETUP_ERROR")) {
+                statusText.setText("⚠️ HATA OLUŞTU\n\n" + result);
+                statusText.setTextColor(0xFFFF0000);
+                return;
+            }
+
+            container.removeAllViews();
+            try {
+                JSONObject json = new JSONObject(result);
+                String appTitle = json.optString("app_name", "Uygulama");
+                
+                TextView titleView = new TextView(MainActivity.this);
+                titleView.setText(appTitle);
+                titleView.setTextSize(26);
+                titleView.setPadding(0, 0, 0, 60);
+                titleView.setGravity(Gravity.CENTER);
+                titleView.setTextColor(0xFF000000);
+                container.addView(titleView);
+
+                JSONArray modules = json.getJSONArray("modules");
+                for (int i = 0; i < modules.length(); i++) {
+                    JSONObject item = modules.getJSONObject(i);
+                    if (item.optBoolean("active", true)) {
+                        createButton(item.getString("title"), item.getString("type"), item.getString("url"));
+                    }
+                }
+            } catch (Exception e) {
+                statusText.setText("Veri Hatası: " + e.getMessage());
+                container.addView(statusText);
+            }
+        }
+    }
+
+    private void createButton(String text, final String type, final String link) {
+        Button btn = new Button(this);
+        btn.setText(text);
+        btn.setPadding(40, 30, 40, 30);
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        params.setMargins(0, 0, 0, 30);
+        btn.setLayoutParams(params);
+        btn.setBackgroundColor(0xFF2196F3);
+        btn.setTextColor(0xFFFFFFFF);
+
+        btn.setOnClickListener(v -> {
+            try {
+                if (type.equals("IPTV")) {
+                    Intent intent = new Intent(MainActivity.this, PlayerActivity.class);
+                    intent.putExtra("VIDEO_URL", link);
+                    startActivity(intent);
+                } else {
+                    Intent browserIntent = new Intent(Intent.ACTION_VIEW, Uri.parse(link));
+                    startActivity(browserIntent);
+                }
+            } catch (Exception e) {
+                Toast.makeText(MainActivity.this, "Hata", Toast.LENGTH_SHORT).show();
+            }
+        });
+        container.addView(btn);
+    }
+}
+EOF
+
+echo "✅ MainActivity.java başarıyla oluşturuldu."
 echo "--- İŞLEM BİTTİ ---"
