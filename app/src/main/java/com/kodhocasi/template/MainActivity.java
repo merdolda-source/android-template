@@ -1,50 +1,64 @@
-package com.kodhocasi.template;
+package com.base.app;
 
-import android.app.Activity;
 import android.os.Bundle;
-import android.view.Window;
-import android.view.WindowManager;
-import com.google.android.exoplayer2.ExoPlayer;
-import com.google.android.exoplayer2.MediaItem;
-import com.google.android.exoplayer2.ui.StyledPlayerView;
+import android.widget.Button;
+import android.widget.TextView;
+import android.widget.Toast;
+import androidx.appcompat.app.AppCompatActivity;
+import org.json.JSONObject;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 
-public class MainActivity extends Activity { // AppCompatActivity yerine düz Activity
+public class MainActivity extends AppCompatActivity {
 
-    private ExoPlayer player;
-    private StyledPlayerView playerView;
-    
-    // PHP Panelden gelecek olan URL
-    private String M3U_URL = "CONFIG_URL_PLACEHOLDER"; 
+    private String m3uUrl = "";
+    private String appName = "";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         
-        // Fullscreen Modu (Tam Ekran)
-        requestWindowFeature(Window.FEATURE_NO_TITLE);
-        getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, 
-                            WindowManager.LayoutParams.FLAG_FULLSCREEN);
+        // Basit bir arayüz oluşturuyoruz (Layout XML kullanmadan kodla)
+        // Normalde layout dosyası kullanılır ama tek dosya istediğin için buraya gömdüm.
+        setContentView(R.layout.activity_main); 
         
-        setContentView(R.layout.activity_main);
+        TextView titleView = findViewById(R.id.txtTitle);
+        TextView urlView = findViewById(R.id.txtUrl);
+        Button playButton = findViewById(R.id.btnPlay);
 
-        playerView = findViewById(R.id.player_view);
-        setupPlayer();
+        // 1. Config Yükle
+        loadConfig();
+
+        // 2. Verileri Ekrana Bas
+        titleView.setText(appName);
+        urlView.setText(m3uUrl);
+
+        // 3. Buton Aksiyonu
+        playButton.setOnClickListener(v -> {
+            Toast.makeText(this, "Oynatılıyor: " + m3uUrl, Toast.LENGTH_SHORT).show();
+            // BURAYA VIDEO PLAYER ACILMA KODU GELECEK
+        });
     }
 
-    private void setupPlayer() {
-        player = new ExoPlayer.Builder(this).build();
-        playerView.setPlayer(player);
+    private void loadConfig() {
+        try {
+            // assets/config.json dosyasını oku
+            InputStream is = getAssets().open("config.json");
+            int size = is.available();
+            byte[] buffer = new byte[size];
+            is.read(buffer);
+            is.close();
 
-        // Dinamik link değişimi burada yapılacak
-        MediaItem mediaItem = MediaItem.fromUri("http://panelinden-gelen-link.m3u8");
-        player.setMediaItem(mediaItem);
-        player.prepare();
-        player.play();
-    }
+            String jsonString = new String(buffer, StandardCharsets.UTF_8);
+            JSONObject jsonObject = new JSONObject(jsonString);
 
-    @Override
-    protected void onDestroy() {
-        super.onDestroy();
-        if (player != null) player.release();
+            appName = jsonObject.optString("app_name", "Varsayılan Uygulama");
+            m3uUrl = jsonObject.optString("m3u_url", "");
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            appName = "Hata Oluştu";
+            m3uUrl = "Config Okunamadı";
+        }
     }
 }
