@@ -5,13 +5,12 @@ PACKAGE_NAME=$1
 APP_NAME=$2
 CONFIG_URL=$3
 ICON_URL=$4
-ADS_CONFIG=$5 # YENİ: Panelden gelen reklam ayarları JSON formatında
+# ADS_CONFIG parametresini kaldırdık çünkü artık canlı çekiyoruz via API
 
 echo "=========================================="
-echo "   ULTRA APP - MULTI APP & UNITY ADS"
+echo "   ULTRA APP - CANLI REKLAM GÜNCELLEME"
 echo "=========================================="
 echo "PAKET: $PACKAGE_NAME"
-echo "REKLAM AYARLARI MEVCUT: ${#ADS_CONFIG} karakter"
 
 # --- 1. TEMİZLİK ---
 rm -rf app/src/main/res/drawable*
@@ -28,7 +27,7 @@ if [ ! -z "$ICON_URL" ]; then
     curl -L -o app/src/main/res/mipmap-xxxhdpi/ic_launcher.png "$ICON_URL"
 fi
 
-# --- 3. BUILD.GRADLE (Unity Ads Eklendi) ---
+# --- 3. BUILD.GRADLE ---
 cat > app/build.gradle <<EOF
 plugins {
     id 'com.android.application'
@@ -56,8 +55,6 @@ dependencies {
     implementation 'androidx.media3:media3-ui:1.2.0'
     implementation 'androidx.media3:media3-common:1.2.0'
     implementation 'androidx.media3:media3-exoplayer-dash:1.2.0'
-    
-    // UNITY ADS SDK
     implementation 'com.unity3d.ads:unity-ads:4.9.2'
 }
 EOF
@@ -69,16 +66,13 @@ cat > app/src/main/AndroidManifest.xml <<EOF
     package="com.base.app">
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-    
     <uses-permission android:name="android.permission.AD_ID" /> 
-
     <application
         android:allowBackup="true"
         android:label="$APP_NAME"
         android:icon="@mipmap/ic_launcher"
         android:usesCleartextTraffic="true"
         android:theme="@android:style/Theme.DeviceDefault.Light.NoActionBar">
-        
         <activity android:name=".MainActivity" android:exported="true" android:hardwareAccelerated="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -94,15 +88,13 @@ cat > app/src/main/AndroidManifest.xml <<EOF
 </manifest>
 EOF
 
-# --- 5. JAVA: REKLAM YÖNETİCİSİ (AdsManager.java) ---
-# Bu sınıf tüm reklam mantığını yönetir (Sıklık kontrolü vb.)
+# --- 5. ADS MANAGER (Aynı, mantık değişmedi) ---
 cat > "$TARGET_DIR/AdsManager.java" <<EOF
 package com.base.app;
 
 import android.app.Activity;
 import android.util.Log;
 import android.view.ViewGroup;
-import android.widget.RelativeLayout;
 import com.unity3d.ads.IUnityAdsInitializationListener;
 import com.unity3d.ads.IUnityAdsLoadListener;
 import com.unity3d.ads.IUnityAdsShowListener;
@@ -114,34 +106,30 @@ import org.json.JSONObject;
 
 public class AdsManager {
     private static String GAME_ID = "";
-    private static boolean TEST_MODE = false; // Yayınlarken false yap
+    private static boolean TEST_MODE = false; 
     private static boolean ENABLED = false;
-    
     private static String BANNER_ID = "Banner_Android";
     private static boolean BANNER_ACTIVE = false;
-    
     private static String INTER_ID = "Interstitial_Android";
     private static boolean INTER_ACTIVE = false;
     private static int INTER_FREQ = 3;
     private static int clickCount = 0;
 
-    public static void init(Activity activity, String jsonConfig) {
+    public static void init(Activity activity, JSONObject json) {
         try {
-            JSONObject json = new JSONObject(jsonConfig);
+            if (json == null) return;
             ENABLED = json.optBoolean("enabled", false);
             GAME_ID = json.optString("game_id", "");
-            
             BANNER_ACTIVE = json.optBoolean("banner_active", false);
             BANNER_ID = json.optString("banner_id", "Banner_Android");
-            
             INTER_ACTIVE = json.optBoolean("inter_active", false);
             INTER_ID = json.optString("inter_id", "Interstitial_Android");
             INTER_FREQ = json.optInt("inter_freq", 3);
 
             if (ENABLED && !GAME_ID.isEmpty()) {
                 UnityAds.initialize(activity.getApplicationContext(), GAME_ID, TEST_MODE, new IUnityAdsInitializationListener() {
-                    public void onInitializationComplete() { Log.d("ADS", "Init Success"); loadInterstitial(); }
-                    public void onInitializationFailed(UnityAds.UnityAdsInitializationError error, String message) { Log.e("ADS", "Init Failed: " + message); }
+                    public void onInitializationComplete() { loadInterstitial(); }
+                    public void onInitializationFailed(UnityAds.UnityAdsInitializationError error, String message) {}
                 });
             }
         } catch (Exception e) { e.printStackTrace(); }
@@ -151,7 +139,7 @@ public class AdsManager {
         if (!ENABLED || !BANNER_ACTIVE) return;
         BannerView banner = new BannerView(activity, BANNER_ID, new UnityBannerSize(320, 50));
         banner.setListener(new BannerView.Listener(){
-            public void onBannerLoaded(BannerView bannerAdView) { container.addView(bannerAdView); }
+            public void onBannerLoaded(BannerView bannerAdView) { container.removeAllViews(); container.addView(bannerAdView); }
             public void onBannerFailedToLoad(BannerView bannerAdView, BannerErrorInfo errorInfo) {}
             public void onBannerClick(BannerView bannerAdView) {}
             public void onBannerLeftApplication(BannerView bannerAdView) {}
@@ -167,18 +155,15 @@ public class AdsManager {
         });
     }
 
-    // Bu fonksiyon geçiş reklamını sıklığa göre gösterir
     public static void showInterstitial(Activity activity) {
         if (!ENABLED || !INTER_ACTIVE) return;
-        
         clickCount++;
         if (clickCount >= INTER_FREQ) {
             UnityAds.show(activity, INTER_ID, new IUnityAdsShowListener() {
                 public void onUnityAdsShowStart(String placementId) {}
                 public void onUnityAdsShowClick(String placementId) {}
                 public void onUnityAdsShowComplete(String placementId, UnityAds.UnityAdsShowCompletionState state) {
-                    clickCount = 0; // Sayacı sıfırla
-                    loadInterstitial(); // Yenisini yükle
+                    clickCount = 0; loadInterstitial();
                 }
                 public void onUnityAdsShowFailure(String placementId, UnityAds.UnityAdsShowError error, String message) { loadInterstitial(); }
             });
@@ -187,7 +172,8 @@ public class AdsManager {
 }
 EOF
 
-# --- 6. MainActivity.java (Reklam Entegrasyonu) ---
+# --- 6. MainActivity.java (CANLI REKLAM ÇEKME) ---
+# BURASI DEĞİŞTİ: Artık API'den gelen JSON'u okuyup reklamı başlatıyor.
 cat > "$TARGET_DIR/MainActivity.java" <<EOF
 package com.base.app;
 import android.app.Activity;
@@ -209,30 +195,27 @@ import java.net.URL;
 
 public class MainActivity extends Activity {
     private String CONFIG_URL = "$CONFIG_URL"; 
-    // Panelden gelen reklam ayarlarını Java stringine gömüyoruz (Escape yaparak)
-    private String ADS_JSON = "$ADS_CONFIG".replace("\"", "\\\""); 
     
+    private RelativeLayout root;
     private LinearLayout contentContainer;
+    private LinearLayout bannerContainer;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         
-        // ANA DÜZEN (Relative Layout: Banner en altta kalsın diye)
-        RelativeLayout root = new RelativeLayout(this);
+        root = new RelativeLayout(this);
         root.setBackgroundColor(0xFFFFFFFF);
         
-        // Scroll View (İçerik)
         ScrollView sv = new ScrollView(this);
         contentContainer = new LinearLayout(this);
         contentContainer.setOrientation(LinearLayout.VERTICAL);
-        contentContainer.setPadding(50, 50, 50, 150); // Banner için alttan boşluk
+        contentContainer.setPadding(50, 50, 50, 150); 
         sv.addView(contentContainer);
         
         root.addView(sv, new RelativeLayout.LayoutParams(-1, -1));
 
-        // Banner Alanı (En Alt)
-        LinearLayout bannerContainer = new LinearLayout(this);
+        bannerContainer = new LinearLayout(this);
         bannerContainer.setOrientation(LinearLayout.VERTICAL);
         bannerContainer.setGravity(Gravity.CENTER);
         RelativeLayout.LayoutParams bannerParams = new RelativeLayout.LayoutParams(-1, -2);
@@ -242,10 +225,7 @@ public class MainActivity extends Activity {
 
         setContentView(root);
         
-        // REKLAMLARI BAŞLAT
-        AdsManager.init(this, "$ADS_CONFIG");
-        AdsManager.showBanner(this, bannerContainer);
-
+        // Önce içeriği çekelim, reklam ayarları da içinde gelecek
         new FetchConfigTask().execute(CONFIG_URL);
     }
 
@@ -276,6 +256,14 @@ public class MainActivity extends Activity {
                 tv.setPadding(0,0,0,30);
                 contentContainer.addView(tv);
 
+                // --- 1. REKLAM AYARLARINI ÇEK VE BAŞLAT (CANLI) ---
+                JSONObject adsConfig = json.optJSONObject("ads_config");
+                if (adsConfig != null) {
+                    AdsManager.init(MainActivity.this, adsConfig);
+                    AdsManager.showBanner(MainActivity.this, bannerContainer);
+                }
+
+                // --- 2. MODÜLLERİ DİZ ---
                 JSONArray mods = json.getJSONArray("modules");
                 for(int i=0; i<mods.length(); i++){
                     JSONObject m = mods.getJSONObject(i);
@@ -288,7 +276,7 @@ public class MainActivity extends Activity {
     }
 
     private void createButton(String text, final String type, final String link) {
-        Button btn = new Button(this);
+        Button btn = new Button(MainActivity.this);
         btn.setText(text);
         LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-1, -2);
         p.setMargins(0,0,0,20);
@@ -297,7 +285,7 @@ public class MainActivity extends Activity {
         btn.setTextColor(0xFFFFFFFF);
         
         btn.setOnClickListener(v -> {
-            // REKLAM KONTROLÜ (Tıklayınca sayaç artar, limit dolunca reklam çıkar)
+            // Geçiş Reklamını Göster (Sayaca göre)
             AdsManager.showInterstitial(MainActivity.this);
 
             if (type.equals("WEB")) {
@@ -318,12 +306,10 @@ public class MainActivity extends Activity {
 }
 EOF
 
-# Diğer dosyalar (PlayerActivity, WebView, ChannelList) aynı kaldığı için tekrar yazmıyorum,
-# ama scriptin tam çalışması için önceki mesajlardaki gibi bunların da oluşturulması gerekir.
-# (Burada önceki mesajdaki PlayerActivity, ChannelListActivity vb. kodlarını kullanmaya devam edecek)
-# KODUN DEVAMINI ÖNCEKİ MESAJDAKİ GİBİ EKLEYEBİLİRSİN.
+# --- DİĞER DOSYALAR (AYNISI - ÖNEMLİ) ---
+# PlayerActivity, ChannelListActivity vb. önceki scriptteki gibi kalmalı.
+# Bu kodun altına önceki mesajdaki "PlayerActivity", "ChannelListActivity", "WebViewActivity" kısımlarını eklemeyi UNUTMA.
 
-# --- PlayerActivity.java (Aynısı) ---
 cat > "$TARGET_DIR/PlayerActivity.java" <<EOF
 package com.base.app;
 import android.app.Activity;
@@ -387,7 +373,6 @@ public class PlayerActivity extends Activity {
 }
 EOF
 
-# --- ChannelListActivity.java (Aynısı) ---
 cat > "$TARGET_DIR/ChannelListActivity.java" <<EOF
 package com.base.app;
 import android.app.Activity;
@@ -465,7 +450,6 @@ public class ChannelListActivity extends Activity {
 }
 EOF
 
-# --- WebViewActivity.java (Aynısı) ---
 cat > "$TARGET_DIR/WebViewActivity.java" <<EOF
 package com.base.app;
 import android.app.Activity;
@@ -483,4 +467,4 @@ public class WebViewActivity extends Activity {
 }
 EOF
 
-echo "✅ APP GÜNCELLENDİ (ÇOKLU UYGULAMA + UNITY ADS)"
+echo "✅ DYNAMIC ADS SİSTEMİ TAMAMLANDI."
