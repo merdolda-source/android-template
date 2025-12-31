@@ -6,28 +6,25 @@ APP_NAME=$2
 CONFIG_URL=$3
 
 echo "=========================================="
-echo "   ULTRA APP OLUŞTURUCU (HLS DESTEKLI)"
+echo "   EVRENSEL PLAYER (ALL FORMATS) V5"
 echo "=========================================="
 echo "PAKET: $PACKAGE_NAME"
 echo "URL: $CONFIG_URL"
 echo "=========================================="
 
 # --- 1. TEMİZLİK ---
-echo "--- Temizlik Yapılıyor ---"
 rm -rf app/src/main/res/drawable*
 rm -rf app/src/main/res/mipmap*
 rm -rf app/src/main/res/values/themes.xml
 rm -rf app/src/main/res/values/styles.xml
 rm -rf app/src/main/res/values/colors.xml
-# Çakışma olmaması için eski kodları siliyoruz
 rm -rf app/src/main/java/com/base/app/*
 
 TARGET_DIR="app/src/main/java/com/base/app"
 mkdir -p "$TARGET_DIR"
 
-# --- 2. BUILD.GRADLE (HLS DESTEĞİ İÇİN KRİTİK ADIM) ---
-# Bu adım ExoPlayer'ın HLS modülünü projeye ekler.
-echo "--- Build.gradle Yeniden Yazılıyor (HLS Library) ---"
+# --- 2. BUILD.GRADLE (HER ŞEYİ EKLE) ---
+# Burada RTSP, DASH ve SmoothStreaming gibi tüm modülleri ekliyoruz.
 cat > app/build.gradle <<EOF
 plugins {
     id 'com.android.application'
@@ -44,13 +41,7 @@ android {
         versionCode 1
         versionName "1.0"
     }
-
-    buildTypes {
-        release {
-            minifyEnabled false
-            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-        }
-    }
+    
     compileOptions {
         sourceCompatibility 1.8
         targetCompatibility 1.8
@@ -61,17 +52,19 @@ dependencies {
     implementation 'androidx.appcompat:appcompat:1.6.1'
     implementation 'com.google.android.material:material:1.11.0'
     
-    // --- GÜÇLÜ PLAYER İÇİN GEREKLİ KÜTÜPHANELER ---
+    // --- EVRENSEL OYNATICI PAKETİ ---
     implementation 'androidx.media3:media3-exoplayer:1.2.0'
-    implementation 'androidx.media3:media3-exoplayer-hls:1.2.0'  // .m3u8 İÇİN ŞART
-    implementation 'androidx.media3:media3-exoplayer-dash:1.2.0' // DASH YAYINLARI İÇİN
+    implementation 'androidx.media3:media3-exoplayer-hls:1.2.0'  // m3u8
+    implementation 'androidx.media3:media3-exoplayer-dash:1.2.0' // dash
+    implementation 'androidx.media3:media3-exoplayer-rtsp:1.2.0' // rtsp (kameralar)
+    implementation 'androidx.media3:media3-exoplayer-smoothstreaming:1.2.0' // smooth
+    implementation 'androidx.media3:media3-datasource:1.2.0'
     implementation 'androidx.media3:media3-ui:1.2.0'
     implementation 'androidx.media3:media3-common:1.2.0'
 }
 EOF
 
 # --- 3. MANIFEST ---
-echo "--- Manifest Oluşturuluyor ---"
 cat > app/src/main/AndroidManifest.xml <<EOF
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
@@ -83,16 +76,11 @@ cat > app/src/main/AndroidManifest.xml <<EOF
     <application
         android:allowBackup="true"
         android:label="$APP_NAME"
-        android:supportsRtl="true"
         android:icon="@android:drawable/sym_def_app_icon"
-        android:roundIcon="@android:drawable/sym_def_app_icon"
         android:usesCleartextTraffic="true"
         android:theme="@android:style/Theme.DeviceDefault.Light.NoActionBar">
         
-        <activity
-            android:name=".MainActivity"
-            android:exported="true"
-            android:configChanges="orientation|screenSize|keyboardHidden">
+        <activity android:name=".MainActivity" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -101,20 +89,16 @@ cat > app/src/main/AndroidManifest.xml <<EOF
 
         <activity android:name=".WebViewActivity" />
         <activity android:name=".ChannelListActivity" />
-
-        <activity 
-            android:name=".PlayerActivity"
+        <activity android:name=".PlayerActivity" 
             android:configChanges="orientation|screenSize|keyboardHidden|smallestScreenSize|screenLayout"
             android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen" />
-            
     </application>
 </manifest>
 EOF
 
 # --- 4. JAVA DOSYALARI ---
 
-# A) PlayerActivity.java (GÜÇLENDİRİLMİŞ PLAYER)
-# Hata yakalama eklendi ve HLS desteği varsayılan yapıldı.
+# A) PlayerActivity.java (EVRENSEL MOD)
 cat > "$TARGET_DIR/PlayerActivity.java" <<EOF
 package com.base.app;
 
@@ -126,7 +110,9 @@ import android.widget.Toast;
 import androidx.media3.common.MediaItem;
 import androidx.media3.common.PlaybackException;
 import androidx.media3.common.Player;
+import androidx.media3.datasource.DefaultHttpDataSource;
 import androidx.media3.exoplayer.ExoPlayer;
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory;
 import androidx.media3.ui.PlayerView;
 
 public class PlayerActivity extends Activity {
@@ -137,41 +123,73 @@ public class PlayerActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        // Ekran kapanmasın
+        // Tam ekran ve ekranı açık tut
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
 
         playerView = new PlayerView(this);
         playerView.setShowNextButton(false);
         playerView.setShowPreviousButton(false);
-        // Kontrollerin ekranda kalma süresi (4 saniye)
         playerView.setControllerShowTimeoutMs(4000); 
         setContentView(playerView);
 
         videoUrl = getIntent().getStringExtra("VIDEO_URL");
+        if (videoUrl != null) {
+            videoUrl = videoUrl.trim(); // Boşlukları temizle
+        }
+
         initializePlayer();
     }
 
     private void initializePlayer() {
-        if (videoUrl == null) return;
+        if (videoUrl == null || videoUrl.isEmpty()) return;
 
-        // Player Oluştur
-        player = new ExoPlayer.Builder(this).build();
+        // 1. CHROME TAKLİDİ (User-Agent)
+        // Bazı sunucular Java/Player olduğunu anlayınca engeller.
+        String userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+        
+        DefaultHttpDataSource.Factory httpDataSourceFactory = new DefaultHttpDataSource.Factory()
+                .setUserAgent(userAgent)
+                .setAllowCrossProtocolRedirects(true); // Yönlendirmelere izin ver
+
+        // 2. OTOMATİK FORMAT ALGILAYICI (Universal Factory)
+        // Bu Factory; HLS, DASH, MP4, MKV ne gelirse otomatik tanır.
+        DefaultMediaSourceFactory mediaSourceFactory = new DefaultMediaSourceFactory(this)
+                .setDataSourceFactory(httpDataSourceFactory);
+
+        // 3. PLAYER OLUŞTUR
+        player = new ExoPlayer.Builder(this)
+                .setMediaSourceFactory(mediaSourceFactory)
+                .build();
+        
         playerView.setPlayer(player);
 
-        // Hata Dinleyicisi (Yayın açılmazsa uyarı verir)
+        // 4. OYNAT
+        try {
+            // MediaItem oluştururken MIME TYPE belirtmiyoruz, ExoPlayer kendisi bulacak.
+            MediaItem mediaItem = MediaItem.fromUri(Uri.parse(videoUrl));
+            player.setMediaItem(mediaItem);
+            player.prepare();
+            player.setPlayWhenReady(true);
+        } catch (Exception e) {
+            Toast.makeText(this, "Başlatma Hatası: " + e.getMessage(), Toast.LENGTH_LONG).show();
+        }
+
+        // 5. HATA YÖNETİMİ
         player.addListener(new Player.Listener() {
             @Override
             public void onPlayerError(PlaybackException error) {
-                Toast.makeText(PlayerActivity.this, "Oynatma Hatası: " + error.getMessage(), Toast.LENGTH_LONG).show();
+                String errorMsg = "Oynatma Hatası";
+                if (error.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED) {
+                    errorMsg = "İnternet Yok veya Sunucu Kapalı";
+                } else if (error.errorCode == PlaybackException.ERROR_CODE_PARSING_CONTAINER_MALFORMED) {
+                    errorMsg = "Video Formatı Desteklenmiyor";
+                } else if (error.errorCode == PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS) {
+                    errorMsg = "Sunucu Erişim İzni Vermedi (403/404)";
+                }
+                Toast.makeText(PlayerActivity.this, errorMsg + "\n" + error.getMessage(), Toast.LENGTH_LONG).show();
             }
         });
-
-        // Medyayı Yükle
-        MediaItem mediaItem = MediaItem.fromUri(Uri.parse(videoUrl));
-        player.setMediaItem(mediaItem);
-        player.prepare();
-        player.setPlayWhenReady(true);
     }
 
     @Override
@@ -185,7 +203,7 @@ public class PlayerActivity extends Activity {
 }
 EOF
 
-# B) ChannelListActivity.java (Aynı Kalıyor - Çalışıyor)
+# B) ChannelListActivity.java (Sadece Linkleri Listeler)
 cat > "$TARGET_DIR/ChannelListActivity.java" <<EOF
 package com.base.app;
 
@@ -193,8 +211,6 @@ import android.app.Activity;
 import android.content.Intent;
 import android.os.AsyncTask;
 import android.os.Bundle;
-import android.view.View;
-import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.ListView;
 import android.widget.Toast;
@@ -206,7 +222,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class ChannelListActivity extends Activity {
-
     private ListView listView;
     private List<String> channelNames = new ArrayList<>();
     private List<String> channelUrls = new ArrayList<>();
@@ -218,7 +233,7 @@ public class ChannelListActivity extends Activity {
         setContentView(listView);
         
         String m3uUrl = getIntent().getStringExtra("M3U_URL");
-        Toast.makeText(this, "Kanallar Yükleniyor...", Toast.LENGTH_SHORT).show();
+        Toast.makeText(this, "Liste Çekiliyor...", Toast.LENGTH_SHORT).show();
         new FetchM3UTask().execute(m3uUrl);
         
         listView.setOnItemClickListener((parent, view, position, id) -> {
@@ -235,7 +250,8 @@ public class ChannelListActivity extends Activity {
             try {
                 URL url = new URL(urls[0]);
                 HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-                conn.setConnectTimeout(10000);
+                conn.setConnectTimeout(15000);
+                conn.setRequestProperty("User-Agent", "Mozilla/5.0");
                 BufferedReader rd = new BufferedReader(new InputStreamReader(conn.getInputStream()));
                 StringBuilder res = new StringBuilder();
                 String line;
@@ -247,30 +263,40 @@ public class ChannelListActivity extends Activity {
         @Override
         protected void onPostExecute(String result) {
             if (result == null) {
-                Toast.makeText(ChannelListActivity.this, "Liste İndirilemedi", Toast.LENGTH_LONG).show();
+                Toast.makeText(ChannelListActivity.this, "HATA: Liste İndirilemedi!", Toast.LENGTH_LONG).show();
                 return;
             }
             String[] lines = result.split("\n");
-            String currentName = "Bilinmeyen Kanal";
+            String currentName = "Kanal";
             
             for (String line : lines) {
                 line = line.trim();
+                if (line.isEmpty()) continue;
+                
                 if (line.startsWith("#EXTINF")) {
-                    if (line.contains(",")) currentName = line.substring(line.lastIndexOf(",") + 1).trim();
-                } else if (!line.startsWith("#") && line.length() > 5) {
+                    if (line.contains(",")) {
+                        currentName = line.substring(line.lastIndexOf(",") + 1).trim();
+                    }
+                } else if (!line.startsWith("#")) {
+                    // M3U olmayan, MP4/TS vb linkler
                     channelNames.add(currentName);
                     channelUrls.add(line);
                     currentName = "Bilinmeyen Kanal";
                 }
             }
-            ArrayAdapter<String> adapter = new ArrayAdapter<>(ChannelListActivity.this, android.R.layout.simple_list_item_1, channelNames);
-            listView.setAdapter(adapter);
+            
+            if (channelNames.isEmpty()) {
+                Toast.makeText(ChannelListActivity.this, "Listede Kanal Bulunamadı!", Toast.LENGTH_LONG).show();
+            } else {
+                ArrayAdapter<String> adapter = new ArrayAdapter<>(ChannelListActivity.this, android.R.layout.simple_list_item_1, channelNames);
+                listView.setAdapter(adapter);
+            }
         }
     }
 }
 EOF
 
-# C) WebViewActivity.java (Aynı Kalıyor)
+# C) WebViewActivity.java
 cat > "$TARGET_DIR/WebViewActivity.java" <<EOF
 package com.base.app;
 import android.app.Activity;
@@ -294,7 +320,7 @@ public class WebViewActivity extends Activity {
 }
 EOF
 
-# D) MainActivity.java (Aynı Kalıyor)
+# D) MainActivity.java
 cat > "$TARGET_DIR/MainActivity.java" <<EOF
 package com.base.app;
 import android.app.Activity;
@@ -399,4 +425,4 @@ public class MainActivity extends Activity {
 }
 EOF
 
-echo "✅ TÜM DOSYALAR OLUŞTURULDU."
+echo "✅ EVRENSEL PLAYER GÜNCELLENDİ (TÜM FORMATLAR AÇIK)"
