@@ -1,4 +1,4 @@
-name: Build Native Android
+name: App Factory
 
 on:
   repository_dispatch:
@@ -9,41 +9,35 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Code
+      - name: Kodları İndir
         uses: actions/checkout@v3
 
-      - name: Setup Java (JDK 17)
+      - name: Java Kur (JDK 17)
         uses: actions/setup-java@v3
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      # HIZLANDIRMA (CACHE)
-      - name: Setup Gradle
+      - name: Gradle Cache (Hızlandırma)
         uses: gradle/actions/setup-gradle@v3
         with:
           gradle-version: current
 
-      # İZİNLERİ VER VE SCRİPTİ ÇALIŞTIR (DÜZELTME BURADA)
-      - name: Configure App & Clean Resources
+      - name: Hazırlık ve Temizlik
         run: |
-          # Gradlew ve Script'e çalıştırma izni veriyoruz
           chmod +x gradlew
           chmod +x scripts/prep_build.sh
-          
-          # Scripti çalıştırıyoruz
+          # Scripti Çalıştır
           ./scripts/prep_build.sh \
             "${{ github.event.client_payload.package_name }}" \
             "${{ github.event.client_payload.app_name }}" \
-            "${{ github.event.client_payload.m3u_url }}"
+            "${{ github.event.client_payload.config_url }}"
 
-      # DERLEME
-      - name: Build APK
+      - name: APK Derle
         run: ./gradlew assembleRelease --no-daemon
 
-      # APK YÜKLEME
-      - name: Upload APK
+      - name: APK Yükle (Artifacts)
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ github.event.client_payload.app_name }}-apk
+          name: ${{ github.event.client_payload.app_name }}-APK
           path: app/build/outputs/apk/release/app-release-unsigned.apk
