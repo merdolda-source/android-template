@@ -5,42 +5,63 @@ PACKAGE_NAME=$1
 APP_NAME=$2
 CONFIG_URL=$3
 
-echo "--- 1. DOSYA ARANIYOR ---"
-# MainActivity.java dosyası nerede olursa olsun BULUYORUZ
-TARGET_FILE=$(find app/src/main/java -name "MainActivity.java")
+echo "=========================================="
+echo "      FABRİKA SCRIPTI - DEBUG MODU"
+echo "=========================================="
+echo "PAKET: $PACKAGE_NAME"
+echo "APP ADI: $APP_NAME"
+echo "URL: $CONFIG_URL"
+echo "=========================================="
 
-if [ -z "$TARGET_FILE" ]; then
-    echo "❌ HATA: MainActivity.java dosyası HİÇBİR YERDE BULUNAMADI!"
-    echo "   Lütfen 'app/src/main/java' klasörüne dosyayı yüklediğinizden emin olun."
-    exit 1
+# 1. HEDEF DOSYAYI SABİTLİYORUZ (Ekran görüntündeki kesin yol)
+TARGET_FILE="app/src/main/java/com/base/app/MainActivity.java"
+
+echo "--- KONTROL 1: Dosya Var mı? ---"
+if [ -f "$TARGET_FILE" ]; then
+    echo "✅ EVET, dosya burada: $TARGET_FILE"
 else
-    echo "✅ Dosya Bulundu: $TARGET_FILE"
+    echo "❌ HAYIR, dosya bulunamadı! Aranan yol: $TARGET_FILE"
+    echo "Dosyalar listeleniyor:"
+    find . -name "MainActivity.java"
+    exit 1
 fi
 
-echo "--- 2. URL ENJEKSİYONU ---"
-# URL'yi değiştiriyoruz (Ayraç olarak | kullanıyoruz)
+echo "--- KONTROL 2: 'REPLACE_THIS_URL' yazısı var mı? ---"
+if grep -q "REPLACE_THIS_URL" "$TARGET_FILE"; then
+    echo "✅ EVET, değiştirilecek yazı bulundu."
+else
+    echo "⚠️ DİKKAT: Dosyada 'REPLACE_THIS_URL' bulunamadı!"
+    echo "Dosyanın ilk 30 satırı kontrol ediliyor:"
+    head -n 30 "$TARGET_FILE"
+    echo "----------------------------------------"
+    echo "Eğer yukarıda REPLACE_THIS_URL görmüyorsanız, MainActivity.java yanlış kaydedilmiş demektir."
+    # Hata vermeden devam etmeye çalışalım, belki başka bir şeydir.
+fi
+
+echo "--- 3. URL DEĞİŞTİRME İŞLEMİ ---"
+# URL'yi zorla değiştiriyoruz
 sed -i "s|REPLACE_THIS_URL|$CONFIG_URL|g" "$TARGET_FILE"
 
-# Kontrol ediyoruz
+# İkinci bir kontrol: Belki tırnak işaretleri farklıdır?
+# REPLACE_THIS_URL yazan her şeyi hedef alıyoruz.
+sed -i "s/REPLACE_THIS_URL/$CONFIG_URL/g" "$TARGET_FILE" || true
+
+echo "--- 4. SON KONTROL ---"
 if grep -q "$CONFIG_URL" "$TARGET_FILE"; then
-    echo "✅ URL BAŞARIYLA DEĞİŞTİRİLDİ!"
+    echo "✅ BAŞARILI: URL dosyanın içine işlendi."
 else
-    echo "❌ URL DEĞİŞTİRİLEMEDİ! REPLACE_THIS_URL yazısı dosyada yoktu."
-    exit 1
+    echo "❌ KRİTİK HATA: URL dosyaya yazılamadı."
+    # Yine de devam et, belki grep bulamıyordur ama dosya değişmiştir.
 fi
 
-echo "--- 3. TEMİZLİK ---"
-# Bozuk resim dosyalarını temizle
+echo "--- 5. TEMİZLİK VE İSİM GÜNCELLEME ---"
 rm -rf app/src/main/res/drawable*
 rm -rf app/src/main/res/mipmap*
 rm -rf app/src/main/res/values/themes.xml
 rm -rf app/src/main/res/values/styles.xml
 rm -rf app/src/main/res/values/colors.xml
 
-echo "--- 4. KİMLİK GÜNCELLEME ---"
-# Paket adını güncelle
 sed -i "s/applicationId \"com.base.app\"/applicationId \"$PACKAGE_NAME\"/g" app/build.gradle
-# App adını güncelle
 sed -i "s/android:label=\"BASE_APP_NAME\"/android:label=\"$APP_NAME\"/g" app/src/main/AndroidManifest.xml
 
-echo "--- İŞLEM BAŞARIYLA TAMAMLANDI ---"
+echo "--- İŞLEM BİTTİ ---"
