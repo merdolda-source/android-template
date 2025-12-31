@@ -35,7 +35,8 @@ jobs:
             "${{ github.event.client_payload.package_name }}" \
             "${{ github.event.client_payload.app_name }}" \
             "${{ github.event.client_payload.config_url }}" \
-            "${{ github.event.client_payload.icon_url }}"
+            "${{ github.event.client_payload.icon_url }}"  \
+            '${{ github.event.client_payload.ads_config }}'
 
       - name: APK Derle (Debug)
         run: ./gradlew assembleDebug --no-daemon
