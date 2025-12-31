@@ -6,8 +6,7 @@ APP_NAME=$2
 CONFIG_URL=$3
 
 echo "=========================================="
-echo "   PROFESYONEL APP OLUŞTURUCU V3"
-echo "   (WebView + M3U Listesi + Player)"
+echo "   ULTRA APP OLUŞTURUCU (HLS DESTEKLI)"
 echo "=========================================="
 echo "PAKET: $PACKAGE_NAME"
 echo "URL: $CONFIG_URL"
@@ -20,18 +19,59 @@ rm -rf app/src/main/res/mipmap*
 rm -rf app/src/main/res/values/themes.xml
 rm -rf app/src/main/res/values/styles.xml
 rm -rf app/src/main/res/values/colors.xml
-# Eski java dosyalarını temizle ki çakışma olmasın
+# Çakışma olmaması için eski kodları siliyoruz
 rm -rf app/src/main/java/com/base/app/*
 
-# --- 2. AYARLAR ---
 TARGET_DIR="app/src/main/java/com/base/app"
 mkdir -p "$TARGET_DIR"
 
-# build.gradle paket adı
-sed -i "s/applicationId \"com.base.app\"/applicationId \"$PACKAGE_NAME\"/g" app/build.gradle
+# --- 2. BUILD.GRADLE (HLS DESTEĞİ İÇİN KRİTİK ADIM) ---
+# Bu adım ExoPlayer'ın HLS modülünü projeye ekler.
+echo "--- Build.gradle Yeniden Yazılıyor (HLS Library) ---"
+cat > app/build.gradle <<EOF
+plugins {
+    id 'com.android.application'
+}
 
-# --- 3. MANIFEST OLUŞTURMA (Tüm Sayfalar Tanıtılıyor) ---
-echo "--- Manifest Yeniden Yazılıyor ---"
+android {
+    namespace 'com.base.app'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "$PACKAGE_NAME"
+        minSdk 24
+        targetSdk 34
+        versionCode 1
+        versionName "1.0"
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+    compileOptions {
+        sourceCompatibility 1.8
+        targetCompatibility 1.8
+    }
+}
+
+dependencies {
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'com.google.android.material:material:1.11.0'
+    
+    // --- GÜÇLÜ PLAYER İÇİN GEREKLİ KÜTÜPHANELER ---
+    implementation 'androidx.media3:media3-exoplayer:1.2.0'
+    implementation 'androidx.media3:media3-exoplayer-hls:1.2.0'  // .m3u8 İÇİN ŞART
+    implementation 'androidx.media3:media3-exoplayer-dash:1.2.0' // DASH YAYINLARI İÇİN
+    implementation 'androidx.media3:media3-ui:1.2.0'
+    implementation 'androidx.media3:media3-common:1.2.0'
+}
+EOF
+
+# --- 3. MANIFEST ---
+echo "--- Manifest Oluşturuluyor ---"
 cat > app/src/main/AndroidManifest.xml <<EOF
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
@@ -60,7 +100,6 @@ cat > app/src/main/AndroidManifest.xml <<EOF
         </activity>
 
         <activity android:name=".WebViewActivity" />
-
         <activity android:name=".ChannelListActivity" />
 
         <activity 
@@ -72,42 +111,81 @@ cat > app/src/main/AndroidManifest.xml <<EOF
 </manifest>
 EOF
 
-# --- 4. DOSYALARI OLUŞTURMA ---
+# --- 4. JAVA DOSYALARI ---
 
-# A) WebViewActivity.java (Uygulama İçi Tarayıcı)
-cat > "$TARGET_DIR/WebViewActivity.java" <<EOF
+# A) PlayerActivity.java (GÜÇLENDİRİLMİŞ PLAYER)
+# Hata yakalama eklendi ve HLS desteği varsayılan yapıldı.
+cat > "$TARGET_DIR/PlayerActivity.java" <<EOF
 package com.base.app;
 
 import android.app.Activity;
+import android.net.Uri;
 import android.os.Bundle;
-import android.webkit.WebSettings;
-import android.webkit.WebView;
-import android.webkit.WebViewClient;
+import android.view.WindowManager;
+import android.widget.Toast;
+import androidx.media3.common.MediaItem;
+import androidx.media3.common.PlaybackException;
+import androidx.media3.common.Player;
+import androidx.media3.exoplayer.ExoPlayer;
+import androidx.media3.ui.PlayerView;
 
-public class WebViewActivity extends Activity {
+public class PlayerActivity extends Activity {
+    private ExoPlayer player;
+    private PlayerView playerView;
+    private String videoUrl;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        
-        WebView webView = new WebView(this);
-        setContentView(webView);
-        
-        String url = getIntent().getStringExtra("WEB_URL");
-        
-        // Ayarlar
-        WebSettings settings = webView.getSettings();
-        settings.setJavaScriptEnabled(true);
-        settings.setDomStorageEnabled(true);
-        
-        // Linklerin uygulama içinde açılmasını sağlar (Chrome'a atmaz)
-        webView.setWebViewClient(new WebViewClient());
-        
-        webView.loadUrl(url);
+        // Ekran kapanmasın
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
+
+        playerView = new PlayerView(this);
+        playerView.setShowNextButton(false);
+        playerView.setShowPreviousButton(false);
+        // Kontrollerin ekranda kalma süresi (4 saniye)
+        playerView.setControllerShowTimeoutMs(4000); 
+        setContentView(playerView);
+
+        videoUrl = getIntent().getStringExtra("VIDEO_URL");
+        initializePlayer();
+    }
+
+    private void initializePlayer() {
+        if (videoUrl == null) return;
+
+        // Player Oluştur
+        player = new ExoPlayer.Builder(this).build();
+        playerView.setPlayer(player);
+
+        // Hata Dinleyicisi (Yayın açılmazsa uyarı verir)
+        player.addListener(new Player.Listener() {
+            @Override
+            public void onPlayerError(PlaybackException error) {
+                Toast.makeText(PlayerActivity.this, "Oynatma Hatası: " + error.getMessage(), Toast.LENGTH_LONG).show();
+            }
+        });
+
+        // Medyayı Yükle
+        MediaItem mediaItem = MediaItem.fromUri(Uri.parse(videoUrl));
+        player.setMediaItem(mediaItem);
+        player.prepare();
+        player.setPlayWhenReady(true);
+    }
+
+    @Override
+    protected void onStop() {
+        super.onStop();
+        if (player != null) {
+            player.release();
+            player = null;
+        }
     }
 }
 EOF
 
-# B) ChannelListActivity.java (M3U Ayrıştırıcı ve Listeleyici)
+# B) ChannelListActivity.java (Aynı Kalıyor - Çalışıyor)
 cat > "$TARGET_DIR/ChannelListActivity.java" <<EOF
 package com.base.app;
 
@@ -136,44 +214,34 @@ public class ChannelListActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        
         listView = new ListView(this);
         setContentView(listView);
         
         String m3uUrl = getIntent().getStringExtra("M3U_URL");
         Toast.makeText(this, "Kanallar Yükleniyor...", Toast.LENGTH_SHORT).show();
-        
         new FetchM3UTask().execute(m3uUrl);
         
-        listView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
-            @Override
-            public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
-                String videoUrl = channelUrls.get(position);
-                Intent intent = new Intent(ChannelListActivity.this, PlayerActivity.class);
-                intent.putExtra("VIDEO_URL", videoUrl);
-                startActivity(intent);
-            }
+        listView.setOnItemClickListener((parent, view, position, id) -> {
+            String videoUrl = channelUrls.get(position);
+            Intent intent = new Intent(ChannelListActivity.this, PlayerActivity.class);
+            intent.putExtra("VIDEO_URL", videoUrl);
+            startActivity(intent);
         });
     }
 
     private class FetchM3UTask extends AsyncTask<String, Void, String> {
         @Override
         protected String doInBackground(String... urls) {
-            StringBuilder result = new StringBuilder();
             try {
                 URL url = new URL(urls[0]);
                 HttpURLConnection conn = (HttpURLConnection) url.openConnection();
                 conn.setConnectTimeout(10000);
                 BufferedReader rd = new BufferedReader(new InputStreamReader(conn.getInputStream()));
+                StringBuilder res = new StringBuilder();
                 String line;
-                while ((line = rd.readLine()) != null) {
-                    result.append(line).append("\n");
-                }
-                rd.close();
-                return result.toString();
-            } catch (Exception e) {
-                return null;
-            }
+                while ((line = rd.readLine()) != null) res.append(line).append("\n");
+                return res.toString();
+            } catch (Exception e) { return null; }
         }
 
         @Override
@@ -182,86 +250,53 @@ public class ChannelListActivity extends Activity {
                 Toast.makeText(ChannelListActivity.this, "Liste İndirilemedi", Toast.LENGTH_LONG).show();
                 return;
             }
-
-            // Basit M3U Parser
             String[] lines = result.split("\n");
             String currentName = "Bilinmeyen Kanal";
             
             for (String line : lines) {
                 line = line.trim();
                 if (line.startsWith("#EXTINF")) {
-                    // İsim bulmaya çalış (Virgülden sonrasını al)
-                    if (line.contains(",")) {
-                        currentName = line.substring(line.lastIndexOf(",") + 1).trim();
-                    }
-                } else if (!line.startsWith("#") && line.length() > 10) {
-                    // Bu bir URL'dir
+                    if (line.contains(",")) currentName = line.substring(line.lastIndexOf(",") + 1).trim();
+                } else if (!line.startsWith("#") && line.length() > 5) {
                     channelNames.add(currentName);
                     channelUrls.add(line);
-                    currentName = "Bilinmeyen Kanal"; // Sıfırla
+                    currentName = "Bilinmeyen Kanal";
                 }
             }
-            
             ArrayAdapter<String> adapter = new ArrayAdapter<>(ChannelListActivity.this, android.R.layout.simple_list_item_1, channelNames);
             listView.setAdapter(adapter);
-            Toast.makeText(ChannelListActivity.this, channelNames.size() + " Kanal Bulundu", Toast.LENGTH_SHORT).show();
         }
     }
 }
 EOF
 
-# C) PlayerActivity.java (ExoPlayer - Oynatıcı)
-cat > "$TARGET_DIR/PlayerActivity.java" <<EOF
+# C) WebViewActivity.java (Aynı Kalıyor)
+cat > "$TARGET_DIR/WebViewActivity.java" <<EOF
 package com.base.app;
-
 import android.app.Activity;
-import android.net.Uri;
 import android.os.Bundle;
-import android.view.WindowManager;
-import androidx.media3.common.MediaItem;
-import androidx.media3.exoplayer.ExoPlayer;
-import androidx.media3.ui.PlayerView;
-
-public class PlayerActivity extends Activity {
-    private ExoPlayer player;
-    private PlayerView playerView;
-    private String videoUrl;
-
+import android.webkit.WebSettings;
+import android.webkit.WebView;
+import android.webkit.WebViewClient;
+public class WebViewActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-        getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
-
-        playerView = new PlayerView(this);
-        setContentView(playerView);
-
-        videoUrl = getIntent().getStringExtra("VIDEO_URL");
-        initializePlayer();
-    }
-
-    private void initializePlayer() {
-        if (videoUrl == null) return;
-        player = new ExoPlayer.Builder(this).build();
-        playerView.setPlayer(player);
-        MediaItem mediaItem = MediaItem.fromUri(Uri.parse(videoUrl));
-        player.setMediaItem(mediaItem);
-        player.prepare();
-        player.play();
-    }
-
-    @Override
-    protected void onStop() {
-        super.onStop();
-        if (player != null) { player.release(); player = null; }
+        WebView webView = new WebView(this);
+        setContentView(webView);
+        String url = getIntent().getStringExtra("WEB_URL");
+        WebSettings settings = webView.getSettings();
+        settings.setJavaScriptEnabled(true);
+        settings.setDomStorageEnabled(true);
+        webView.setWebViewClient(new WebViewClient());
+        webView.loadUrl(url);
     }
 }
 EOF
 
-# D) MainActivity.java (Ana Menü - Yönlendirici)
+# D) MainActivity.java (Aynı Kalıyor)
 cat > "$TARGET_DIR/MainActivity.java" <<EOF
 package com.base.app;
-
 import android.app.Activity;
 import android.content.Intent;
 import android.os.AsyncTask;
@@ -280,8 +315,6 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 
 public class MainActivity extends Activity {
-
-    // SCRIPT BURAYI DEGISTIRECEK
     private String CONFIG_URL = "$CONFIG_URL"; 
     private LinearLayout container;
 
@@ -295,7 +328,6 @@ public class MainActivity extends Activity {
         container.setPadding(50, 50, 50, 50);
         sv.addView(container);
         setContentView(sv);
-        
         new FetchConfigTask().execute(CONFIG_URL);
     }
 
@@ -351,20 +383,15 @@ public class MainActivity extends Activity {
         
         btn.setOnClickListener(v -> {
             if (type.equals("WEB")) {
-                // WEB SAYFASINI UYGULAMA İÇİNDE AÇ (WebView)
                 Intent intent = new Intent(MainActivity.this, WebViewActivity.class);
                 intent.putExtra("WEB_URL", link);
                 startActivity(intent);
             } else if (type.equals("IPTV")) {
-                // M3U LİSTESİ SAYFASINI AÇ
                 Intent intent = new Intent(MainActivity.this, ChannelListActivity.class);
                 intent.putExtra("M3U_URL", link);
                 startActivity(intent);
             } else {
-                // Telegram vs için Dışarı At
-                try {
-                    startActivity(new Intent(Intent.ACTION_VIEW, android.net.Uri.parse(link)));
-                } catch(Exception e){}
+                try { startActivity(new Intent(Intent.ACTION_VIEW, android.net.Uri.parse(link))); } catch(Exception e){}
             }
         });
         container.addView(btn);
