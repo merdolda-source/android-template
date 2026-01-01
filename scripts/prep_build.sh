@@ -1,60 +1,43 @@
 #!/bin/bash
 set -e
-
 PACKAGE_NAME=$1
 APP_NAME=$2
 CONFIG_URL=$3
 ICON_URL=$4
-# ADS_CONFIG parametresini kaldırdık çünkü artık canlı çekiyoruz via API
+# ADS_CONFIG artık API'den canlı geliyor
 
 echo "=========================================="
-echo "   ULTRA APP - CANLI REKLAM GÜNCELLEME"
+echo "   ULTRA APP V7 - PRO UI & TV SUPPORT"
 echo "=========================================="
-echo "PAKET: $PACKAGE_NAME"
 
 # --- 1. TEMİZLİK ---
 rm -rf app/src/main/res/drawable*
 rm -rf app/src/main/res/mipmap*
-rm -rf app/src/main/res/values/themes.xml
 rm -rf app/src/main/java/com/base/app/*
-
 TARGET_DIR="app/src/main/java/com/base/app"
 mkdir -p "$TARGET_DIR"
 
-# --- 2. ICON AYARLAMA ---
+# --- 2. ICON ---
 mkdir -p app/src/main/res/mipmap-xxxhdpi
-if [ ! -z "$ICON_URL" ]; then
-    curl -L -o app/src/main/res/mipmap-xxxhdpi/ic_launcher.png "$ICON_URL"
-fi
+if [ ! -z "$ICON_URL" ]; then curl -L -o app/src/main/res/mipmap-xxxhdpi/ic_launcher.png "$ICON_URL"; fi
 
 # --- 3. BUILD.GRADLE ---
 cat > app/build.gradle <<EOF
-plugins {
-    id 'com.android.application'
-}
+plugins { id 'com.android.application' }
 android {
     namespace 'com.base.app'
     compileSdk 34
-    defaultConfig {
-        applicationId "$PACKAGE_NAME"
-        minSdk 24
-        targetSdk 34
-        versionCode 1
-        versionName "1.0"
-    }
-    compileOptions {
-        sourceCompatibility 1.8
-        targetCompatibility 1.8
-    }
+    defaultConfig { applicationId "$PACKAGE_NAME"; minSdk 24; targetSdk 34; versionCode 1; versionName "1.0"; }
+    compileOptions { sourceCompatibility 1.8; targetCompatibility 1.8; }
 }
 dependencies {
     implementation 'androidx.appcompat:appcompat:1.6.1'
     implementation 'com.google.android.material:material:1.11.0'
     implementation 'androidx.media3:media3-exoplayer:1.2.0'
     implementation 'androidx.media3:media3-exoplayer-hls:1.2.0'
+    implementation 'androidx.media3:media3-exoplayer-dash:1.2.0'
     implementation 'androidx.media3:media3-ui:1.2.0'
     implementation 'androidx.media3:media3-common:1.2.0'
-    implementation 'androidx.media3:media3-exoplayer-dash:1.2.0'
     implementation 'com.unity3d.ads:unity-ads:4.9.2'
 }
 EOF
@@ -62,118 +45,68 @@ EOF
 # --- 4. MANIFEST ---
 cat > app/src/main/AndroidManifest.xml <<EOF
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.base.app">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.base.app">
     <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.AD_ID" /> 
-    <application
-        android:allowBackup="true"
-        android:label="$APP_NAME"
-        android:icon="@mipmap/ic_launcher"
-        android:usesCleartextTraffic="true"
-        android:theme="@android:style/Theme.DeviceDefault.Light.NoActionBar">
+    <application android:allowBackup="true" android:label="$APP_NAME" android:icon="@mipmap/ic_launcher"
+        android:usesCleartextTraffic="true" android:theme="@android:style/Theme.DeviceDefault.Light.NoActionBar">
         <activity android:name=".MainActivity" android:exported="true" android:hardwareAccelerated="true">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
         </activity>
         <activity android:name=".WebViewActivity" />
         <activity android:name=".ChannelListActivity" />
-        <activity android:name=".PlayerActivity" 
-            android:configChanges="orientation|screenSize|keyboardHidden|smallestScreenSize|screenLayout"
-            android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen" />
+        <activity android:name=".PlayerActivity" android:configChanges="orientation|screenSize|keyboardHidden|smallestScreenSize|screenLayout" android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen" />
     </application>
 </manifest>
 EOF
 
-# --- 5. ADS MANAGER (Aynı, mantık değişmedi) ---
+# --- 5. ADS MANAGER (Aynı) ---
 cat > "$TARGET_DIR/AdsManager.java" <<EOF
 package com.base.app;
-
 import android.app.Activity;
 import android.util.Log;
 import android.view.ViewGroup;
-import com.unity3d.ads.IUnityAdsInitializationListener;
-import com.unity3d.ads.IUnityAdsLoadListener;
-import com.unity3d.ads.IUnityAdsShowListener;
-import com.unity3d.ads.UnityAds;
-import com.unity3d.services.banners.BannerErrorInfo;
-import com.unity3d.services.banners.BannerView;
-import com.unity3d.services.banners.UnityBannerSize;
+import com.unity3d.ads.*;
+import com.unity3d.services.banners.*;
 import org.json.JSONObject;
-
 public class AdsManager {
-    private static String GAME_ID = "";
-    private static boolean TEST_MODE = false; 
-    private static boolean ENABLED = false;
-    private static String BANNER_ID = "Banner_Android";
-    private static boolean BANNER_ACTIVE = false;
-    private static String INTER_ID = "Interstitial_Android";
-    private static boolean INTER_ACTIVE = false;
-    private static int INTER_FREQ = 3;
-    private static int clickCount = 0;
-
-    public static void init(Activity activity, JSONObject json) {
-        try {
-            if (json == null) return;
-            ENABLED = json.optBoolean("enabled", false);
-            GAME_ID = json.optString("game_id", "");
-            BANNER_ACTIVE = json.optBoolean("banner_active", false);
-            BANNER_ID = json.optString("banner_id", "Banner_Android");
-            INTER_ACTIVE = json.optBoolean("inter_active", false);
-            INTER_ID = json.optString("inter_id", "Interstitial_Android");
-            INTER_FREQ = json.optInt("inter_freq", 3);
-
-            if (ENABLED && !GAME_ID.isEmpty()) {
-                UnityAds.initialize(activity.getApplicationContext(), GAME_ID, TEST_MODE, new IUnityAdsInitializationListener() {
-                    public void onInitializationComplete() { loadInterstitial(); }
-                    public void onInitializationFailed(UnityAds.UnityAdsInitializationError error, String message) {}
-                });
-            }
-        } catch (Exception e) { e.printStackTrace(); }
+    private static boolean ENABLED=false, BANNER_ACTIVE=false, INTER_ACTIVE=false;
+    private static String GAME_ID="", BANNER_ID="", INTER_ID="";
+    private static int INTER_FREQ=3, clickCount=0;
+    public static void init(Activity a, JSONObject j){
+        try{
+            if(j==null)return;
+            ENABLED=j.optBoolean("enabled",false); GAME_ID=j.optString("game_id");
+            BANNER_ACTIVE=j.optBoolean("banner_active"); BANNER_ID=j.optString("banner_id");
+            INTER_ACTIVE=j.optBoolean("inter_active"); INTER_ID=j.optString("inter_id"); INTER_FREQ=j.optInt("inter_freq",3);
+            if(ENABLED && !GAME_ID.isEmpty()) UnityAds.initialize(a.getApplicationContext(), GAME_ID, false, new IUnityAdsInitializationListener(){
+                public void onInitializationComplete(){ loadInterstitial(); }
+                public void onInitializationFailed(UnityAds.UnityAdsInitializationError e, String m){}
+            });
+        }catch(Exception e){}
     }
-
-    public static void showBanner(Activity activity, ViewGroup container) {
-        if (!ENABLED || !BANNER_ACTIVE) return;
-        BannerView banner = new BannerView(activity, BANNER_ID, new UnityBannerSize(320, 50));
-        banner.setListener(new BannerView.Listener(){
-            public void onBannerLoaded(BannerView bannerAdView) { container.removeAllViews(); container.addView(bannerAdView); }
-            public void onBannerFailedToLoad(BannerView bannerAdView, BannerErrorInfo errorInfo) {}
-            public void onBannerClick(BannerView bannerAdView) {}
-            public void onBannerLeftApplication(BannerView bannerAdView) {}
-        });
-        banner.load();
+    public static void showBanner(Activity a, ViewGroup c){
+        if(!ENABLED || !BANNER_ACTIVE)return;
+        BannerView b = new BannerView(a, BANNER_ID, new UnityBannerSize(320, 50));
+        b.setListener(new BannerView.Listener(){ public void onBannerLoaded(BannerView v){c.removeAllViews(); c.addView(v);} });
+        b.load();
     }
-
-    private static void loadInterstitial() {
-        if (!ENABLED || !INTER_ACTIVE) return;
-        UnityAds.load(INTER_ID, new IUnityAdsLoadListener() {
-            public void onUnityAdsAdLoaded(String placementId) {}
-            public void onUnityAdsFailedToLoad(String placementId, UnityAds.UnityAdsLoadError error, String message) {}
-        });
-    }
-
-    public static void showInterstitial(Activity activity) {
-        if (!ENABLED || !INTER_ACTIVE) return;
+    private static void loadInterstitial(){ if(ENABLED && INTER_ACTIVE) UnityAds.load(INTER_ID, new IUnityAdsLoadListener(){public void onUnityAdsAdLoaded(String p){} public void onUnityAdsFailedToLoad(String p, UnityAds.UnityAdsLoadError e, String m){}}); }
+    public static void showInterstitial(Activity a){
+        if(!ENABLED || !INTER_ACTIVE)return;
         clickCount++;
-        if (clickCount >= INTER_FREQ) {
-            UnityAds.show(activity, INTER_ID, new IUnityAdsShowListener() {
-                public void onUnityAdsShowStart(String placementId) {}
-                public void onUnityAdsShowClick(String placementId) {}
-                public void onUnityAdsShowComplete(String placementId, UnityAds.UnityAdsShowCompletionState state) {
-                    clickCount = 0; loadInterstitial();
-                }
-                public void onUnityAdsShowFailure(String placementId, UnityAds.UnityAdsShowError error, String message) { loadInterstitial(); }
+        if(clickCount>=INTER_FREQ){
+            UnityAds.show(a, INTER_ID, new IUnityAdsShowListener(){
+                public void onUnityAdsShowStart(String p){} public void onUnityAdsShowClick(String p){}
+                public void onUnityAdsShowComplete(String p, UnityAds.UnityAdsShowCompletionState s){clickCount=0; loadInterstitial();}
+                public void onUnityAdsShowFailure(String p, UnityAds.UnityAdsShowError e, String m){loadInterstitial();}
             });
         }
     }
 }
 EOF
 
-# --- 6. MainActivity.java (CANLI REKLAM ÇEKME) ---
-# BURASI DEĞİŞTİ: Artık API'den gelen JSON'u okuyup reklamı başlatıyor.
+# --- 6. MainActivity.java (PROFESYONEL UI + HEADER + EXIT LOGIC) ---
 cat > "$TARGET_DIR/MainActivity.java" <<EOF
 package com.base.app;
 import android.app.Activity;
@@ -181,11 +114,11 @@ import android.content.Intent;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.view.Gravity;
-import android.widget.Button;
-import android.widget.LinearLayout;
-import android.widget.ScrollView;
-import android.widget.TextView;
-import android.widget.RelativeLayout;
+import android.view.View;
+import android.widget.*;
+import android.graphics.Color;
+import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.StateListDrawable;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import java.io.BufferedReader;
@@ -195,38 +128,176 @@ import java.net.URL;
 
 public class MainActivity extends Activity {
     private String CONFIG_URL = "$CONFIG_URL"; 
-    
     private RelativeLayout root;
     private LinearLayout contentContainer;
     private LinearLayout bannerContainer;
+    private LinearLayout headerLayout;
+    private TextView titleText;
+    private ImageView refreshBtn, shareBtn;
+    
+    // UI Ayarları
+    private String headerColor = "#2196F3", textColor = "#FFFFFF", bgColor = "#F0F0F0";
+    private boolean showRefresh = true, showShare = true;
+    private String appName = "$APP_NAME";
+    
+    // Çıkış Mantığı
+    private long lastBackPressTime = 0;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         
         root = new RelativeLayout(this);
-        root.setBackgroundColor(0xFFFFFFFF);
         
-        ScrollView sv = new ScrollView(this);
-        contentContainer = new LinearLayout(this);
-        contentContainer.setOrientation(LinearLayout.VERTICAL);
-        contentContainer.setPadding(50, 50, 50, 150); 
-        sv.addView(contentContainer);
+        // --- 1. HEADER (Üst Bar) ---
+        headerLayout = new LinearLayout(this);
+        headerLayout.setId(View.generateViewId());
+        headerLayout.setOrientation(LinearLayout.HORIZONTAL);
+        headerLayout.setGravity(Gravity.CENTER_VERTICAL);
+        headerLayout.setPadding(30, 30, 30, 30);
+        headerLayout.setBackgroundColor(Color.parseColor(headerColor));
+        headerLayout.setElevation(10f); // Gölge
         
-        root.addView(sv, new RelativeLayout.LayoutParams(-1, -1));
+        titleText = new TextView(this);
+        titleText.setText(appName);
+        titleText.setTextColor(Color.parseColor(textColor));
+        titleText.setTextSize(20);
+        titleText.setTypeface(null, android.graphics.Typeface.BOLD);
+        LinearLayout.LayoutParams titleParams = new LinearLayout.LayoutParams(0, -2, 1.0f);
+        headerLayout.addView(titleText, titleParams);
 
+        // Paylaş Butonu
+        shareBtn = new ImageView(this);
+        shareBtn.setImageResource(android.R.drawable.ic_menu_share);
+        shareBtn.setColorFilter(Color.parseColor(textColor));
+        shareBtn.setPadding(20, 0, 20, 0);
+        shareBtn.setOnClickListener(v -> shareApp());
+        headerLayout.addView(shareBtn);
+
+        // Yenile Butonu
+        refreshBtn = new ImageView(this);
+        refreshBtn.setImageResource(android.R.drawable.ic_popup_sync);
+        refreshBtn.setColorFilter(Color.parseColor(textColor));
+        refreshBtn.setPadding(20, 0, 0, 0);
+        refreshBtn.setOnClickListener(v -> {
+            Toast.makeText(this, "Yenileniyor...", Toast.LENGTH_SHORT).show();
+            new FetchConfigTask().execute(CONFIG_URL);
+        });
+        headerLayout.addView(refreshBtn);
+
+        RelativeLayout.LayoutParams headerParams = new RelativeLayout.LayoutParams(-1, -2);
+        headerParams.addRule(RelativeLayout.ALIGN_PARENT_TOP);
+        root.addView(headerLayout, headerParams);
+
+        // --- 2. BANNER ---
         bannerContainer = new LinearLayout(this);
+        bannerContainer.setId(View.generateViewId());
         bannerContainer.setOrientation(LinearLayout.VERTICAL);
         bannerContainer.setGravity(Gravity.CENTER);
-        RelativeLayout.LayoutParams bannerParams = new RelativeLayout.LayoutParams(-1, -2);
-        bannerParams.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM);
-        bannerContainer.setLayoutParams(bannerParams);
-        root.addView(bannerContainer);
+        RelativeLayout.LayoutParams bannerRelParams = new RelativeLayout.LayoutParams(-1, -2);
+        bannerRelParams.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM);
+        root.addView(bannerContainer, bannerRelParams);
+
+        // --- 3. İÇERİK (ScrollView) ---
+        ScrollView sv = new ScrollView(this);
+        sv.setBackgroundColor(Color.parseColor(bgColor)); // Dinamik arkaplan
+        
+        contentContainer = new LinearLayout(this);
+        contentContainer.setOrientation(LinearLayout.VERTICAL);
+        contentContainer.setPadding(30, 30, 30, 150); 
+        sv.addView(contentContainer);
+        
+        RelativeLayout.LayoutParams scrollParams = new RelativeLayout.LayoutParams(-1, -1);
+        scrollParams.addRule(RelativeLayout.BELOW, headerLayout.getId());
+        scrollParams.addRule(RelativeLayout.ABOVE, bannerContainer.getId());
+        root.addView(sv, scrollParams);
 
         setContentView(root);
-        
-        // Önce içeriği çekelim, reklam ayarları da içinde gelecek
         new FetchConfigTask().execute(CONFIG_URL);
+    }
+
+    private void shareApp() {
+        Intent sendIntent = new Intent();
+        sendIntent.setAction(Intent.ACTION_SEND);
+        sendIntent.putExtra(Intent.EXTRA_TEXT, "Harika bir uygulama keşfettim: " + appName + "\n\nİndir: https://play.google.com/store/apps/details?id=" + getPackageName());
+        sendIntent.setType("text/plain");
+        startActivity(Intent.createChooser(sendIntent, "Paylaş"));
+    }
+
+    // Çıkış için 2 kere basma mantığı
+    @Override
+    public void onBackPressed() {
+        if (this.lastBackPressTime < System.currentTimeMillis() - 2000) {
+            Toast.makeText(this, "Çıkmak için tekrar basın", Toast.LENGTH_SHORT).show();
+            this.lastBackPressTime = System.currentTimeMillis();
+        } else {
+            super.onBackPressed();
+            System.exit(0);
+        }
+    }
+
+    // TASARIMLI BUTON OLUŞTURUCU (TV UYUMLU)
+    private void createStyledButton(String text, final String type, final String link) {
+        Button btn = new Button(this);
+        btn.setText(text);
+        btn.setTextColor(Color.parseColor(textColor)); // Buton yazı rengi header ile uyumlu olsun
+        btn.setTextSize(16);
+        btn.setPadding(40, 40, 40, 40);
+        btn.setGravity(Gravity.CENTER_VERTICAL | Gravity.START); // Yazı solda
+        
+        // --- PRO TASARIM (STATE LIST DRAWABLE) ---
+        // Normal hali
+        GradientDrawable normal = new GradientDrawable();
+        normal.setColor(Color.parseColor(headerColor)); // Header rengini butona ver
+        normal.setCornerRadius(15);
+        normal.setStroke(2, Color.parseColor("#DDDDDD"));
+
+        // Üzerine gelince / Basınca (TV Focus)
+        GradientDrawable focused = new GradientDrawable();
+        focused.setColor(Color.parseColor("#FF9800")); // Turuncu focus
+        focused.setCornerRadius(15);
+        focused.setStroke(4, Color.WHITE);
+
+        StateListDrawable selector = new StateListDrawable();
+        selector.addState(new int[]{android.R.attr.state_pressed}, focused);
+        selector.addState(new int[]{android.R.attr.state_focused}, focused); // TV Kumandası için
+        selector.addState(new int[]{}, normal);
+        
+        btn.setBackground(selector);
+        
+        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-1, -2);
+        p.setMargins(0, 0, 0, 25);
+        btn.setLayoutParams(p);
+        
+        // İkon Ekleme (Metin başına)
+        int iconRes = android.R.drawable.ic_menu_view; // Varsayılan
+        if(type.equals("WEB")) iconRes = android.R.drawable.ic_menu_compass;
+        if(type.equals("IPTV")) iconRes = android.R.drawable.ic_menu_slideshow;
+        if(type.equals("JSON_LIST")) iconRes = android.R.drawable.ic_menu_sort_by_size;
+        
+        btn.setCompoundDrawablesWithIntrinsicBounds(iconRes, 0, 0, 0);
+        btn.setCompoundDrawablePadding(30);
+
+        btn.setOnClickListener(v -> {
+            AdsManager.showInterstitial(MainActivity.this);
+            if (type.equals("WEB")) {
+                Intent intent = new Intent(MainActivity.this, WebViewActivity.class);
+                intent.putExtra("WEB_URL", link);
+                startActivity(intent);
+            } else if (type.equals("IPTV") || type.equals("JSON_LIST")) {
+                Intent intent = new Intent(MainActivity.this, ChannelListActivity.class);
+                intent.putExtra("LIST_URL", link);
+                intent.putExtra("TYPE", type);
+                // Renkleri diğer sayfaya da taşı
+                intent.putExtra("BG_COLOR", bgColor);
+                intent.putExtra("HEADER_COLOR", headerColor);
+                intent.putExtra("TEXT_COLOR", textColor);
+                startActivity(intent);
+            } else {
+                try { startActivity(new Intent(Intent.ACTION_VIEW, android.net.Uri.parse(link))); } catch(Exception e){}
+            }
+        });
+        contentContainer.addView(btn);
     }
 
     private class FetchConfigTask extends AsyncTask<String, Void, String> {
@@ -248,68 +319,229 @@ public class MainActivity extends Activity {
             contentContainer.removeAllViews();
             try {
                 JSONObject json = new JSONObject(result);
-                String title = json.optString("app_name", "App");
-                TextView tv = new TextView(MainActivity.this);
-                tv.setText(title);
-                tv.setTextSize(24);
-                tv.setGravity(Gravity.CENTER);
-                tv.setPadding(0,0,0,30);
-                contentContainer.addView(tv);
+                appName = json.optString("app_name", "App");
+                titleText.setText(appName);
 
-                // --- 1. REKLAM AYARLARINI ÇEK VE BAŞLAT (CANLI) ---
+                // --- UI AYARLARINI UYGULA ---
+                JSONObject ui = json.optJSONObject("ui_config");
+                if(ui != null) {
+                    headerColor = ui.optString("header_color", "#2196F3");
+                    textColor = ui.optString("text_color", "#FFFFFF");
+                    bgColor = ui.optString("bg_color", "#F0F0F0");
+                    
+                    showRefresh = ui.optBoolean("show_refresh", true);
+                    showShare = ui.optBoolean("show_share", true);
+                    
+                    // Renkleri Güncelle
+                    headerLayout.setBackgroundColor(Color.parseColor(headerColor));
+                    titleText.setTextColor(Color.parseColor(textColor));
+                    root.setBackgroundColor(Color.parseColor(bgColor));
+                    ((ScrollView)contentContainer.getParent()).setBackgroundColor(Color.parseColor(bgColor));
+                    
+                    refreshBtn.setVisibility(showRefresh ? View.VISIBLE : View.GONE);
+                    shareBtn.setVisibility(showShare ? View.VISIBLE : View.GONE);
+                    refreshBtn.setColorFilter(Color.parseColor(textColor));
+                    shareBtn.setColorFilter(Color.parseColor(textColor));
+                }
+
                 JSONObject adsConfig = json.optJSONObject("ads_config");
                 if (adsConfig != null) {
                     AdsManager.init(MainActivity.this, adsConfig);
                     AdsManager.showBanner(MainActivity.this, bannerContainer);
                 }
 
-                // --- 2. MODÜLLERİ DİZ ---
                 JSONArray mods = json.getJSONArray("modules");
                 for(int i=0; i<mods.length(); i++){
                     JSONObject m = mods.getJSONObject(i);
                     if (m.optBoolean("active", true)) {
-                        createButton(m.getString("title"), m.getString("type"), m.getString("url"));
+                        createStyledButton(m.getString("title"), m.getString("type"), m.getString("url"));
                     }
                 }
             } catch(Exception e){}
         }
     }
+}
+EOF
 
-    private void createButton(String text, final String type, final String link) {
-        Button btn = new Button(MainActivity.this);
-        btn.setText(text);
-        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-1, -2);
-        p.setMargins(0,0,0,20);
-        btn.setLayoutParams(p);
-        btn.setBackgroundColor(0xFF2196F3);
-        btn.setTextColor(0xFFFFFFFF);
+# --- 7. ChannelListActivity.java (TV UYUMLU LİSTE TASARIMI) ---
+cat > "$TARGET_DIR/ChannelListActivity.java" <<EOF
+package com.base.app;
+import android.app.Activity;
+import android.content.Intent;
+import android.os.AsyncTask;
+import android.os.Bundle;
+import android.view.*;
+import android.widget.*;
+import android.graphics.Color;
+import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.StateListDrawable;
+import org.json.JSONArray;
+import org.json.JSONObject;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.util.ArrayList;
+import java.util.List;
+
+public class ChannelListActivity extends Activity {
+    private ListView listView;
+    private List<String> names = new ArrayList<>(), urls = new ArrayList<>(), headers = new ArrayList<>();
+    private String headerColor="#2196F3", textColor="#FFFFFF", bgColor="#F0F0F0";
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
         
-        btn.setOnClickListener(v -> {
-            // Geçiş Reklamını Göster (Sayaca göre)
-            AdsManager.showInterstitial(MainActivity.this);
+        // Intent'ten renkleri al
+        headerColor = getIntent().getStringExtra("HEADER_COLOR");
+        if(headerColor==null) headerColor="#2196F3";
+        bgColor = getIntent().getStringExtra("BG_COLOR");
+        if(bgColor==null) bgColor="#F0F0F0";
+        textColor = getIntent().getStringExtra("TEXT_COLOR");
+        if(textColor==null) textColor="#FFFFFF";
 
-            if (type.equals("WEB")) {
-                Intent intent = new Intent(MainActivity.this, WebViewActivity.class);
-                intent.putExtra("WEB_URL", link);
-                startActivity(intent);
-            } else if (type.equals("IPTV") || type.equals("JSON_LIST")) {
-                Intent intent = new Intent(MainActivity.this, ChannelListActivity.class);
-                intent.putExtra("LIST_URL", link);
-                intent.putExtra("TYPE", type);
-                startActivity(intent);
-            } else {
-                try { startActivity(new Intent(Intent.ACTION_VIEW, android.net.Uri.parse(link))); } catch(Exception e){}
-            }
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setBackgroundColor(Color.parseColor(bgColor));
+
+        // Header
+        LinearLayout header = new LinearLayout(this);
+        header.setBackgroundColor(Color.parseColor(headerColor));
+        header.setPadding(30,30,30,30);
+        TextView title = new TextView(this);
+        title.setText("Kanal Listesi");
+        title.setTextColor(Color.parseColor(textColor));
+        title.setTextSize(18);
+        header.addView(title);
+        root.addView(header);
+
+        listView = new ListView(this);
+        listView.setDivider(null); // Çizgileri kaldır, biz özel yapacağız
+        listView.setPadding(20,20,20,20);
+        listView.setClipToPadding(false);
+        // TV Kumandası için seçimi belirt
+        listView.setSelector(android.R.color.transparent); 
+        
+        root.addView(listView);
+        setContentView(root);
+        
+        String listUrl = getIntent().getStringExtra("LIST_URL");
+        String type = getIntent().getStringExtra("TYPE");
+        new FetchListTask(type).execute(listUrl);
+        
+        listView.setOnItemClickListener((p,v,pos,id)->{
+            Intent i = new Intent(ChannelListActivity.this, PlayerActivity.class);
+            i.putExtra("VIDEO_URL", urls.get(pos));
+            i.putExtra("HEADERS_JSON", headers.get(pos));
+            startActivity(i);
         });
-        contentContainer.addView(btn);
+    }
+
+    // ÖZEL ADAPTER (TV Uyumlu ve Şık)
+    private class ChannelAdapter extends ArrayAdapter<String> {
+        public ChannelAdapter(List<String> items) { super(ChannelListActivity.this, 0, items); }
+        
+        @Override
+        public View getView(int position, View convertView, ViewGroup parent) {
+            if (convertView == null) {
+                LinearLayout layout = new LinearLayout(getContext());
+                layout.setOrientation(LinearLayout.HORIZONTAL);
+                layout.setPadding(30, 30, 30, 30);
+                layout.setGravity(Gravity.CENTER_VERTICAL);
+                
+                // İkon
+                ImageView icon = new ImageView(getContext());
+                icon.setImageResource(android.R.drawable.ic_media_play);
+                icon.setColorFilter(Color.DKGRAY);
+                layout.addView(icon, new LinearLayout.LayoutParams(50, 50));
+                
+                // Metin
+                TextView tv = new TextView(getContext());
+                tv.setId(android.R.id.text1);
+                tv.setTextSize(16);
+                tv.setTextColor(Color.BLACK);
+                tv.setPadding(30, 0, 0, 0);
+                layout.addView(tv);
+                
+                convertView = layout;
+            }
+            
+            TextView tv = convertView.findViewById(android.R.id.text1);
+            tv.setText(getItem(position));
+            
+            // --- DİNAMİK ARKA PLAN (TV FOCUS) ---
+            GradientDrawable normal = new GradientDrawable();
+            normal.setColor(Color.WHITE);
+            normal.setCornerRadius(10);
+            normal.setStroke(1, Color.LTGRAY);
+
+            GradientDrawable focused = new GradientDrawable();
+            focused.setColor(Color.parseColor("#FFEB3B")); // Seçilince Sarımsı
+            focused.setCornerRadius(10);
+            focused.setStroke(3, Color.parseColor(headerColor));
+
+            StateListDrawable bg = new StateListDrawable();
+            bg.addState(new int[]{android.R.attr.state_pressed}, focused);
+            bg.addState(new int[]{android.R.attr.state_selected}, focused); // TV
+            bg.addState(new int[]{android.R.attr.state_hovered}, focused);
+            bg.addState(new int[]{}, normal);
+            
+            convertView.setBackground(bg);
+            
+            // Margin verelim (ListView içinde margin zor olduğu için LayoutParams ile)
+            AbsListView.LayoutParams params = new AbsListView.LayoutParams(-1, -2);
+            convertView.setLayoutParams(params);
+            convertView.setPadding(30,30,30,30); // İç boşluk
+            
+            return convertView;
+        }
+    }
+
+    private class FetchListTask extends AsyncTask<String,Void,String>{
+        String type; FetchListTask(String t){type=t;}
+        protected String doInBackground(String... u){
+            try{
+                URL url=new URL(u[0]); HttpURLConnection c=(HttpURLConnection)url.openConnection();
+                c.setConnectTimeout(15000); c.setRequestProperty("User-Agent","Mozilla/5.0");
+                BufferedReader r=new BufferedReader(new InputStreamReader(c.getInputStream()));
+                StringBuilder sb=new StringBuilder(); String l; while((l=r.readLine())!=null)sb.append(l);
+                return sb.toString();
+            }catch(Exception e){return null;}
+        }
+        protected void onPostExecute(String r){
+            if(r==null){Toast.makeText(ChannelListActivity.this,"Hata",Toast.LENGTH_SHORT).show();return;}
+            try{
+                names.clear(); urls.clear(); headers.clear();
+                if("JSON_LIST".equals(type) || r.trim().startsWith("{")){
+                    JSONObject root=new JSONObject(r); JSONArray arr=root.getJSONObject("list").getJSONArray("item");
+                    for(int i=0;i<arr.length();i++){
+                        JSONObject o=arr.getJSONObject(i);
+                        String url=o.optString("media_url",o.optString("url",""));
+                        if(url.isEmpty())continue;
+                        JSONObject h=new JSONObject();
+                        for(int k=1;k<=5;k++){
+                            String kn=o.optString("h"+k+"Key"), kv=o.optString("h"+k+"Val");
+                            if(!kn.isEmpty()&&!kn.equals("0")&&!kv.isEmpty()&&!kv.equals("0")) h.put(kn,kv);
+                        }
+                        names.add(o.optString("title")); urls.add(url); headers.add(h.toString());
+                    }
+                }else{
+                    String[] lines=r.split("\n"); String name="Kanal";
+                    for(String l:lines){
+                        l=l.trim(); if(l.isEmpty())continue;
+                        if(l.startsWith("#EXTINF")){ if(l.contains(",")) name=l.substring(l.lastIndexOf(",")+1).trim(); }
+                        else if(!l.startsWith("#")){ names.add(name); urls.add(l); headers.add("{}"); name="Bilinmeyen"; }
+                    }
+                }
+                listView.setAdapter(new ChannelAdapter(names)); // Özel Adapter Kullan
+            }catch(Exception e){Toast.makeText(ChannelListActivity.this,"Liste Hatasi",Toast.LENGTH_SHORT).show();}
+        }
     }
 }
 EOF
 
-# --- DİĞER DOSYALAR (AYNISI - ÖNEMLİ) ---
-# PlayerActivity, ChannelListActivity vb. önceki scriptteki gibi kalmalı.
-# Bu kodun altına önceki mesajdaki "PlayerActivity", "ChannelListActivity", "WebViewActivity" kısımlarını eklemeyi UNUTMA.
-
+# --- Diğerleri (WebView & Player) - Değişiklik yok, aynen yazıyoruz ---
 cat > "$TARGET_DIR/PlayerActivity.java" <<EOF
 package com.base.app;
 import android.app.Activity;
@@ -373,83 +605,6 @@ public class PlayerActivity extends Activity {
 }
 EOF
 
-cat > "$TARGET_DIR/ChannelListActivity.java" <<EOF
-package com.base.app;
-import android.app.Activity;
-import android.content.Intent;
-import android.os.AsyncTask;
-import android.os.Bundle;
-import android.widget.ArrayAdapter;
-import android.widget.ListView;
-import android.widget.Toast;
-import org.json.JSONArray;
-import org.json.JSONObject;
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
-import java.net.HttpURLConnection;
-import java.net.URL;
-import java.util.ArrayList;
-import java.util.List;
-public class ChannelListActivity extends Activity {
-    private ListView listView;
-    private List<String> names = new ArrayList<>(), urls = new ArrayList<>(), headers = new ArrayList<>();
-    @Override
-    protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        listView = new ListView(this);
-        setContentView(listView);
-        String listUrl = getIntent().getStringExtra("LIST_URL");
-        String type = getIntent().getStringExtra("TYPE");
-        new FetchListTask(type).execute(listUrl);
-        listView.setOnItemClickListener((p,v,pos,id)->{
-            Intent i = new Intent(ChannelListActivity.this, PlayerActivity.class);
-            i.putExtra("VIDEO_URL", urls.get(pos));
-            i.putExtra("HEADERS_JSON", headers.get(pos));
-            startActivity(i);
-        });
-    }
-    private class FetchListTask extends AsyncTask<String,Void,String>{
-        String type; FetchListTask(String t){type=t;}
-        protected String doInBackground(String... u){
-            try{
-                URL url=new URL(u[0]); HttpURLConnection c=(HttpURLConnection)url.openConnection();
-                c.setConnectTimeout(15000); c.setRequestProperty("User-Agent","Mozilla/5.0");
-                BufferedReader r=new BufferedReader(new InputStreamReader(c.getInputStream()));
-                StringBuilder sb=new StringBuilder(); String l; while((l=r.readLine())!=null)sb.append(l);
-                return sb.toString();
-            }catch(Exception e){return null;}
-        }
-        protected void onPostExecute(String r){
-            if(r==null)return;
-            try{
-                if("JSON_LIST".equals(type) || r.trim().startsWith("{")){
-                    JSONObject root=new JSONObject(r); JSONArray arr=root.getJSONObject("list").getJSONArray("item");
-                    for(int i=0;i<arr.length();i++){
-                        JSONObject o=arr.getJSONObject(i);
-                        String url=o.optString("media_url",o.optString("url",""));
-                        if(url.isEmpty())continue;
-                        JSONObject h=new JSONObject();
-                        for(int k=1;k<=5;k++){
-                            String kn=o.optString("h"+k+"Key"), kv=o.optString("h"+k+"Val");
-                            if(!kn.isEmpty()&&!kn.equals("0")&&!kv.isEmpty()&&!kv.equals("0")) h.put(kn,kv);
-                        }
-                        names.add(o.optString("title")); urls.add(url); headers.add(h.toString());
-                    }
-                }else{
-                    String[] lines=r.split("\n"); String name="Kanal";
-                    for(String l:lines){
-                        l=l.trim(); if(l.isEmpty())continue;
-                        if(l.startsWith("#EXTINF")){ if(l.contains(",")) name=l.substring(l.lastIndexOf(",")+1).trim(); }
-                        else if(!l.startsWith("#")){ names.add(name); urls.add(l); headers.add("{}"); name="Bilinmeyen"; }
-                    }
-                }
-                listView.setAdapter(new ArrayAdapter<>(ChannelListActivity.this, android.R.layout.simple_list_item_1, names));
-            }catch(Exception e){}
-        }
-    }
-}
-EOF
-
 cat > "$TARGET_DIR/WebViewActivity.java" <<EOF
 package com.base.app;
 import android.app.Activity;
@@ -467,4 +622,4 @@ public class WebViewActivity extends Activity {
 }
 EOF
 
-echo "✅ DYNAMIC ADS SİSTEMİ TAMAMLANDI."
+echo "✅ ULTRA APP V7 TAMAMLANDI!"
