@@ -8,7 +8,7 @@ VERSION_CODE=$5
 VERSION_NAME=$6
 
 echo "=========================================="
-echo "   ULTRA APP V9 - STARTUP MODE & HEADER CONTROL"
+echo "   ULTRA APP V10 - NO ICONS & DYNAMIC FONTS"
 echo "=========================================="
 
 # --- 1. TEMİZLİK ---
@@ -22,7 +22,8 @@ mkdir -p "$TARGET_DIR"
 mkdir -p app/src/main/res/mipmap-xxxhdpi
 if [ ! -z "$ICON_URL" ]; then curl -L -o app/src/main/res/mipmap-xxxhdpi/ic_launcher.png "$ICON_URL"; fi
 
-# --- 3. BUILD.GRADLE ---
+# --- 3. BUILD.GRADLE (SIGNED RELEASE CONFIG) ---
+# Play Store için gerekli olan imzalama ayarlarını buraya ekliyoruz.
 cat > app/build.gradle <<EOF
 plugins { id 'com.android.application' }
 android {
@@ -34,6 +35,25 @@ android {
         targetSdk 34
         versionCode $VERSION_CODE
         versionName "$VERSION_NAME"
+    }
+    
+    // İMZALAMA AYARLARI (GITHUB SECRETS KULLANIR)
+    signingConfigs {
+        release {
+            storeFile file("keystore.jks")
+            storePassword System.getenv("SIGNING_STORE_PASSWORD")
+            keyAlias System.getenv("SIGNING_KEY_ALIAS")
+            keyPassword System.getenv("SIGNING_KEY_PASSWORD")
+        }
+    }
+
+    buildTypes {
+        release {
+            signingConfig signingConfigs.release
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
     }
     compileOptions { sourceCompatibility 1.8; targetCompatibility 1.8; }
 }
@@ -109,7 +129,7 @@ public class AdsManager {
 }
 EOF
 
-# --- 6. MainActivity (MANTIKSAL GÜNCELLEME: HEADER GİZLEME & DİREKT AÇILIŞ) ---
+# --- 6. MainActivity (İKONSUZ & DİNAMİK FONT) ---
 cat > "$TARGET_DIR/MainActivity.java" <<EOF
 package com.base.app;
 import android.app.Activity;
@@ -120,6 +140,7 @@ import android.view.Gravity;
 import android.view.View;
 import android.widget.*;
 import android.graphics.Color;
+import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.StateListDrawable;
 import org.json.JSONArray;
@@ -138,19 +159,21 @@ public class MainActivity extends Activity {
     
     // UI Ayarları
     private String headerColor = "#2196F3", textColor = "#FFFFFF", bgColor = "#F0F0F0", focusColor = "#FF9800";
-    private boolean showRefresh = true, showShare = true;
-    private boolean showHeader = true; // Header açık mı?
-    private String headerTitle = ""; // Özel başlık
-    private String appName = "$APP_NAME";
+    private boolean showRefresh = true, showShare = true, showHeader = true;
+    private String headerTitle = "", appName = "$APP_NAME";
+    
+    // FONT AYARLARI
+    private int fontSize = 16;
+    private int fontStyle = Typeface.BOLD; // Varsayılan
+
     private long lastBackPressTime = 0;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        
         root = new RelativeLayout(this);
         
-        // --- HEADER ---
+        // Header
         headerLayout = new LinearLayout(this);
         headerLayout.setId(View.generateViewId());
         headerLayout.setOrientation(LinearLayout.HORIZONTAL);
@@ -161,7 +184,7 @@ public class MainActivity extends Activity {
         titleText = new TextView(this);
         titleText.setText(appName);
         titleText.setTextSize(20);
-        titleText.setTypeface(null, android.graphics.Typeface.BOLD);
+        titleText.setTypeface(null, Typeface.BOLD);
         LinearLayout.LayoutParams titleParams = new LinearLayout.LayoutParams(0, -2, 1.0f);
         headerLayout.addView(titleText, titleParams);
 
@@ -181,7 +204,6 @@ public class MainActivity extends Activity {
         hp.addRule(RelativeLayout.ALIGN_PARENT_TOP);
         root.addView(headerLayout, hp);
 
-        // --- BANNER ---
         bannerContainer = new LinearLayout(this);
         bannerContainer.setId(View.generateViewId());
         bannerContainer.setOrientation(LinearLayout.VERTICAL);
@@ -190,7 +212,6 @@ public class MainActivity extends Activity {
         bp.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM);
         root.addView(bannerContainer, bp);
 
-        // --- CONTENT ---
         ScrollView sv = new ScrollView(this);
         contentContainer = new LinearLayout(this);
         contentContainer.setOrientation(LinearLayout.VERTICAL);
@@ -227,7 +248,12 @@ public class MainActivity extends Activity {
         Button btn = new Button(this);
         btn.setText(text);
         btn.setTextColor(Color.parseColor(textColor));
-        btn.setTextSize(16);
+        
+        // --- DİNAMİK FONT UYGULAMA ---
+        btn.setTextSize(fontSize);
+        btn.setTypeface(null, fontStyle);
+        // ----------------------------
+        
         btn.setPadding(40, 40, 40, 40);
         btn.setGravity(Gravity.CENTER_VERTICAL | Gravity.START);
         
@@ -250,11 +276,7 @@ public class MainActivity extends Activity {
         p.setMargins(0, 0, 0, 25);
         btn.setLayoutParams(p);
         
-        int iconRes = android.R.drawable.ic_menu_view;
-        if(type.equals("WEB")) iconRes = android.R.drawable.ic_menu_compass;
-        if(type.equals("IPTV")) iconRes = android.R.drawable.ic_menu_slideshow;
-        btn.setCompoundDrawablesWithIntrinsicBounds(iconRes, 0, 0, 0);
-        btn.setCompoundDrawablePadding(30);
+        // İKON EKLEME KODU SİLİNDİ (Sadece Yazı Kaldı)
 
         btn.setOnClickListener(v -> openContent(type, link));
         contentContainer.addView(btn);
@@ -306,13 +328,18 @@ public class MainActivity extends Activity {
                     
                     showRefresh = ui.optBoolean("show_refresh", true);
                     showShare = ui.optBoolean("show_share", true);
-                    showHeader = ui.optBoolean("show_header", true); // YENİ
-                    headerTitle = ui.optString("header_title", ""); // YENİ
+                    showHeader = ui.optBoolean("show_header", true);
+                    headerTitle = ui.optString("header_title", "");
                     
-                    // --- HEADER GİZLEME MANTIĞI ---
+                    // FONT AYARLARINI ÇEK
+                    fontSize = ui.optInt("font_size", 16);
+                    String fStyle = ui.optString("font_style", "BOLD");
+                    if(fStyle.equals("NORMAL")) fontStyle = Typeface.NORMAL;
+                    else if(fStyle.equals("ITALIC")) fontStyle = Typeface.ITALIC;
+                    else fontStyle = Typeface.BOLD;
+
                     if (showHeader) {
                         headerLayout.setVisibility(View.VISIBLE);
-                        // Özel başlık varsa onu kullan, yoksa App adını
                         titleText.setText(headerTitle.isEmpty() ? appName : headerTitle);
                     } else {
                         headerLayout.setVisibility(View.GONE);
@@ -328,17 +355,11 @@ public class MainActivity extends Activity {
                     refreshBtn.setColorFilter(Color.parseColor(textColor));
                     shareBtn.setColorFilter(Color.parseColor(textColor));
 
-                    // --- STARTUP MODE CONTROL (DİREKT AÇILIŞ) ---
                     String startupMode = ui.optString("startup_mode", "MENU");
                     if ("DIRECT".equals(startupMode)) {
                         String dType = ui.optString("direct_type", "WEB");
                         String dUrl = ui.optString("direct_url", "");
-                        if (!dUrl.isEmpty()) {
-                            // Direkt aç ve bu ekranı kapatma (Kullanıcı geri gelirse menüye dönsün istemiyorsan finish() eklenebilir)
-                            openContent(dType, dUrl);
-                            // Eğer sadece direkt içerik olsun menüye dönemesin istiyorsan:
-                            // finish(); return; 
-                        }
+                        if (!dUrl.isEmpty()) { openContent(dType, dUrl); }
                     }
                 } else {
                     titleText.setText(appName);
@@ -614,4 +635,4 @@ public class WebViewActivity extends Activity {
 }
 EOF
 
-echo "✅ ULTRA APP V9 TAMAMLANDI."
+echo "✅ PROJE TAMAMLANDI (V10 - NO ICONS & DYNAMIC FONTS)"
