@@ -8,7 +8,7 @@ VERSION_CODE=$5
 VERSION_NAME=$6
 
 echo "=========================================="
-echo "   ULTRA APP V8 - PRO UI & GLIDE IMAGE"
+echo "   ULTRA APP V9 - STARTUP MODE & HEADER CONTROL"
 echo "=========================================="
 
 # --- 1. TEMİZLİK ---
@@ -22,7 +22,7 @@ mkdir -p "$TARGET_DIR"
 mkdir -p app/src/main/res/mipmap-xxxhdpi
 if [ ! -z "$ICON_URL" ]; then curl -L -o app/src/main/res/mipmap-xxxhdpi/ic_launcher.png "$ICON_URL"; fi
 
-# --- 3. BUILD.GRADLE (GLIDE EKLENDİ & SÜRÜM AYARLANDI) ---
+# --- 3. BUILD.GRADLE ---
 cat > app/build.gradle <<EOF
 plugins { id 'com.android.application' }
 android {
@@ -45,7 +45,6 @@ dependencies {
     implementation 'androidx.media3:media3-ui:1.2.0'
     implementation 'androidx.media3:media3-common:1.2.0'
     implementation 'com.unity3d.ads:unity-ads:4.9.2'
-    // GLIDE (RESİM YÜKLEMEK İÇİN)
     implementation 'com.github.bumptech.glide:glide:4.16.0'
 }
 EOF
@@ -110,223 +109,7 @@ public class AdsManager {
 }
 EOF
 
-# --- 6. ChannelListActivity.java (RESİM DESTEKLİ PRO UI) ---
-cat > "$TARGET_DIR/ChannelListActivity.java" <<EOF
-package com.base.app;
-import android.app.Activity;
-import android.content.Intent;
-import android.os.AsyncTask;
-import android.os.Bundle;
-import android.view.*;
-import android.widget.*;
-import android.graphics.Color;
-import android.graphics.drawable.GradientDrawable;
-import android.graphics.drawable.StateListDrawable;
-import org.json.JSONArray;
-import org.json.JSONObject;
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
-import java.net.HttpURLConnection;
-import java.net.URL;
-import java.util.ArrayList;
-import java.util.List;
-import com.bumptech.glide.Glide; // Glide ile resim yükleme
-
-public class ChannelListActivity extends Activity {
-    private ListView listView;
-    // Verileri tutacak listeler
-    private List<ChannelItem> channelList = new ArrayList<>();
-    
-    // UI Renkleri
-    private String headerColor="#2196F3", textColor="#FFFFFF", bgColor="#F0F0F0", focusColor="#FF9800";
-
-    // Kanal Sınıfı
-    class ChannelItem {
-        String name;
-        String url;
-        String image; // Resim URL
-        String headers;
-        ChannelItem(String n, String u, String i, String h) { name=n; url=u; image=i; headers=h; }
-    }
-
-    @Override
-    protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        
-        headerColor = getIntent().getStringExtra("HEADER_COLOR");
-        bgColor = getIntent().getStringExtra("BG_COLOR");
-        textColor = getIntent().getStringExtra("TEXT_COLOR");
-        focusColor = getIntent().getStringExtra("FOCUS_COLOR"); // Panelden gelen hover rengi
-        if(focusColor == null) focusColor = "#FF9800";
-
-        LinearLayout root = new LinearLayout(this);
-        root.setOrientation(LinearLayout.VERTICAL);
-        root.setBackgroundColor(Color.parseColor(bgColor));
-
-        // Header
-        LinearLayout header = new LinearLayout(this);
-        header.setBackgroundColor(Color.parseColor(headerColor));
-        header.setPadding(30,30,30,30);
-        TextView title = new TextView(this);
-        title.setText("Kanal Listesi");
-        title.setTextColor(Color.parseColor(textColor));
-        title.setTextSize(18);
-        header.addView(title);
-        root.addView(header);
-
-        listView = new ListView(this);
-        listView.setDivider(null); 
-        listView.setPadding(20,20,20,20);
-        listView.setClipToPadding(false);
-        listView.setSelector(android.R.color.transparent);
-        
-        root.addView(listView);
-        setContentView(root);
-        
-        String listUrl = getIntent().getStringExtra("LIST_URL");
-        String type = getIntent().getStringExtra("TYPE");
-        new FetchListTask(type).execute(listUrl);
-        
-        listView.setOnItemClickListener((p,v,pos,id)->{
-            ChannelItem item = channelList.get(pos);
-            Intent i = new Intent(ChannelListActivity.this, PlayerActivity.class);
-            i.putExtra("VIDEO_URL", item.url);
-            i.putExtra("HEADERS_JSON", item.headers);
-            startActivity(i);
-        });
-    }
-
-    // --- PRO ADAPTER (RESİM + YAZI + HOVER) ---
-    private class ChannelAdapter extends ArrayAdapter<ChannelItem> {
-        public ChannelAdapter(List<ChannelItem> items) { super(ChannelListActivity.this, 0, items); }
-        
-        @Override
-        public View getView(int position, View convertView, ViewGroup parent) {
-            if (convertView == null) {
-                // Yatay Düzen (Resim Solda, Yazı Sağda)
-                LinearLayout layout = new LinearLayout(getContext());
-                layout.setOrientation(LinearLayout.HORIZONTAL);
-                layout.setPadding(20, 20, 20, 20);
-                layout.setGravity(Gravity.CENTER_VERTICAL);
-                
-                // Resim Kutusu (CardView efekti için bir FrameLayout içinde olabilir ama basit tutalım)
-                ImageView icon = new ImageView(getContext());
-                icon.setId(101); // ID verelim
-                icon.setScaleType(ImageView.ScaleType.CENTER_CROP);
-                
-                // Resim Çerçevesi
-                LinearLayout.LayoutParams imgParams = new LinearLayout.LayoutParams(120, 120); // Resim boyutu
-                imgParams.setMargins(0, 0, 30, 0);
-                layout.addView(icon, imgParams);
-                
-                // Metin
-                TextView tv = new TextView(getContext());
-                tv.setId(102);
-                tv.setTextSize(16);
-                tv.setTextColor(Color.BLACK);
-                tv.setTypeface(null, android.graphics.Typeface.BOLD);
-                layout.addView(tv);
-                
-                convertView = layout;
-            }
-            
-            ChannelItem item = getItem(position);
-            ImageView img = convertView.findViewById(101);
-            TextView txt = convertView.findViewById(102);
-            
-            txt.setText(item.name);
-            
-            // GLIDE İLE RESİM YÜKLEME
-            if(item.image != null && !item.image.isEmpty()) {
-                Glide.with(getContext()).load(item.image).into(img);
-            } else {
-                img.setImageResource(android.R.drawable.ic_menu_slideshow); // Varsayılan ikon
-            }
-
-            // --- HOVER / FOCUS RENKLENDİRME ---
-            GradientDrawable normal = new GradientDrawable();
-            normal.setColor(Color.WHITE);
-            normal.setCornerRadius(15);
-            normal.setStroke(1, Color.LTGRAY);
-
-            GradientDrawable focused = new GradientDrawable();
-            focused.setColor(Color.parseColor(focusColor)); // PANELDEKİ HOVER RENGİ
-            focused.setCornerRadius(15);
-            focused.setStroke(3, Color.parseColor(headerColor));
-
-            StateListDrawable bg = new StateListDrawable();
-            bg.addState(new int[]{android.R.attr.state_pressed}, focused);
-            bg.addState(new int[]{android.R.attr.state_selected}, focused);
-            bg.addState(new int[]{android.R.attr.state_hovered}, focused);
-            bg.addState(new int[]{}, normal);
-            
-            convertView.setBackground(bg);
-            
-            // Kartlar arası boşluk
-            AbsListView.LayoutParams params = new AbsListView.LayoutParams(-1, -2);
-            convertView.setLayoutParams(params);
-            
-            return convertView;
-        }
-    }
-
-    private class FetchListTask extends AsyncTask<String,Void,String>{
-        String type; FetchListTask(String t){type=t;}
-        protected String doInBackground(String... u){
-            try{
-                URL url=new URL(u[0]); HttpURLConnection c=(HttpURLConnection)url.openConnection();
-                c.setConnectTimeout(15000); c.setRequestProperty("User-Agent","Mozilla/5.0");
-                BufferedReader r=new BufferedReader(new InputStreamReader(c.getInputStream()));
-                StringBuilder sb=new StringBuilder(); String l; while((l=r.readLine())!=null)sb.append(l);
-                return sb.toString();
-            }catch(Exception e){return null;}
-        }
-        protected void onPostExecute(String r){
-            if(r==null){Toast.makeText(ChannelListActivity.this,"Hata",Toast.LENGTH_SHORT).show();return;}
-            try{
-                channelList.clear();
-                
-                if("JSON_LIST".equals(type) || r.trim().startsWith("{")){
-                    // JSON PARSER (RESİM DESTEKLİ)
-                    JSONObject root=new JSONObject(r); JSONArray arr=root.getJSONObject("list").getJSONArray("item");
-                    for(int i=0;i<arr.length();i++){
-                        JSONObject o=arr.getJSONObject(i);
-                        String url=o.optString("media_url",o.optString("url",""));
-                        if(url.isEmpty())continue;
-                        
-                        String title = o.optString("title");
-                        String image = o.optString("thumb_square", o.optString("image", "")); // RESİM URLSİ
-                        
-                        JSONObject h=new JSONObject();
-                        for(int k=1;k<=5;k++){
-                            String kn=o.optString("h"+k+"Key"), kv=o.optString("h"+k+"Val");
-                            if(!kn.isEmpty()&&!kn.equals("0")&&!kv.isEmpty()&&!kv.equals("0")) h.put(kn,kv);
-                        }
-                        channelList.add(new ChannelItem(title, url, image, h.toString()));
-                    }
-                }else{
-                    // M3U PARSER
-                    String[] lines=r.split("\n"); String name="Kanal"; String img="";
-                    for(String l:lines){
-                        l=l.trim(); if(l.isEmpty())continue;
-                        if(l.startsWith("#EXTINF")){ 
-                            if(l.contains(",")) name=l.substring(l.lastIndexOf(",")+1).trim(); 
-                            // tvg-logo varsa onu alabiliriz (Basit parserda atlıyoruz ama eklenebilir)
-                        } else if(!l.startsWith("#")){ 
-                            channelList.add(new ChannelItem(name, l, "", "{}")); 
-                            name="Bilinmeyen"; 
-                        }
-                    }
-                }
-                listView.setAdapter(new ChannelAdapter(channelList));
-            }catch(Exception e){Toast.makeText(ChannelListActivity.this,"Liste Hatasi",Toast.LENGTH_SHORT).show();}
-        }
-    }
-}
-EOF
-
-# --- 7. MainActivity (UI RENKLERİNİ GÜNCELLE) ---
-# Sadece UI kısmını güncelliyoruz, focusColor'ı Intent ile diğer sayfaya gönderiyoruz.
+# --- 6. MainActivity (MANTIKSAL GÜNCELLEME: HEADER GİZLEME & DİREKT AÇILIŞ) ---
 cat > "$TARGET_DIR/MainActivity.java" <<EOF
 package com.base.app;
 import android.app.Activity;
@@ -356,15 +139,18 @@ public class MainActivity extends Activity {
     // UI Ayarları
     private String headerColor = "#2196F3", textColor = "#FFFFFF", bgColor = "#F0F0F0", focusColor = "#FF9800";
     private boolean showRefresh = true, showShare = true;
+    private boolean showHeader = true; // Header açık mı?
+    private String headerTitle = ""; // Özel başlık
     private String appName = "$APP_NAME";
     private long lastBackPressTime = 0;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        
         root = new RelativeLayout(this);
         
-        // Header
+        // --- HEADER ---
         headerLayout = new LinearLayout(this);
         headerLayout.setId(View.generateViewId());
         headerLayout.setOrientation(LinearLayout.HORIZONTAL);
@@ -395,6 +181,7 @@ public class MainActivity extends Activity {
         hp.addRule(RelativeLayout.ALIGN_PARENT_TOP);
         root.addView(headerLayout, hp);
 
+        // --- BANNER ---
         bannerContainer = new LinearLayout(this);
         bannerContainer.setId(View.generateViewId());
         bannerContainer.setOrientation(LinearLayout.VERTICAL);
@@ -403,6 +190,7 @@ public class MainActivity extends Activity {
         bp.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM);
         root.addView(bannerContainer, bp);
 
+        // --- CONTENT ---
         ScrollView sv = new ScrollView(this);
         contentContainer = new LinearLayout(this);
         contentContainer.setOrientation(LinearLayout.VERTICAL);
@@ -448,7 +236,7 @@ public class MainActivity extends Activity {
         normal.setCornerRadius(15);
 
         GradientDrawable focused = new GradientDrawable();
-        focused.setColor(Color.parseColor(focusColor)); // DİNAMİK FOCUS RENGİ
+        focused.setColor(Color.parseColor(focusColor)); 
         focused.setCornerRadius(15);
         focused.setStroke(4, Color.WHITE);
 
@@ -468,22 +256,24 @@ public class MainActivity extends Activity {
         btn.setCompoundDrawablesWithIntrinsicBounds(iconRes, 0, 0, 0);
         btn.setCompoundDrawablePadding(30);
 
-        btn.setOnClickListener(v -> {
-            AdsManager.showInterstitial(MainActivity.this);
-            if (type.equals("WEB")) {
-                Intent i = new Intent(MainActivity.this, WebViewActivity.class);
-                i.putExtra("WEB_URL", link); startActivity(i);
-            } else if (type.equals("IPTV") || type.equals("JSON_LIST")) {
-                Intent i = new Intent(MainActivity.this, ChannelListActivity.class);
-                i.putExtra("LIST_URL", link); i.putExtra("TYPE", type);
-                i.putExtra("BG_COLOR", bgColor); i.putExtra("HEADER_COLOR", headerColor); 
-                i.putExtra("TEXT_COLOR", textColor); i.putExtra("FOCUS_COLOR", focusColor);
-                startActivity(i);
-            } else {
-                try { startActivity(new Intent(Intent.ACTION_VIEW, android.net.Uri.parse(link))); } catch(Exception e){}
-            }
-        });
+        btn.setOnClickListener(v -> openContent(type, link));
         contentContainer.addView(btn);
+    }
+
+    private void openContent(String type, String link) {
+        AdsManager.showInterstitial(MainActivity.this);
+        if (type.equals("WEB")) {
+            Intent i = new Intent(MainActivity.this, WebViewActivity.class);
+            i.putExtra("WEB_URL", link); startActivity(i);
+        } else if (type.equals("IPTV") || type.equals("JSON_LIST")) {
+            Intent i = new Intent(MainActivity.this, ChannelListActivity.class);
+            i.putExtra("LIST_URL", link); i.putExtra("TYPE", type);
+            i.putExtra("BG_COLOR", bgColor); i.putExtra("HEADER_COLOR", headerColor); 
+            i.putExtra("TEXT_COLOR", textColor); i.putExtra("FOCUS_COLOR", focusColor);
+            startActivity(i);
+        } else {
+            try { startActivity(new Intent(Intent.ACTION_VIEW, android.net.Uri.parse(link))); } catch(Exception e){}
+        }
     }
 
     private class FetchConfigTask extends AsyncTask<String, Void, String> {
@@ -506,18 +296,28 @@ public class MainActivity extends Activity {
             try {
                 JSONObject json = new JSONObject(result);
                 appName = json.optString("app_name", "App");
-                titleText.setText(appName);
-
+                
                 JSONObject ui = json.optJSONObject("ui_config");
                 if(ui != null) {
                     headerColor = ui.optString("header_color", "#2196F3");
                     textColor = ui.optString("text_color", "#FFFFFF");
                     bgColor = ui.optString("bg_color", "#F0F0F0");
-                    focusColor = ui.optString("focus_color", "#FF9800"); // YENİ
+                    focusColor = ui.optString("focus_color", "#FF9800");
                     
                     showRefresh = ui.optBoolean("show_refresh", true);
                     showShare = ui.optBoolean("show_share", true);
+                    showHeader = ui.optBoolean("show_header", true); // YENİ
+                    headerTitle = ui.optString("header_title", ""); // YENİ
                     
+                    // --- HEADER GİZLEME MANTIĞI ---
+                    if (showHeader) {
+                        headerLayout.setVisibility(View.VISIBLE);
+                        // Özel başlık varsa onu kullan, yoksa App adını
+                        titleText.setText(headerTitle.isEmpty() ? appName : headerTitle);
+                    } else {
+                        headerLayout.setVisibility(View.GONE);
+                    }
+
                     headerLayout.setBackgroundColor(Color.parseColor(headerColor));
                     titleText.setTextColor(Color.parseColor(textColor));
                     root.setBackgroundColor(Color.parseColor(bgColor));
@@ -527,6 +327,21 @@ public class MainActivity extends Activity {
                     shareBtn.setVisibility(showShare ? View.VISIBLE : View.GONE);
                     refreshBtn.setColorFilter(Color.parseColor(textColor));
                     shareBtn.setColorFilter(Color.parseColor(textColor));
+
+                    // --- STARTUP MODE CONTROL (DİREKT AÇILIŞ) ---
+                    String startupMode = ui.optString("startup_mode", "MENU");
+                    if ("DIRECT".equals(startupMode)) {
+                        String dType = ui.optString("direct_type", "WEB");
+                        String dUrl = ui.optString("direct_url", "");
+                        if (!dUrl.isEmpty()) {
+                            // Direkt aç ve bu ekranı kapatma (Kullanıcı geri gelirse menüye dönsün istemiyorsan finish() eklenebilir)
+                            openContent(dType, dUrl);
+                            // Eğer sadece direkt içerik olsun menüye dönemesin istiyorsan:
+                            // finish(); return; 
+                        }
+                    }
+                } else {
+                    titleText.setText(appName);
                 }
 
                 JSONObject adsConfig = json.optJSONObject("ads_config");
@@ -548,9 +363,177 @@ public class MainActivity extends Activity {
 }
 EOF
 
-# Diğer dosyalar (PlayerActivity, WebViewActivity) önceki script ile aynı kalabilir
-# Ancak dosya bütünlüğü için onları da buraya ekliyorum.
+# --- ChannelListActivity.java (Aynı) ---
+cat > "$TARGET_DIR/ChannelListActivity.java" <<EOF
+package com.base.app;
+import android.app.Activity;
+import android.content.Intent;
+import android.os.AsyncTask;
+import android.os.Bundle;
+import android.view.*;
+import android.widget.*;
+import android.graphics.Color;
+import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.StateListDrawable;
+import org.json.JSONArray;
+import org.json.JSONObject;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.util.ArrayList;
+import java.util.List;
+import com.bumptech.glide.Glide; 
 
+public class ChannelListActivity extends Activity {
+    private ListView listView;
+    private List<ChannelItem> channelList = new ArrayList<>();
+    private String headerColor="#2196F3", textColor="#FFFFFF", bgColor="#F0F0F0", focusColor="#FF9800";
+
+    class ChannelItem {
+        String name; String url; String image; String headers;
+        ChannelItem(String n, String u, String i, String h) { name=n; url=u; image=i; headers=h; }
+    }
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        headerColor = getIntent().getStringExtra("HEADER_COLOR");
+        bgColor = getIntent().getStringExtra("BG_COLOR");
+        textColor = getIntent().getStringExtra("TEXT_COLOR");
+        focusColor = getIntent().getStringExtra("FOCUS_COLOR"); 
+        if(focusColor == null) focusColor = "#FF9800";
+
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setBackgroundColor(Color.parseColor(bgColor));
+
+        LinearLayout header = new LinearLayout(this);
+        header.setBackgroundColor(Color.parseColor(headerColor));
+        header.setPadding(30,30,30,30);
+        TextView title = new TextView(this);
+        title.setText("Kanal Listesi");
+        title.setTextColor(Color.parseColor(textColor));
+        title.setTextSize(18);
+        header.addView(title);
+        root.addView(header);
+
+        listView = new ListView(this);
+        listView.setDivider(null); 
+        listView.setPadding(20,20,20,20);
+        listView.setClipToPadding(false);
+        listView.setSelector(android.R.color.transparent);
+        
+        root.addView(listView);
+        setContentView(root);
+        
+        String listUrl = getIntent().getStringExtra("LIST_URL");
+        String type = getIntent().getStringExtra("TYPE");
+        new FetchListTask(type).execute(listUrl);
+        
+        listView.setOnItemClickListener((p,v,pos,id)->{
+            ChannelItem item = channelList.get(pos);
+            Intent i = new Intent(ChannelListActivity.this, PlayerActivity.class);
+            i.putExtra("VIDEO_URL", item.url);
+            i.putExtra("HEADERS_JSON", item.headers);
+            startActivity(i);
+        });
+    }
+
+    private class ChannelAdapter extends ArrayAdapter<ChannelItem> {
+        public ChannelAdapter(List<ChannelItem> items) { super(ChannelListActivity.this, 0, items); }
+        public View getView(int position, View convertView, ViewGroup parent) {
+            if (convertView == null) {
+                LinearLayout layout = new LinearLayout(getContext());
+                layout.setOrientation(LinearLayout.HORIZONTAL);
+                layout.setPadding(20, 20, 20, 20);
+                layout.setGravity(Gravity.CENTER_VERTICAL);
+                
+                ImageView icon = new ImageView(getContext());
+                icon.setId(101); icon.setScaleType(ImageView.ScaleType.CENTER_CROP);
+                LinearLayout.LayoutParams imgParams = new LinearLayout.LayoutParams(120, 120);
+                imgParams.setMargins(0, 0, 30, 0);
+                layout.addView(icon, imgParams);
+                
+                TextView tv = new TextView(getContext());
+                tv.setId(102); tv.setTextSize(16); tv.setTextColor(Color.BLACK); tv.setTypeface(null, android.graphics.Typeface.BOLD);
+                layout.addView(tv);
+                convertView = layout;
+            }
+            ChannelItem item = getItem(position);
+            ImageView img = convertView.findViewById(101);
+            TextView txt = convertView.findViewById(102);
+            txt.setText(item.name);
+            
+            if(item.image != null && !item.image.isEmpty()) Glide.with(getContext()).load(item.image).into(img);
+            else img.setImageResource(android.R.drawable.ic_menu_slideshow);
+
+            GradientDrawable normal = new GradientDrawable();
+            normal.setColor(Color.WHITE); normal.setCornerRadius(15); normal.setStroke(1, Color.LTGRAY);
+            GradientDrawable focused = new GradientDrawable();
+            focused.setColor(Color.parseColor(focusColor)); focused.setCornerRadius(15); focused.setStroke(3, Color.parseColor(headerColor));
+            StateListDrawable bg = new StateListDrawable();
+            bg.addState(new int[]{android.R.attr.state_pressed}, focused);
+            bg.addState(new int[]{android.R.attr.state_selected}, focused);
+            bg.addState(new int[]{android.R.attr.state_hovered}, focused);
+            bg.addState(new int[]{}, normal);
+            convertView.setBackground(bg);
+            
+            AbsListView.LayoutParams params = new AbsListView.LayoutParams(-1, -2);
+            convertView.setLayoutParams(params);
+            return convertView;
+        }
+    }
+
+    private class FetchListTask extends AsyncTask<String,Void,String>{
+        String type; FetchListTask(String t){type=t;}
+        protected String doInBackground(String... u){
+            try{
+                URL url=new URL(u[0]); HttpURLConnection c=(HttpURLConnection)url.openConnection();
+                c.setConnectTimeout(15000); c.setRequestProperty("User-Agent","Mozilla/5.0");
+                BufferedReader r=new BufferedReader(new InputStreamReader(c.getInputStream()));
+                StringBuilder sb=new StringBuilder(); String l; while((l=r.readLine())!=null)sb.append(l);
+                return sb.toString();
+            }catch(Exception e){return null;}
+        }
+        protected void onPostExecute(String r){
+            if(r==null){Toast.makeText(ChannelListActivity.this,"Hata",Toast.LENGTH_SHORT).show();return;}
+            try{
+                channelList.clear();
+                if("JSON_LIST".equals(type) || r.trim().startsWith("{")){
+                    JSONObject root=new JSONObject(r); JSONArray arr=root.getJSONObject("list").getJSONArray("item");
+                    for(int i=0;i<arr.length();i++){
+                        JSONObject o=arr.getJSONObject(i);
+                        String url=o.optString("media_url",o.optString("url",""));
+                        if(url.isEmpty())continue;
+                        String title = o.optString("title");
+                        String image = o.optString("thumb_square", o.optString("image", ""));
+                        JSONObject h=new JSONObject();
+                        for(int k=1;k<=5;k++){
+                            String kn=o.optString("h"+k+"Key"), kv=o.optString("h"+k+"Val");
+                            if(!kn.isEmpty()&&!kn.equals("0")&&!kv.isEmpty()&&!kv.equals("0")) h.put(kn,kv);
+                        }
+                        channelList.add(new ChannelItem(title, url, image, h.toString()));
+                    }
+                }else{
+                    String[] lines=r.split("\n"); String name="Kanal";
+                    for(String l:lines){
+                        l=l.trim(); if(l.isEmpty())continue;
+                        if(l.startsWith("#EXTINF")){ 
+                            if(l.contains(",")) name=l.substring(l.lastIndexOf(",")+1).trim(); 
+                        } else if(!l.startsWith("#")){ 
+                            channelList.add(new ChannelItem(name, l, "", "{}")); name="Bilinmeyen"; 
+                        }
+                    }
+                }
+                listView.setAdapter(new ChannelAdapter(channelList));
+            }catch(Exception e){Toast.makeText(ChannelListActivity.this,"Liste Hatasi",Toast.LENGTH_SHORT).show();}
+        }
+    }
+}
+EOF
+
+# --- Player & WebView (Aynı) ---
 cat > "$TARGET_DIR/PlayerActivity.java" <<EOF
 package com.base.app;
 import android.app.Activity;
@@ -631,4 +614,4 @@ public class WebViewActivity extends Activity {
 }
 EOF
 
-echo "✅ PRO UI VE VERSİYON SİSTEMİ EKLENDİ!"
+echo "✅ ULTRA APP V9 TAMAMLANDI."
