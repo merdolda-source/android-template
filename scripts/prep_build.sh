@@ -8,7 +8,7 @@ VERSION_CODE=$5
 VERSION_NAME=$6
 
 echo "=========================================="
-echo "   ULTRA APP V11 - NO ICONS & FONTS"
+echo "   ULTRA APP V12 - M3U FIX & PRO UI"
 echo "=========================================="
 
 # --- 1. TEMİZLİK ---
@@ -22,7 +22,7 @@ mkdir -p "$TARGET_DIR"
 mkdir -p app/src/main/res/mipmap-xxxhdpi
 if [ ! -z "$ICON_URL" ]; then curl -L -o app/src/main/res/mipmap-xxxhdpi/ic_launcher.png "$ICON_URL"; fi
 
-# --- 3. BUILD.GRADLE (SIGNED) ---
+# --- 3. BUILD.GRADLE ---
 cat > app/build.gradle <<EOF
 plugins { id 'com.android.application' }
 android {
@@ -125,7 +125,7 @@ public class AdsManager {
 }
 EOF
 
-# --- 6. MainActivity (İKONSUZ & DİNAMİK FONT) ---
+# --- 6. MainActivity ---
 cat > "$TARGET_DIR/MainActivity.java" <<EOF
 package com.base.app;
 import android.app.Activity;
@@ -310,6 +310,7 @@ public class MainActivity extends Activity {
                     textColor = ui.optString("text_color", "#FFFFFF");
                     bgColor = ui.optString("bg_color", "#F0F0F0");
                     focusColor = ui.optString("focus_color", "#FF9800");
+                    
                     showRefresh = ui.optBoolean("show_refresh", true);
                     showShare = ui.optBoolean("show_share", true);
                     showHeader = ui.optBoolean("show_header", true);
@@ -332,6 +333,7 @@ public class MainActivity extends Activity {
                     titleText.setTextColor(Color.parseColor(textColor));
                     root.setBackgroundColor(Color.parseColor(bgColor));
                     ((ScrollView)contentContainer.getParent()).setBackgroundColor(Color.parseColor(bgColor));
+                    
                     refreshBtn.setVisibility(showRefresh ? View.VISIBLE : View.GONE);
                     shareBtn.setVisibility(showShare ? View.VISIBLE : View.GONE);
                     refreshBtn.setColorFilter(Color.parseColor(textColor));
@@ -366,7 +368,8 @@ public class MainActivity extends Activity {
 }
 EOF
 
-# --- ChannelListActivity.java ---
+# --- 7. ChannelListActivity.java (M3U FIX) ---
+# BURADA M3U PARSING MANTIĞI DÜZELTİLDİ
 cat > "$TARGET_DIR/ChannelListActivity.java" <<EOF
 package com.base.app;
 import android.app.Activity;
@@ -495,7 +498,7 @@ public class ChannelListActivity extends Activity {
                 URL url=new URL(u[0]); HttpURLConnection c=(HttpURLConnection)url.openConnection();
                 c.setConnectTimeout(15000); c.setRequestProperty("User-Agent","Mozilla/5.0");
                 BufferedReader r=new BufferedReader(new InputStreamReader(c.getInputStream()));
-                StringBuilder sb=new StringBuilder(); String l; while((l=r.readLine())!=null)sb.append(l);
+                StringBuilder sb=new StringBuilder(); String l; while((l=r.readLine())!=null)sb.append(l).append("\n");
                 return sb.toString();
             }catch(Exception e){return null;}
         }
@@ -503,32 +506,49 @@ public class ChannelListActivity extends Activity {
             if(r==null){Toast.makeText(ChannelListActivity.this,"Hata",Toast.LENGTH_SHORT).show();return;}
             try{
                 channelList.clear();
+                // JSON ve M3U AYRIMI
                 if("JSON_LIST".equals(type) || r.trim().startsWith("{")){
-                    JSONObject root=new JSONObject(r); JSONArray arr=root.getJSONObject("list").getJSONArray("item");
-                    for(int i=0;i<arr.length();i++){
-                        JSONObject o=arr.getJSONObject(i);
-                        String url=o.optString("media_url",o.optString("url",""));
-                        if(url.isEmpty())continue;
-                        String title = o.optString("title");
-                        String image = o.optString("thumb_square", o.optString("image", ""));
-                        JSONObject h=new JSONObject();
-                        for(int k=1;k<=5;k++){
-                            String kn=o.optString("h"+k+"Key"), kv=o.optString("h"+k+"Val");
-                            if(!kn.isEmpty()&&!kn.equals("0")&&!kv.isEmpty()&&!kv.equals("0")) h.put(kn,kv);
+                    try {
+                        JSONObject root=new JSONObject(r); JSONArray arr=root.getJSONObject("list").getJSONArray("item");
+                        for(int i=0;i<arr.length();i++){
+                            JSONObject o=arr.getJSONObject(i);
+                            String url=o.optString("media_url",o.optString("url",""));
+                            if(url.isEmpty())continue;
+                            String title = o.optString("title");
+                            String image = o.optString("thumb_square", o.optString("image", ""));
+                            JSONObject h=new JSONObject();
+                            for(int k=1;k<=5;k++){
+                                String kn=o.optString("h"+k+"Key"), kv=o.optString("h"+k+"Val");
+                                if(!kn.isEmpty()&&!kn.equals("0")&&!kv.isEmpty()&&!kv.equals("0")) h.put(kn,kv);
+                            }
+                            channelList.add(new ChannelItem(title, url, image, h.toString()));
                         }
-                        channelList.add(new ChannelItem(title, url, image, h.toString()));
-                    }
-                }else{
-                    String[] lines=r.split("\n"); String name="Kanal";
-                    for(String l:lines){
-                        l=l.trim(); if(l.isEmpty())continue;
-                        if(l.startsWith("#EXTINF")){ 
-                            if(l.contains(",")) name=l.substring(l.lastIndexOf(",")+1).trim(); 
-                        } else if(!l.startsWith("#")){ 
-                            channelList.add(new ChannelItem(name, l, "", "{}")); name="Bilinmeyen"; 
+                    } catch(Exception e) {}
+                }
+                
+                // M3U PARSER (JSON Başarısız olursa veya M3U ise)
+                if(channelList.isEmpty()) {
+                    String[] lines = r.split("\n");
+                    String currentTitle = "Kanal";
+                    String currentImage = "";
+                    for(String line : lines) {
+                        line = line.trim();
+                        if(line.isEmpty()) continue;
+                        if(line.startsWith("#EXTINF")) {
+                            if(line.contains(",")) currentTitle = line.substring(line.lastIndexOf(",")+1).trim();
+                            if(line.contains("tvg-logo=\"")) {
+                                int s = line.indexOf("tvg-logo=\"")+10;
+                                int e = line.indexOf("\"", s);
+                                if(e>s) currentImage = line.substring(s, e);
+                            }
+                        } else if(!line.startsWith("#")) {
+                            channelList.add(new ChannelItem(currentTitle, line, currentImage, "{}"));
+                            currentTitle = "Bilinmeyen Kanal";
+                            currentImage = "";
                         }
                     }
                 }
+                
                 listView.setAdapter(new ChannelAdapter(channelList));
             }catch(Exception e){Toast.makeText(ChannelListActivity.this,"Liste Hatasi",Toast.LENGTH_SHORT).show();}
         }
@@ -617,4 +637,4 @@ public class WebViewActivity extends Activity {
 }
 EOF
 
-echo "✅ ULTRA APP V11 TAMAMLANDI."
+echo "✅ ULTRA APP V12 - M3U FIX TAMAMLANDI."
