@@ -8,7 +8,7 @@ VERSION_CODE=$5
 VERSION_NAME=$6
 
 echo "=========================================="
-echo "   ULTRA APP V10 - NO ICONS & DYNAMIC FONTS"
+echo "   ULTRA APP V11 - NO ICONS & FONTS"
 echo "=========================================="
 
 # --- 1. TEMİZLİK ---
@@ -22,8 +22,7 @@ mkdir -p "$TARGET_DIR"
 mkdir -p app/src/main/res/mipmap-xxxhdpi
 if [ ! -z "$ICON_URL" ]; then curl -L -o app/src/main/res/mipmap-xxxhdpi/ic_launcher.png "$ICON_URL"; fi
 
-# --- 3. BUILD.GRADLE (SIGNED RELEASE CONFIG) ---
-# Play Store için gerekli olan imzalama ayarlarını buraya ekliyoruz.
+# --- 3. BUILD.GRADLE (SIGNED) ---
 cat > app/build.gradle <<EOF
 plugins { id 'com.android.application' }
 android {
@@ -36,8 +35,6 @@ android {
         versionCode $VERSION_CODE
         versionName "$VERSION_NAME"
     }
-    
-    // İMZALAMA AYARLARI (GITHUB SECRETS KULLANIR)
     signingConfigs {
         release {
             storeFile file("keystore.jks")
@@ -46,7 +43,6 @@ android {
             keyPassword System.getenv("SIGNING_KEY_PASSWORD")
         }
     }
-
     buildTypes {
         release {
             signingConfig signingConfigs.release
@@ -87,7 +83,7 @@ cat > app/src/main/AndroidManifest.xml <<EOF
 </manifest>
 EOF
 
-# --- 5. ADS MANAGER (Aynı) ---
+# --- 5. ADS MANAGER ---
 cat > "$TARGET_DIR/AdsManager.java" <<EOF
 package com.base.app;
 import android.app.Activity;
@@ -157,15 +153,11 @@ public class MainActivity extends Activity {
     private TextView titleText;
     private ImageView refreshBtn, shareBtn;
     
-    // UI Ayarları
     private String headerColor = "#2196F3", textColor = "#FFFFFF", bgColor = "#F0F0F0", focusColor = "#FF9800";
     private boolean showRefresh = true, showShare = true, showHeader = true;
     private String headerTitle = "", appName = "$APP_NAME";
-    
-    // FONT AYARLARI
     private int fontSize = 16;
-    private int fontStyle = Typeface.BOLD; // Varsayılan
-
+    private int fontStyle = Typeface.BOLD;
     private long lastBackPressTime = 0;
 
     @Override
@@ -173,7 +165,6 @@ public class MainActivity extends Activity {
         super.onCreate(savedInstanceState);
         root = new RelativeLayout(this);
         
-        // Header
         headerLayout = new LinearLayout(this);
         headerLayout.setId(View.generateViewId());
         headerLayout.setOrientation(LinearLayout.HORIZONTAL);
@@ -248,12 +239,8 @@ public class MainActivity extends Activity {
         Button btn = new Button(this);
         btn.setText(text);
         btn.setTextColor(Color.parseColor(textColor));
-        
-        // --- DİNAMİK FONT UYGULAMA ---
         btn.setTextSize(fontSize);
         btn.setTypeface(null, fontStyle);
-        // ----------------------------
-        
         btn.setPadding(40, 40, 40, 40);
         btn.setGravity(Gravity.CENTER_VERTICAL | Gravity.START);
         
@@ -276,8 +263,6 @@ public class MainActivity extends Activity {
         p.setMargins(0, 0, 0, 25);
         btn.setLayoutParams(p);
         
-        // İKON EKLEME KODU SİLİNDİ (Sadece Yazı Kaldı)
-
         btn.setOnClickListener(v -> openContent(type, link));
         contentContainer.addView(btn);
     }
@@ -325,13 +310,11 @@ public class MainActivity extends Activity {
                     textColor = ui.optString("text_color", "#FFFFFF");
                     bgColor = ui.optString("bg_color", "#F0F0F0");
                     focusColor = ui.optString("focus_color", "#FF9800");
-                    
                     showRefresh = ui.optBoolean("show_refresh", true);
                     showShare = ui.optBoolean("show_share", true);
                     showHeader = ui.optBoolean("show_header", true);
                     headerTitle = ui.optString("header_title", "");
                     
-                    // FONT AYARLARINI ÇEK
                     fontSize = ui.optInt("font_size", 16);
                     String fStyle = ui.optString("font_style", "BOLD");
                     if(fStyle.equals("NORMAL")) fontStyle = Typeface.NORMAL;
@@ -349,7 +332,6 @@ public class MainActivity extends Activity {
                     titleText.setTextColor(Color.parseColor(textColor));
                     root.setBackgroundColor(Color.parseColor(bgColor));
                     ((ScrollView)contentContainer.getParent()).setBackgroundColor(Color.parseColor(bgColor));
-                    
                     refreshBtn.setVisibility(showRefresh ? View.VISIBLE : View.GONE);
                     shareBtn.setVisibility(showShare ? View.VISIBLE : View.GONE);
                     refreshBtn.setColorFilter(Color.parseColor(textColor));
@@ -384,7 +366,7 @@ public class MainActivity extends Activity {
 }
 EOF
 
-# --- ChannelListActivity.java (Aynı) ---
+# --- ChannelListActivity.java ---
 cat > "$TARGET_DIR/ChannelListActivity.java" <<EOF
 package com.base.app;
 import android.app.Activity;
@@ -554,7 +536,7 @@ public class ChannelListActivity extends Activity {
 }
 EOF
 
-# --- Player & WebView (Aynı) ---
+# --- Player & WebView ---
 cat > "$TARGET_DIR/PlayerActivity.java" <<EOF
 package com.base.app;
 import android.app.Activity;
@@ -635,4 +617,4 @@ public class WebViewActivity extends Activity {
 }
 EOF
 
-echo "✅ PROJE TAMAMLANDI (V10 - NO ICONS & DYNAMIC FONTS)"
+echo "✅ ULTRA APP V11 TAMAMLANDI."
