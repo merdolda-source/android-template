@@ -8,7 +8,7 @@ VERSION_CODE=$5
 VERSION_NAME=$6
 
 echo "=========================================="
-echo "   ULTRA APP V20 - DIRECT EXIT FIX & FULL"
+echo "   ULTRA APP V21 - SPLASH FIX & SUPER PLAYER"
 echo "=========================================="
 
 # --- 1. TEMİZLİK ---
@@ -136,7 +136,7 @@ public class AdsManager {
 }
 EOF
 
-# --- 6. MainActivity (FİNAL DÜZELTME BURADA YAPILDI: finish()) ---
+# --- 6. MainActivity (SPLASH FIX - MENÜ GÖRÜNMEZ) ---
 cat > "$TARGET_DIR/MainActivity.java" <<EOF
 package com.base.app;
 import android.app.Activity;
@@ -162,10 +162,13 @@ public class MainActivity extends Activity {
     private RelativeLayout root;
     private LinearLayout contentContainer, bannerContainer, headerLayout;
     private TextView titleText;
+    private ProgressBar loadingSpinner;
     private ImageView refreshBtn, shareBtn;
+    
+    // Varsayılan değerler
     private String headerColor = "#2196F3", textColor = "#FFFFFF", bgColor = "#F0F0F0", focusColor = "#FF9800";
-    private boolean showRefresh = true, showShare = true, showHeader = true;
-    private String headerTitle = "", appName = "$APP_NAME";
+    private boolean showHeader = true;
+    private String appName = "$APP_NAME";
     private int fontSize = 16;
     private int fontStyle = Typeface.BOLD;
     private long lastBackPressTime = 0;
@@ -174,6 +177,17 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         root = new RelativeLayout(this);
+        root.setBackgroundColor(Color.WHITE);
+
+        // --- YÜKLENİYOR SİMGESİ (SPLASH) ---
+        loadingSpinner = new ProgressBar(this);
+        RelativeLayout.LayoutParams lp = new RelativeLayout.LayoutParams(-2, -2);
+        lp.addRule(RelativeLayout.CENTER_IN_PARENT);
+        root.addView(loadingSpinner, lp);
+
+        // --- ANA İÇERİK (GİZLİ BAŞLAR) ---
+        // Header, Banner ve Liste elemanlarını oluşturuyoruz ama GİZLİYORUZ.
+        // Veri gelince (onPostExecute) gösterilecek.
         
         headerLayout = new LinearLayout(this);
         headerLayout.setId(View.generateViewId());
@@ -181,11 +195,10 @@ public class MainActivity extends Activity {
         headerLayout.setGravity(Gravity.CENTER_VERTICAL);
         headerLayout.setPadding(30, 30, 30, 30);
         headerLayout.setElevation(10f);
+        headerLayout.setVisibility(View.GONE); // GİZLİ
         
         titleText = new TextView(this);
         titleText.setText(appName);
-        titleText.setTextSize(20);
-        titleText.setTypeface(null, Typeface.BOLD);
         LinearLayout.LayoutParams titleParams = new LinearLayout.LayoutParams(0, -2, 1.0f);
         headerLayout.addView(titleText, titleParams);
 
@@ -209,6 +222,7 @@ public class MainActivity extends Activity {
         bannerContainer.setId(View.generateViewId());
         bannerContainer.setOrientation(LinearLayout.VERTICAL);
         bannerContainer.setGravity(Gravity.CENTER);
+        bannerContainer.setVisibility(View.GONE); // GİZLİ
         RelativeLayout.LayoutParams bp = new RelativeLayout.LayoutParams(-1, -2);
         bp.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM);
         root.addView(bannerContainer, bp);
@@ -218,10 +232,13 @@ public class MainActivity extends Activity {
         contentContainer.setOrientation(LinearLayout.VERTICAL);
         contentContainer.setPadding(30, 30, 30, 150); 
         sv.addView(contentContainer);
+        sv.setVisibility(View.GONE); // GİZLİ
+        
         RelativeLayout.LayoutParams sp = new RelativeLayout.LayoutParams(-1, -1);
         sp.addRule(RelativeLayout.BELOW, headerLayout.getId());
         sp.addRule(RelativeLayout.ABOVE, bannerContainer.getId());
         root.addView(sv, sp);
+
         setContentView(root);
         new FetchConfigTask().execute(CONFIG_URL);
     }
@@ -281,60 +298,82 @@ public class MainActivity extends Activity {
         }
         protected void onPostExecute(String result) {
             if (result == null) return;
-            contentContainer.removeAllViews();
+            
             try {
                 JSONObject json = new JSONObject(result);
                 appName = json.optString("app_name", "App");
                 JSONObject ui = json.optJSONObject("ui_config");
+                
+                // ÖNCE AYARLARI OKU
                 if(ui != null) {
                     headerColor = ui.optString("header_color", "#2196F3");
                     textColor = ui.optString("text_color", "#FFFFFF");
                     bgColor = ui.optString("bg_color", "#F0F0F0");
                     focusColor = ui.optString("focus_color", "#FF9800");
-                    showRefresh = ui.optBoolean("show_refresh", true);
-                    showShare = ui.optBoolean("show_share", true);
                     showHeader = ui.optBoolean("show_header", true);
-                    headerTitle = ui.optString("header_title", "");
+                    
                     fontSize = ui.optInt("font_size", 16);
                     String fStyle = ui.optString("font_style", "BOLD");
-                    if(fStyle.equals("NORMAL")) fontStyle = Typeface.NORMAL; else if(fStyle.equals("ITALIC")) fontStyle = Typeface.ITALIC; else fontStyle = Typeface.BOLD;
+                    if(fStyle.equals("NORMAL")) fontStyle = Typeface.NORMAL; 
+                    else if(fStyle.equals("ITALIC")) fontStyle = Typeface.ITALIC; 
+                    else fontStyle = Typeface.BOLD;
 
-                    if (showHeader) { headerLayout.setVisibility(View.VISIBLE); titleText.setText(headerTitle.isEmpty() ? appName : headerTitle); } else { headerLayout.setVisibility(View.GONE); }
-                    
-                    headerLayout.setBackgroundColor(Color.parseColor(headerColor));
-                    titleText.setTextColor(Color.parseColor(textColor));
-                    root.setBackgroundColor(Color.parseColor(bgColor));
-                    ((ScrollView)contentContainer.getParent()).setBackgroundColor(Color.parseColor(bgColor));
-                    refreshBtn.setVisibility(showRefresh ? View.VISIBLE : View.GONE);
-                    shareBtn.setVisibility(showShare ? View.VISIBLE : View.GONE);
-                    refreshBtn.setColorFilter(Color.parseColor(textColor));
-                    shareBtn.setColorFilter(Color.parseColor(textColor));
-
+                    // DİREKT AÇILIŞ KONTROLÜ (EN ÖNEMLİ KISIM)
                     String startupMode = ui.optString("startup_mode", "MENU");
                     if ("DIRECT".equals(startupMode)) {
-                        String dType = ui.optString("direct_type", "WEB"); String dUrl = ui.optString("direct_url", "");
+                        String dType = ui.optString("direct_type", "WEB"); 
+                        String dUrl = ui.optString("direct_url", "");
                         if (!dUrl.isEmpty()) { 
+                            // DİREKT İÇERİĞİ AÇ VE UYGULAMAYI KAPAT (ARKADA MENÜ KALMASIN)
                             openContent(dType, dUrl); 
-                            finish(); // <<-- FİNAL DÜZELTME: MAIN ACTIVITY'YI KAPAT, GERİ DÖNÜLEMESİN
+                            finish(); 
+                            return; // Fonksiyondan çık, menüyü çizme.
                         }
                     }
-                } else { titleText.setText(appName); }
+                }
 
-                JSONObject adsConfig = json.optJSONObject("ads_config");
-                if (adsConfig != null) { AdsManager.init(MainActivity.this, adsConfig); AdsManager.showBanner(MainActivity.this, bannerContainer); }
+                // EĞER BURAYA GELDİYSEK "MENU" MODUNDAYIZ DEMEKTİR.
+                // ŞİMDİ ARAYÜZÜ GÖSTER VE BOYAMALARI YAP.
+                loadingSpinner.setVisibility(View.GONE); // Yükleniyor'u gizle
+                ((ScrollView)contentContainer.getParent()).setVisibility(View.VISIBLE); // İçeriği aç
+                bannerContainer.setVisibility(View.VISIBLE); // Banner aç
+                
+                if (showHeader) headerLayout.setVisibility(View.VISIBLE);
+                
+                // Renkleri Uygula
+                root.setBackgroundColor(Color.parseColor(bgColor));
+                headerLayout.setBackgroundColor(Color.parseColor(headerColor));
+                titleText.setText(appName);
+                titleText.setTextColor(Color.parseColor(textColor));
+                titleText.setTextSize(20);
+                titleText.setTypeface(null, fontStyle);
+                refreshBtn.setColorFilter(Color.parseColor(textColor));
+                shareBtn.setColorFilter(Color.parseColor(textColor));
 
+                // Modülleri Ekle
+                contentContainer.removeAllViews();
                 JSONArray mods = json.getJSONArray("modules");
                 for(int i=0; i<mods.length(); i++){
                     JSONObject m = mods.getJSONObject(i);
-                    if (m.optBoolean("active", true)) { createStyledButton(m.getString("title"), m.getString("type"), m.getString("url")); }
+                    if (m.optBoolean("active", true)) { 
+                        createStyledButton(m.getString("title"), m.getString("type"), m.getString("url")); 
+                    }
                 }
+                
+                // Reklamları Yükle
+                JSONObject adsConfig = json.optJSONObject("ads_config");
+                if (adsConfig != null) { 
+                    AdsManager.init(MainActivity.this, adsConfig); 
+                    AdsManager.showBanner(MainActivity.this, bannerContainer); 
+                }
+
             } catch(Exception e){}
         }
     }
 }
 EOF
 
-# --- 7. ChannelListActivity (KATEGORİ, M3U HEADER & JSON) ---
+# --- 7. ChannelListActivity ---
 cat > "$TARGET_DIR/ChannelListActivity.java" <<EOF
 package com.base.app;
 import android.app.Activity;
@@ -387,7 +426,6 @@ public class ChannelListActivity extends Activity {
         LinearLayout header = new LinearLayout(this);
         header.setBackgroundColor(Color.parseColor(headerColor));
         header.setPadding(30,30,30,30);
-        
         titleText = new TextView(this);
         titleText.setText("Yükleniyor...");
         titleText.setTextColor(Color.parseColor(textColor));
@@ -588,7 +626,7 @@ public class ChannelListActivity extends Activity {
 }
 EOF
 
-# --- 8. PlayerActivity (URL RESOLVER EKLENDİ) ---
+# --- 8. PlayerActivity (SUPER RESOLVER & ALL FORMATS) ---
 cat > "$TARGET_DIR/PlayerActivity.java" <<EOF
 package com.base.app;
 import android.app.Activity;
@@ -636,57 +674,36 @@ public class PlayerActivity extends Activity {
         }
     }
 
-    // URL Bilgisi Tutan Sınıf
-    class UrlInfo {
-        String url;
-        String mimeType;
-        UrlInfo(String u, String m) { url = u; mimeType = m; }
-    }
+    class UrlInfo { String url; String mimeType; UrlInfo(String u, String m) { url = u; mimeType = m; } }
 
-    // Arkaplan URL Çözücü
     private class ResolveUrlTask extends AsyncTask<String, Void, UrlInfo> {
         @Override
         protected UrlInfo doInBackground(String... params) {
             String currentUrl = params[0];
             String detectedMime = null;
-            
             try {
-                // Sadece HTTP/HTTPS ise işlem yap
                 if (!currentUrl.startsWith("http")) return new UrlInfo(currentUrl, null);
-
-                // Yönlendirmeleri takip et (Max 5)
                 for (int i = 0; i < 5; i++) {
                     URL url = new URL(currentUrl);
                     HttpURLConnection con = (HttpURLConnection) url.openConnection();
-                    con.setInstanceFollowRedirects(false); // Manuel takip
-                    con.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)");
+                    con.setInstanceFollowRedirects(false); 
+                    con.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
                     con.setConnectTimeout(8000);
                     con.connect();
-
                     int code = con.getResponseCode();
                     if (code >= 300 && code < 400) {
                         String next = con.getHeaderField("Location");
-                        if (next != null) {
-                            currentUrl = next; // Yeni URL'ye geç
-                            continue;
-                        }
+                        if (next != null) { currentUrl = next; continue; }
                     }
-                    
-                    // Son durağa geldik, MIME type alalım
                     detectedMime = con.getContentType();
                     con.disconnect();
                     break;
                 }
-            } catch (Exception e) {
-                // Hata olursa orijinal URL ile devam et
-            }
+            } catch (Exception e) {}
             return new UrlInfo(currentUrl, detectedMime);
         }
-
         @Override
-        protected void onPostExecute(UrlInfo info) {
-            initializePlayer(info);
-        }
+        protected void onPostExecute(UrlInfo info) { initializePlayer(info); }
     }
 
     private void initializePlayer(UrlInfo info) {
@@ -710,36 +727,21 @@ public class PlayerActivity extends Activity {
                 .setUserAgent(userAgent)
                 .setAllowCrossProtocolRedirects(true)
                 .setDefaultRequestProperties(requestProps);
-                
-        DefaultMediaSourceFactory mediaFactory = new DefaultMediaSourceFactory(this)
-                .setDataSourceFactory(httpFactory);
-
-        player = new ExoPlayer.Builder(this)
-                .setMediaSourceFactory(mediaFactory)
-                .build();
-        
+        DefaultMediaSourceFactory mediaFactory = new DefaultMediaSourceFactory(this).setDataSourceFactory(httpFactory);
+        player = new ExoPlayer.Builder(this).setMediaSourceFactory(mediaFactory).build();
         playerView.setPlayer(player);
         
         try {
             MediaItem.Builder item = new MediaItem.Builder().setUri(Uri.parse(info.url));
-            
-            // Eğer MIME Type belliyse ve uzantı yoksa, ExoPlayer'a ipucu ver
             if (info.mimeType != null) {
-                if (info.mimeType.contains("mpegurl") || info.mimeType.contains("hls")) {
-                    item.setMimeType(MimeTypes.APPLICATION_M3U8);
-                } else if (info.mimeType.contains("dash")) {
-                    item.setMimeType(MimeTypes.APPLICATION_MPD);
-                } else if (info.mimeType.contains("video/mp4")) {
-                    item.setMimeType(MimeTypes.APPLICATION_MP4);
-                }
+                if (info.mimeType.contains("mpegurl") || info.mimeType.contains("hls")) item.setMimeType(MimeTypes.APPLICATION_M3U8);
+                else if (info.mimeType.contains("dash")) item.setMimeType(MimeTypes.APPLICATION_MPD);
+                else if (info.mimeType.contains("video/mp4")) item.setMimeType(MimeTypes.APPLICATION_MP4);
             }
-            
             player.setMediaItem(item.build());
             player.prepare();
             player.setPlayWhenReady(true);
-        } catch(Exception e){ 
-            Toast.makeText(this, "Hata: " + e.getMessage(), Toast.LENGTH_LONG).show(); 
-        }
+        } catch(Exception e){ Toast.makeText(this, "Hata: " + e.getMessage(), Toast.LENGTH_LONG).show(); }
         
         player.addListener(new Player.Listener(){ 
             public void onPlayerError(PlaybackException e){ 
@@ -750,7 +752,6 @@ public class PlayerActivity extends Activity {
             } 
         });
     }
-
     protected void onStop(){ super.onStop(); if(player!=null){player.release(); player=null;} }
 }
 EOF
@@ -773,4 +774,4 @@ public class WebViewActivity extends Activity {
 }
 EOF
 
-echo "✅ ULTRA APP V20 - FULL & FINAL"
+echo "✅ ULTRA APP V21 - SPLASH, DIRECT FIX & SUPER RESOLVER TAMAMLANDI."
