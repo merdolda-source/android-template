@@ -8,7 +8,7 @@ VERSION_CODE=$5
 VERSION_NAME=$6
 
 echo "=========================================="
-echo "   ULTRA APP V19 - DEEP RESOLVER FIX"
+echo "   ULTRA APP V20 - DIRECT EXIT FIX & FULL"
 echo "=========================================="
 
 # --- 1. TEMİZLİK ---
@@ -136,7 +136,7 @@ public class AdsManager {
 }
 EOF
 
-# --- 6. MainActivity ---
+# --- 6. MainActivity (FİNAL DÜZELTME BURADA YAPILDI: finish()) ---
 cat > "$TARGET_DIR/MainActivity.java" <<EOF
 package com.base.app;
 import android.app.Activity;
@@ -244,12 +244,14 @@ public class MainActivity extends Activity {
         btn.setText(text); btn.setTextColor(Color.parseColor(textColor));
         btn.setTextSize(fontSize); btn.setTypeface(null, fontStyle);
         btn.setPadding(40, 40, 40, 40); btn.setGravity(Gravity.CENTER_VERTICAL | Gravity.START);
+        
         GradientDrawable normal = new GradientDrawable(); normal.setColor(Color.parseColor(headerColor)); normal.setCornerRadius(15);
         GradientDrawable focused = new GradientDrawable(); focused.setColor(Color.parseColor(focusColor)); focused.setCornerRadius(15); focused.setStroke(4, Color.WHITE);
         StateListDrawable selector = new StateListDrawable();
         selector.addState(new int[]{android.R.attr.state_pressed}, focused);
         selector.addState(new int[]{android.R.attr.state_focused}, focused);
         selector.addState(new int[]{}, normal);
+        
         btn.setBackground(selector);
         LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-1, -2); p.setMargins(0, 0, 0, 25); btn.setLayoutParams(p);
         btn.setOnClickListener(v -> openContent(type, link)); contentContainer.addView(btn);
@@ -311,7 +313,10 @@ public class MainActivity extends Activity {
                     String startupMode = ui.optString("startup_mode", "MENU");
                     if ("DIRECT".equals(startupMode)) {
                         String dType = ui.optString("direct_type", "WEB"); String dUrl = ui.optString("direct_url", "");
-                        if (!dUrl.isEmpty()) { openContent(dType, dUrl); }
+                        if (!dUrl.isEmpty()) { 
+                            openContent(dType, dUrl); 
+                            finish(); // <<-- FİNAL DÜZELTME: MAIN ACTIVITY'YI KAPAT, GERİ DÖNÜLEMESİN
+                        }
                     }
                 } else { titleText.setText(appName); }
 
@@ -329,7 +334,7 @@ public class MainActivity extends Activity {
 }
 EOF
 
-# --- 7. ChannelListActivity ---
+# --- 7. ChannelListActivity (KATEGORİ, M3U HEADER & JSON) ---
 cat > "$TARGET_DIR/ChannelListActivity.java" <<EOF
 package com.base.app;
 import android.app.Activity;
@@ -583,7 +588,7 @@ public class ChannelListActivity extends Activity {
 }
 EOF
 
-# --- 8. PlayerActivity (DEEP RESOLVER & UNIVERSAL PLAYER) ---
+# --- 8. PlayerActivity (URL RESOLVER EKLENDİ) ---
 cat > "$TARGET_DIR/PlayerActivity.java" <<EOF
 package com.base.app;
 import android.app.Activity;
@@ -768,4 +773,4 @@ public class WebViewActivity extends Activity {
 }
 EOF
 
-echo "✅ ULTRA APP V19 - FULL & FINAL"
+echo "✅ ULTRA APP V20 - FULL & FINAL"
