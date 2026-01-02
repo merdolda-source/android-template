@@ -8,7 +8,7 @@ VERSION_CODE=$5
 VERSION_NAME=$6
 
 echo "=========================================="
-echo "   ULTRA APP V18 - URL RESOLVER & ALL FORMATS"
+echo "   ULTRA APP V19 - DEEP RESOLVER FIX"
 echo "=========================================="
 
 # --- 1. TEMİZLİK ---
@@ -28,7 +28,7 @@ if [ ! -s "$ICON_TARGET" ]; then
     curl -L -k -o "$ICON_TARGET" "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3b/Android_new_logo_2019.svg/512px-Android_new_logo_2019.svg.png"
 fi
 
-# --- 3. BUILD.GRADLE (TÜM FORMATLAR) ---
+# --- 3. BUILD.GRADLE ---
 cat > app/build.gradle <<EOF
 plugins { id 'com.android.application' }
 android {
@@ -62,7 +62,6 @@ android {
 dependencies {
     implementation 'androidx.appcompat:appcompat:1.6.1'
     implementation 'com.google.android.material:material:1.11.0'
-    // TÜM OYNATICI FORMATLARI
     implementation 'androidx.media3:media3-exoplayer:1.2.0'
     implementation 'androidx.media3:media3-exoplayer-hls:1.2.0'
     implementation 'androidx.media3:media3-exoplayer-dash:1.2.0'
@@ -164,7 +163,6 @@ public class MainActivity extends Activity {
     private LinearLayout contentContainer, bannerContainer, headerLayout;
     private TextView titleText;
     private ImageView refreshBtn, shareBtn;
-    
     private String headerColor = "#2196F3", textColor = "#FFFFFF", bgColor = "#F0F0F0", focusColor = "#FF9800";
     private boolean showRefresh = true, showShare = true, showHeader = true;
     private String headerTitle = "", appName = "$APP_NAME";
@@ -246,14 +244,12 @@ public class MainActivity extends Activity {
         btn.setText(text); btn.setTextColor(Color.parseColor(textColor));
         btn.setTextSize(fontSize); btn.setTypeface(null, fontStyle);
         btn.setPadding(40, 40, 40, 40); btn.setGravity(Gravity.CENTER_VERTICAL | Gravity.START);
-        
         GradientDrawable normal = new GradientDrawable(); normal.setColor(Color.parseColor(headerColor)); normal.setCornerRadius(15);
         GradientDrawable focused = new GradientDrawable(); focused.setColor(Color.parseColor(focusColor)); focused.setCornerRadius(15); focused.setStroke(4, Color.WHITE);
         StateListDrawable selector = new StateListDrawable();
         selector.addState(new int[]{android.R.attr.state_pressed}, focused);
         selector.addState(new int[]{android.R.attr.state_focused}, focused);
         selector.addState(new int[]{}, normal);
-        
         btn.setBackground(selector);
         LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-1, -2); p.setMargins(0, 0, 0, 25); btn.setLayoutParams(p);
         btn.setOnClickListener(v -> openContent(type, link)); contentContainer.addView(btn);
@@ -333,7 +329,7 @@ public class MainActivity extends Activity {
 }
 EOF
 
-# --- 7. ChannelListActivity (KATEGORİ & M3U FIX) ---
+# --- 7. ChannelListActivity ---
 cat > "$TARGET_DIR/ChannelListActivity.java" <<EOF
 package com.base.app;
 import android.app.Activity;
@@ -587,7 +583,7 @@ public class ChannelListActivity extends Activity {
 }
 EOF
 
-# --- 8. PlayerActivity (URL RESOLVER EKLENDİ) ---
+# --- 8. PlayerActivity (DEEP RESOLVER & UNIVERSAL PLAYER) ---
 cat > "$TARGET_DIR/PlayerActivity.java" <<EOF
 package com.base.app;
 import android.app.Activity;
@@ -597,6 +593,7 @@ import android.os.Bundle;
 import android.view.WindowManager;
 import android.widget.Toast;
 import androidx.media3.common.MediaItem;
+import androidx.media3.common.MimeTypes;
 import androidx.media3.common.PlaybackException;
 import androidx.media3.common.Player;
 import androidx.media3.datasource.DefaultHttpDataSource;
@@ -629,44 +626,65 @@ public class PlayerActivity extends Activity {
         headersJson = getIntent().getStringExtra("HEADERS_JSON");
         
         if(videoUrl != null && !videoUrl.isEmpty()) {
-            Toast.makeText(this, "Yükleniyor...", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "Bağlanılıyor...", Toast.LENGTH_SHORT).show();
             new ResolveUrlTask().execute(videoUrl.trim());
         }
     }
 
-    private class ResolveUrlTask extends AsyncTask<String, Void, String> {
+    // URL Bilgisi Tutan Sınıf
+    class UrlInfo {
+        String url;
+        String mimeType;
+        UrlInfo(String u, String m) { url = u; mimeType = m; }
+    }
+
+    // Arkaplan URL Çözücü
+    private class ResolveUrlTask extends AsyncTask<String, Void, UrlInfo> {
         @Override
-        protected String doInBackground(String... params) {
-            String urlString = params[0];
+        protected UrlInfo doInBackground(String... params) {
+            String currentUrl = params[0];
+            String detectedMime = null;
+            
             try {
-                // Sadece HTTP/HTTPS ise yönlendirme kontrolü yap
-                if (!urlString.startsWith("http")) return urlString;
+                // Sadece HTTP/HTTPS ise işlem yap
+                if (!currentUrl.startsWith("http")) return new UrlInfo(currentUrl, null);
 
-                URL url = new URL(urlString);
-                HttpURLConnection con = (HttpURLConnection) url.openConnection();
-                con.setInstanceFollowRedirects(false); // Manuel takip edeceğiz
-                con.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)");
-                con.setConnectTimeout(5000);
-                con.connect();
+                // Yönlendirmeleri takip et (Max 5)
+                for (int i = 0; i < 5; i++) {
+                    URL url = new URL(currentUrl);
+                    HttpURLConnection con = (HttpURLConnection) url.openConnection();
+                    con.setInstanceFollowRedirects(false); // Manuel takip
+                    con.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)");
+                    con.setConnectTimeout(8000);
+                    con.connect();
 
-                int responseCode = con.getResponseCode();
-                if (responseCode >= 300 && responseCode < 400) {
-                    String newUrl = con.getHeaderField("Location");
-                    if (newUrl != null) return newUrl;
+                    int code = con.getResponseCode();
+                    if (code >= 300 && code < 400) {
+                        String next = con.getHeaderField("Location");
+                        if (next != null) {
+                            currentUrl = next; // Yeni URL'ye geç
+                            continue;
+                        }
+                    }
+                    
+                    // Son durağa geldik, MIME type alalım
+                    detectedMime = con.getContentType();
+                    con.disconnect();
+                    break;
                 }
-                return urlString; // Yönlendirme yoksa aynen döndür
             } catch (Exception e) {
-                return urlString; // Hata olursa orijinali dene
+                // Hata olursa orijinal URL ile devam et
             }
+            return new UrlInfo(currentUrl, detectedMime);
         }
 
         @Override
-        protected void onPostExecute(String resolvedUrl) {
-            initializePlayer(resolvedUrl);
+        protected void onPostExecute(UrlInfo info) {
+            initializePlayer(info);
         }
     }
 
-    private void initializePlayer(String finalUrl) {
+    private void initializePlayer(UrlInfo info) {
         String userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36";
         Map<String, String> requestProps = new HashMap<>();
         
@@ -698,7 +716,20 @@ public class PlayerActivity extends Activity {
         playerView.setPlayer(player);
         
         try {
-            player.setMediaItem(MediaItem.fromUri(Uri.parse(finalUrl)));
+            MediaItem.Builder item = new MediaItem.Builder().setUri(Uri.parse(info.url));
+            
+            // Eğer MIME Type belliyse ve uzantı yoksa, ExoPlayer'a ipucu ver
+            if (info.mimeType != null) {
+                if (info.mimeType.contains("mpegurl") || info.mimeType.contains("hls")) {
+                    item.setMimeType(MimeTypes.APPLICATION_M3U8);
+                } else if (info.mimeType.contains("dash")) {
+                    item.setMimeType(MimeTypes.APPLICATION_MPD);
+                } else if (info.mimeType.contains("video/mp4")) {
+                    item.setMimeType(MimeTypes.APPLICATION_MP4);
+                }
+            }
+            
+            player.setMediaItem(item.build());
             player.prepare();
             player.setPlayWhenReady(true);
         } catch(Exception e){ 
@@ -707,7 +738,10 @@ public class PlayerActivity extends Activity {
         
         player.addListener(new Player.Listener(){ 
             public void onPlayerError(PlaybackException e){ 
-                Toast.makeText(PlayerActivity.this, "Oynatma Hatası: " + e.getMessage(), Toast.LENGTH_LONG).show(); 
+                String err = "Hata oluştu";
+                if(e.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED) err = "Bağlantı Hatası";
+                else if(e.errorCode == PlaybackException.ERROR_CODE_PARSING_CONTAINER_MALFORMED) err = "Format Desteklenmiyor";
+                Toast.makeText(PlayerActivity.this, err, Toast.LENGTH_LONG).show(); 
             } 
         });
     }
@@ -734,4 +768,4 @@ public class WebViewActivity extends Activity {
 }
 EOF
 
-echo "✅ ULTRA APP V18 - URL RESOLVER & ALL FORMATS TAMAMLANDI."
+echo "✅ ULTRA APP V19 - FULL & FINAL"
