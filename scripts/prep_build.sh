@@ -8,7 +8,7 @@ VERSION_CODE=$5
 VERSION_NAME=$6
 
 echo "=========================================="
-echo "   ULTRA APP V16 - BUILD FIX & FALLBACK ICON"
+echo "   ULTRA APP V16 - PART 1 (SETUP & MAIN)"
 echo "=========================================="
 
 # --- 1. TEMİZLİK ---
@@ -18,25 +18,21 @@ rm -rf app/src/main/java/com/base/app/*
 TARGET_DIR="app/src/main/java/com/base/app"
 mkdir -p "$TARGET_DIR"
 
-# --- 2. ICON (GELİŞMİŞ İNDİRME VE YEDEK PLAN) ---
+# --- 2. ICON (GÜÇLENDİRİLMİŞ İNDİRME) ---
 mkdir -p app/src/main/res/mipmap-xxxhdpi
 ICON_TARGET="app/src/main/res/mipmap-xxxhdpi/ic_launcher.png"
 
-# 1. Adım: Kullanıcının ikonunu indirmeyi dene
 if [ ! -z "$ICON_URL" ]; then 
-    echo "Kullanıcı ikonu indiriliyor: $ICON_URL"
-    # -k (insecure) SSL hatalarını atla, -L yönlendirmeleri izle
-    curl -L -k -A "Mozilla/5.0" --connect-timeout 20 --max-time 60 -o "$ICON_TARGET" "$ICON_URL" || echo "Kullanıcı ikonu indirilemedi."
+    echo "İkon indiriliyor..."
+    curl -L -k -A "Mozilla/5.0" --connect-timeout 20 --max-time 60 -o "$ICON_TARGET" "$ICON_URL" || echo "İkon indirilemedi."
 fi
-
-# 2. Adım: Eğer indirme başarısız olduysa veya dosya boşsa, YEDEK İKON indir (Build patlamasın diye)
+# Yedek İkon Kontrolü
 if [ ! -s "$ICON_TARGET" ]; then
-    echo "⚠️ İkon bulunamadı! Varsayılan yedek ikon kullanılıyor..."
-    # Güvenilir bir kaynaktan varsayılan ikon indir
+    echo "Yedek ikon kullanılıyor."
     curl -L -k -o "$ICON_TARGET" "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3b/Android_new_logo_2019.svg/512px-Android_new_logo_2019.svg.png"
 fi
 
-# --- 3. BUILD.GRADLE (V15 ile Aynı) ---
+# --- 3. BUILD.GRADLE (EVRENSEL FORMAT DESTEKLİ) ---
 cat > app/build.gradle <<EOF
 plugins { id 'com.android.application' }
 android {
@@ -83,8 +79,7 @@ dependencies {
 }
 EOF
 
-# --- 4. MANIFEST (WARNING DÜZELTİLDİ) ---
-# package="com.base.app" kaldırıldı çünkü build.gradle içinde namespace var.
+# --- 4. MANIFEST ---
 cat > app/src/main/AndroidManifest.xml <<EOF
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -98,9 +93,7 @@ cat > app/src/main/AndroidManifest.xml <<EOF
         </activity>
         <activity android:name=".WebViewActivity" />
         <activity android:name=".ChannelListActivity" />
-        <activity android:name=".PlayerActivity" 
-            android:configChanges="orientation|screenSize|keyboardHidden|smallestScreenSize|screenLayout" 
-            android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen" />
+        <activity android:name=".PlayerActivity" android:configChanges="orientation|screenSize|keyboardHidden|smallestScreenSize|screenLayout" android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen" />
     </application>
 </manifest>
 EOF
@@ -147,7 +140,204 @@ public class AdsManager {
 }
 EOF
 
-# --- 6. ChannelListActivity (KATEGORİ & M3U FIX) ---
+# --- 6. MainActivity (GİRİŞ EKRANI) ---
+cat > "$TARGET_DIR/MainActivity.java" <<EOF
+package com.base.app;
+import android.app.Activity;
+import android.content.Intent;
+import android.os.AsyncTask;
+import android.os.Bundle;
+import android.view.Gravity;
+import android.view.View;
+import android.widget.*;
+import android.graphics.Color;
+import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.StateListDrawable;
+import org.json.JSONArray;
+import org.json.JSONObject;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.URL;
+
+public class MainActivity extends Activity {
+    private String CONFIG_URL = "$CONFIG_URL"; 
+    private RelativeLayout root;
+    private LinearLayout contentContainer, bannerContainer, headerLayout;
+    private TextView titleText;
+    private ImageView refreshBtn, shareBtn;
+    
+    private String headerColor = "#2196F3", textColor = "#FFFFFF", bgColor = "#F0F0F0", focusColor = "#FF9800";
+    private boolean showRefresh = true, showShare = true, showHeader = true;
+    private String headerTitle = "", appName = "$APP_NAME";
+    private int fontSize = 16;
+    private int fontStyle = Typeface.BOLD;
+    private long lastBackPressTime = 0;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        root = new RelativeLayout(this);
+        
+        headerLayout = new LinearLayout(this);
+        headerLayout.setId(View.generateViewId());
+        headerLayout.setOrientation(LinearLayout.HORIZONTAL);
+        headerLayout.setGravity(Gravity.CENTER_VERTICAL);
+        headerLayout.setPadding(30, 30, 30, 30);
+        headerLayout.setElevation(10f);
+        
+        titleText = new TextView(this);
+        titleText.setText(appName);
+        titleText.setTextSize(20);
+        titleText.setTypeface(null, Typeface.BOLD);
+        LinearLayout.LayoutParams titleParams = new LinearLayout.LayoutParams(0, -2, 1.0f);
+        headerLayout.addView(titleText, titleParams);
+
+        shareBtn = new ImageView(this);
+        shareBtn.setImageResource(android.R.drawable.ic_menu_share);
+        shareBtn.setPadding(20, 0, 20, 0);
+        shareBtn.setOnClickListener(v -> shareApp());
+        headerLayout.addView(shareBtn);
+
+        refreshBtn = new ImageView(this);
+        refreshBtn.setImageResource(android.R.drawable.ic_popup_sync);
+        refreshBtn.setPadding(20, 0, 0, 0);
+        refreshBtn.setOnClickListener(v -> new FetchConfigTask().execute(CONFIG_URL));
+        headerLayout.addView(refreshBtn);
+
+        RelativeLayout.LayoutParams hp = new RelativeLayout.LayoutParams(-1, -2);
+        hp.addRule(RelativeLayout.ALIGN_PARENT_TOP);
+        root.addView(headerLayout, hp);
+
+        bannerContainer = new LinearLayout(this);
+        bannerContainer.setId(View.generateViewId());
+        bannerContainer.setOrientation(LinearLayout.VERTICAL);
+        bannerContainer.setGravity(Gravity.CENTER);
+        RelativeLayout.LayoutParams bp = new RelativeLayout.LayoutParams(-1, -2);
+        bp.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM);
+        root.addView(bannerContainer, bp);
+
+        ScrollView sv = new ScrollView(this);
+        contentContainer = new LinearLayout(this);
+        contentContainer.setOrientation(LinearLayout.VERTICAL);
+        contentContainer.setPadding(30, 30, 30, 150); 
+        sv.addView(contentContainer);
+        
+        RelativeLayout.LayoutParams sp = new RelativeLayout.LayoutParams(-1, -1);
+        sp.addRule(RelativeLayout.BELOW, headerLayout.getId());
+        sp.addRule(RelativeLayout.ABOVE, bannerContainer.getId());
+        root.addView(sv, sp);
+
+        setContentView(root);
+        new FetchConfigTask().execute(CONFIG_URL);
+    }
+
+    private void shareApp() {
+        Intent i = new Intent(Intent.ACTION_SEND); i.setType("text/plain");
+        i.putExtra(Intent.EXTRA_TEXT, appName + " uygulamasını indir: https://play.google.com/store/apps/details?id=" + getPackageName());
+        startActivity(Intent.createChooser(i, "Paylaş"));
+    }
+
+    public void onBackPressed() {
+        if (this.lastBackPressTime < System.currentTimeMillis() - 2000) {
+            Toast.makeText(this, "Çıkmak için tekrar basın", Toast.LENGTH_SHORT).show();
+            this.lastBackPressTime = System.currentTimeMillis();
+        } else { super.onBackPressed(); System.exit(0); }
+    }
+
+    private void createStyledButton(String text, final String type, final String link) {
+        Button btn = new Button(this);
+        btn.setText(text); btn.setTextColor(Color.parseColor(textColor));
+        btn.setTextSize(fontSize); btn.setTypeface(null, fontStyle);
+        btn.setPadding(40, 40, 40, 40); btn.setGravity(Gravity.CENTER_VERTICAL | Gravity.START);
+        
+        GradientDrawable normal = new GradientDrawable(); normal.setColor(Color.parseColor(headerColor)); normal.setCornerRadius(15);
+        GradientDrawable focused = new GradientDrawable(); focused.setColor(Color.parseColor(focusColor)); focused.setCornerRadius(15); focused.setStroke(4, Color.WHITE);
+        StateListDrawable selector = new StateListDrawable();
+        selector.addState(new int[]{android.R.attr.state_pressed}, focused);
+        selector.addState(new int[]{android.R.attr.state_focused}, focused);
+        selector.addState(new int[]{}, normal);
+        
+        btn.setBackground(selector);
+        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-1, -2); p.setMargins(0, 0, 0, 25); btn.setLayoutParams(p);
+        btn.setOnClickListener(v -> openContent(type, link)); contentContainer.addView(btn);
+    }
+
+    private void openContent(String type, String link) {
+        AdsManager.showInterstitial(MainActivity.this);
+        if (type.equals("WEB")) { Intent i = new Intent(MainActivity.this, WebViewActivity.class); i.putExtra("WEB_URL", link); startActivity(i); }
+        else if (type.equals("IPTV") || type.equals("JSON_LIST")) {
+            Intent i = new Intent(MainActivity.this, ChannelListActivity.class);
+            i.putExtra("LIST_URL", link); i.putExtra("TYPE", type);
+            i.putExtra("BG_COLOR", bgColor); i.putExtra("HEADER_COLOR", headerColor); 
+            i.putExtra("TEXT_COLOR", textColor); i.putExtra("FOCUS_COLOR", focusColor);
+            startActivity(i);
+        } else { try { startActivity(new Intent(Intent.ACTION_VIEW, android.net.Uri.parse(link))); } catch(Exception e){} }
+    }
+
+    private class FetchConfigTask extends AsyncTask<String, Void, String> {
+        protected String doInBackground(String... urls) {
+            try {
+                URL url = new URL(urls[0]); HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                conn.setRequestProperty("User-Agent", "Mozilla/5.0"); conn.setConnectTimeout(10000);
+                BufferedReader rd = new BufferedReader(new InputStreamReader(conn.getInputStream()));
+                StringBuilder res = new StringBuilder(); String line; while ((line = rd.readLine()) != null) res.append(line);
+                return res.toString();
+            } catch (Exception e) { return null; }
+        }
+        protected void onPostExecute(String result) {
+            if (result == null) return;
+            contentContainer.removeAllViews();
+            try {
+                JSONObject json = new JSONObject(result);
+                appName = json.optString("app_name", "App");
+                JSONObject ui = json.optJSONObject("ui_config");
+                if(ui != null) {
+                    headerColor = ui.optString("header_color", "#2196F3");
+                    textColor = ui.optString("text_color", "#FFFFFF");
+                    bgColor = ui.optString("bg_color", "#F0F0F0");
+                    focusColor = ui.optString("focus_color", "#FF9800");
+                    showRefresh = ui.optBoolean("show_refresh", true);
+                    showShare = ui.optBoolean("show_share", true);
+                    showHeader = ui.optBoolean("show_header", true);
+                    headerTitle = ui.optString("header_title", "");
+                    fontSize = ui.optInt("font_size", 16);
+                    String fStyle = ui.optString("font_style", "BOLD");
+                    if(fStyle.equals("NORMAL")) fontStyle = Typeface.NORMAL; else if(fStyle.equals("ITALIC")) fontStyle = Typeface.ITALIC; else fontStyle = Typeface.BOLD;
+
+                    if (showHeader) { headerLayout.setVisibility(View.VISIBLE); titleText.setText(headerTitle.isEmpty() ? appName : headerTitle); } else { headerLayout.setVisibility(View.GONE); }
+                    
+                    headerLayout.setBackgroundColor(Color.parseColor(headerColor));
+                    titleText.setTextColor(Color.parseColor(textColor));
+                    root.setBackgroundColor(Color.parseColor(bgColor));
+                    ((ScrollView)contentContainer.getParent()).setBackgroundColor(Color.parseColor(bgColor));
+                    refreshBtn.setVisibility(showRefresh ? View.VISIBLE : View.GONE);
+                    shareBtn.setVisibility(showShare ? View.VISIBLE : View.GONE);
+                    refreshBtn.setColorFilter(Color.parseColor(textColor));
+                    shareBtn.setColorFilter(Color.parseColor(textColor));
+
+                    String startupMode = ui.optString("startup_mode", "MENU");
+                    if ("DIRECT".equals(startupMode)) {
+                        String dType = ui.optString("direct_type", "WEB"); String dUrl = ui.optString("direct_url", "");
+                        if (!dUrl.isEmpty()) { openContent(dType, dUrl); }
+                    }
+                } else { titleText.setText(appName); }
+
+                JSONObject adsConfig = json.optJSONObject("ads_config");
+                if (adsConfig != null) { AdsManager.init(MainActivity.this, adsConfig); AdsManager.showBanner(MainActivity.this, bannerContainer); }
+
+                JSONArray mods = json.getJSONArray("modules");
+                for(int i=0; i<mods.length(); i++){
+                    JSONObject m = mods.getJSONObject(i);
+                    if (m.optBoolean("active", true)) { createStyledButton(m.getString("title"), m.getString("type"), m.getString("url")); }
+                }
+            } catch(Exception e){}
+        }
+    }
+}
+EOF
+# --- 7. ChannelListActivity (KATEGORİ, M3U HEADER & JSON) ---
 cat > "$TARGET_DIR/ChannelListActivity.java" <<EOF
 package com.base.app;
 import android.app.Activity;
@@ -214,7 +404,6 @@ public class ChannelListActivity extends Activity {
         listView.setPadding(20,20,20,20);
         listView.setClipToPadding(false);
         listView.setSelector(android.R.color.transparent);
-        
         root.addView(listView);
         setContentView(root);
         
@@ -331,7 +520,36 @@ public class ChannelListActivity extends Activity {
             try{
                 groupedChannels.clear(); groupNames.clear();
                 
-                if(!r.trim().startsWith("{")) {
+                if("JSON_LIST".equals(type) || r.trim().startsWith("{")) {
+                    // JSON PARSER
+                    try {
+                        JSONObject root=new JSONObject(r); JSONArray arr=root.getJSONObject("list").getJSONArray("item");
+                        String defaultGroup = "Genel";
+                        for(int i=0;i<arr.length();i++){
+                            JSONObject o=arr.getJSONObject(i);
+                            String url=o.optString("media_url",o.optString("url",""));
+                            if(url.isEmpty())continue;
+                            String title = o.optString("title");
+                            String image = o.optString("thumb_square", o.optString("image", ""));
+                            String group = o.optString("group", defaultGroup); // JSON'da grup varsa al
+                            
+                            JSONObject h=new JSONObject();
+                            for(int k=1;k<=5;k++){
+                                String kn=o.optString("h"+k+"Key"), kv=o.optString("h"+k+"Val");
+                                if(!kn.isEmpty()&&!kn.equals("0")&&!kv.isEmpty()&&!kv.equals("0")) h.put(kn,kv);
+                            }
+                            
+                            if(!groupedChannels.containsKey(group)) {
+                                groupedChannels.put(group, new ArrayList<>());
+                                groupNames.add(group);
+                            }
+                            groupedChannels.get(group).add(new ChannelItem(title, url, image, h.toString()));
+                        }
+                    } catch(Exception e){}
+                } 
+                
+                // M3U PARSER (GROUPS & HEADERS)
+                if(groupedChannels.isEmpty() && !r.trim().startsWith("{")) {
                     String[] lines = r.split("\n");
                     String currentTitle = "Kanal";
                     String currentImage = "";
@@ -348,7 +566,8 @@ public class ChannelListActivity extends Activity {
                             if(mGroup.find()) currentGroup = mGroup.group(1); else currentGroup = "Genel";
                             Matcher mLogo = logoPattern.matcher(line);
                             if(mLogo.find()) currentImage = mLogo.group(1);
-                        } else if(line.startsWith("#EXTVLCOPT:")) {
+                        } 
+                        else if(line.startsWith("#EXTVLCOPT:")) {
                             String opt = line.substring(11); String[] parts = opt.split("=", 2);
                             if(parts.length==2) {
                                 try {
@@ -357,7 +576,8 @@ public class ChannelListActivity extends Activity {
                                     if(parts[0].equalsIgnoreCase("http-user-agent")) currentHeaders.put("User-Agent", parts[1]);
                                 } catch(Exception e){}
                             }
-                        } else if(!line.startsWith("#")) {
+                        } 
+                        else if(!line.startsWith("#")) {
                             if(!groupedChannels.containsKey(currentGroup)) {
                                 groupedChannels.put(currentGroup, new ArrayList<>());
                                 groupNames.add(currentGroup);
@@ -367,14 +587,18 @@ public class ChannelListActivity extends Activity {
                         }
                     }
                 }
-                if (groupNames.size() > 1) showGroups(); else if (groupNames.size() == 1) showChannels(groupNames.get(0));
+
+                if (groupNames.size() > 1) showGroups(); 
+                else if (groupNames.size() == 1) showChannels(groupNames.get(0));
+                else Toast.makeText(ChannelListActivity.this,"Kanal Bulunamadı",Toast.LENGTH_SHORT).show();
+
             }catch(Exception e){Toast.makeText(ChannelListActivity.this,"Liste Hatasi",Toast.LENGTH_SHORT).show();}
         }
     }
 }
 EOF
 
-# --- 7. PlayerActivity ---
+# --- 8. PlayerActivity (UNIVERSAL FORMAT) ---
 cat > "$TARGET_DIR/PlayerActivity.java" <<EOF
 package com.base.app;
 import android.app.Activity;
@@ -449,182 +673,6 @@ public class PlayerActivity extends Activity {
         });
     }
     protected void onStop(){ super.onStop(); if(player!=null){player.release(); player=null;} }
-}
-EOF
-
-# --- 8. MainActivity (Font & UI) ---
-cat > "$TARGET_DIR/MainActivity.java" <<EOF
-package com.base.app;
-import android.app.Activity;
-import android.content.Intent;
-import android.os.AsyncTask;
-import android.os.Bundle;
-import android.view.Gravity;
-import android.view.View;
-import android.widget.*;
-import android.graphics.Color;
-import android.graphics.Typeface;
-import android.graphics.drawable.GradientDrawable;
-import android.graphics.drawable.StateListDrawable;
-import org.json.JSONArray;
-import org.json.JSONObject;
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
-import java.net.HttpURLConnection;
-import java.net.URL;
-
-public class MainActivity extends Activity {
-    private String CONFIG_URL = "$CONFIG_URL"; 
-    private RelativeLayout root;
-    private LinearLayout contentContainer, bannerContainer, headerLayout;
-    private TextView titleText;
-    private ImageView refreshBtn, shareBtn;
-    private String headerColor = "#2196F3", textColor = "#FFFFFF", bgColor = "#F0F0F0", focusColor = "#FF9800";
-    private boolean showRefresh = true, showShare = true, showHeader = true;
-    private String headerTitle = "", appName = "$APP_NAME";
-    private int fontSize = 16;
-    private int fontStyle = Typeface.BOLD;
-    private long lastBackPressTime = 0;
-
-    @Override
-    protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        root = new RelativeLayout(this);
-        headerLayout = new LinearLayout(this);
-        headerLayout.setId(View.generateViewId());
-        headerLayout.setOrientation(LinearLayout.HORIZONTAL);
-        headerLayout.setGravity(Gravity.CENTER_VERTICAL);
-        headerLayout.setPadding(30, 30, 30, 30);
-        headerLayout.setElevation(10f);
-        titleText = new TextView(this);
-        titleText.setText(appName);
-        titleText.setTextSize(20);
-        titleText.setTypeface(null, Typeface.BOLD);
-        LinearLayout.LayoutParams titleParams = new LinearLayout.LayoutParams(0, -2, 1.0f);
-        headerLayout.addView(titleText, titleParams);
-        shareBtn = new ImageView(this);
-        shareBtn.setImageResource(android.R.drawable.ic_menu_share);
-        shareBtn.setPadding(20, 0, 20, 0);
-        shareBtn.setOnClickListener(v -> shareApp());
-        headerLayout.addView(shareBtn);
-        refreshBtn = new ImageView(this);
-        refreshBtn.setImageResource(android.R.drawable.ic_popup_sync);
-        refreshBtn.setPadding(20, 0, 0, 0);
-        refreshBtn.setOnClickListener(v -> new FetchConfigTask().execute(CONFIG_URL));
-        headerLayout.addView(refreshBtn);
-        RelativeLayout.LayoutParams hp = new RelativeLayout.LayoutParams(-1, -2);
-        hp.addRule(RelativeLayout.ALIGN_PARENT_TOP);
-        root.addView(headerLayout, hp);
-        bannerContainer = new LinearLayout(this);
-        bannerContainer.setId(View.generateViewId());
-        bannerContainer.setOrientation(LinearLayout.VERTICAL);
-        bannerContainer.setGravity(Gravity.CENTER);
-        RelativeLayout.LayoutParams bp = new RelativeLayout.LayoutParams(-1, -2);
-        bp.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM);
-        root.addView(bannerContainer, bp);
-        ScrollView sv = new ScrollView(this);
-        contentContainer = new LinearLayout(this);
-        contentContainer.setOrientation(LinearLayout.VERTICAL);
-        contentContainer.setPadding(30, 30, 30, 150); 
-        sv.addView(contentContainer);
-        RelativeLayout.LayoutParams sp = new RelativeLayout.LayoutParams(-1, -1);
-        sp.addRule(RelativeLayout.BELOW, headerLayout.getId());
-        sp.addRule(RelativeLayout.ABOVE, bannerContainer.getId());
-        root.addView(sv, sp);
-        setContentView(root);
-        new FetchConfigTask().execute(CONFIG_URL);
-    }
-    private void shareApp() {
-        Intent i = new Intent(Intent.ACTION_SEND); i.setType("text/plain");
-        i.putExtra(Intent.EXTRA_TEXT, appName + " uygulamasını indir: https://play.google.com/store/apps/details?id=" + getPackageName());
-        startActivity(Intent.createChooser(i, "Paylaş"));
-    }
-    public void onBackPressed() {
-        if (this.lastBackPressTime < System.currentTimeMillis() - 2000) {
-            Toast.makeText(this, "Çıkmak için tekrar basın", Toast.LENGTH_SHORT).show();
-            this.lastBackPressTime = System.currentTimeMillis();
-        } else { super.onBackPressed(); System.exit(0); }
-    }
-    private void createStyledButton(String text, final String type, final String link) {
-        Button btn = new Button(this);
-        btn.setText(text); btn.setTextColor(Color.parseColor(textColor));
-        btn.setTextSize(fontSize); btn.setTypeface(null, fontStyle);
-        btn.setPadding(40, 40, 40, 40); btn.setGravity(Gravity.CENTER_VERTICAL | Gravity.START);
-        GradientDrawable normal = new GradientDrawable(); normal.setColor(Color.parseColor(headerColor)); normal.setCornerRadius(15);
-        GradientDrawable focused = new GradientDrawable(); focused.setColor(Color.parseColor(focusColor)); focused.setCornerRadius(15); focused.setStroke(4, Color.WHITE);
-        StateListDrawable selector = new StateListDrawable();
-        selector.addState(new int[]{android.R.attr.state_pressed}, focused);
-        selector.addState(new int[]{android.R.attr.state_focused}, focused);
-        selector.addState(new int[]{}, normal);
-        btn.setBackground(selector);
-        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-1, -2); p.setMargins(0, 0, 0, 25); btn.setLayoutParams(p);
-        btn.setOnClickListener(v -> openContent(type, link)); contentContainer.addView(btn);
-    }
-    private void openContent(String type, String link) {
-        AdsManager.showInterstitial(MainActivity.this);
-        if (type.equals("WEB")) { Intent i = new Intent(MainActivity.this, WebViewActivity.class); i.putExtra("WEB_URL", link); startActivity(i); }
-        else if (type.equals("IPTV") || type.equals("JSON_LIST")) {
-            Intent i = new Intent(MainActivity.this, ChannelListActivity.class);
-            i.putExtra("LIST_URL", link); i.putExtra("TYPE", type);
-            i.putExtra("BG_COLOR", bgColor); i.putExtra("HEADER_COLOR", headerColor); 
-            i.putExtra("TEXT_COLOR", textColor); i.putExtra("FOCUS_COLOR", focusColor);
-            startActivity(i);
-        } else { try { startActivity(new Intent(Intent.ACTION_VIEW, android.net.Uri.parse(link))); } catch(Exception e){} }
-    }
-    private class FetchConfigTask extends AsyncTask<String, Void, String> {
-        protected String doInBackground(String... urls) {
-            try {
-                URL url = new URL(urls[0]); HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-                conn.setRequestProperty("User-Agent", "AppFactory");
-                BufferedReader rd = new BufferedReader(new InputStreamReader(conn.getInputStream()));
-                StringBuilder res = new StringBuilder(); String line; while ((line = rd.readLine()) != null) res.append(line);
-                return res.toString();
-            } catch (Exception e) { return null; }
-        }
-        protected void onPostExecute(String result) {
-            if (result == null) return;
-            contentContainer.removeAllViews();
-            try {
-                JSONObject json = new JSONObject(result);
-                appName = json.optString("app_name", "App");
-                JSONObject ui = json.optJSONObject("ui_config");
-                if(ui != null) {
-                    headerColor = ui.optString("header_color", "#2196F3");
-                    textColor = ui.optString("text_color", "#FFFFFF");
-                    bgColor = ui.optString("bg_color", "#F0F0F0");
-                    focusColor = ui.optString("focus_color", "#FF9800");
-                    showRefresh = ui.optBoolean("show_refresh", true);
-                    showShare = ui.optBoolean("show_share", true);
-                    showHeader = ui.optBoolean("show_header", true);
-                    headerTitle = ui.optString("header_title", "");
-                    fontSize = ui.optInt("font_size", 16);
-                    String fStyle = ui.optString("font_style", "BOLD");
-                    if(fStyle.equals("NORMAL")) fontStyle = Typeface.NORMAL; else if(fStyle.equals("ITALIC")) fontStyle = Typeface.ITALIC; else fontStyle = Typeface.BOLD;
-                    if (showHeader) { headerLayout.setVisibility(View.VISIBLE); titleText.setText(headerTitle.isEmpty() ? appName : headerTitle); } else { headerLayout.setVisibility(View.GONE); }
-                    headerLayout.setBackgroundColor(Color.parseColor(headerColor));
-                    titleText.setTextColor(Color.parseColor(textColor));
-                    root.setBackgroundColor(Color.parseColor(bgColor));
-                    ((ScrollView)contentContainer.getParent()).setBackgroundColor(Color.parseColor(bgColor));
-                    refreshBtn.setVisibility(showRefresh ? View.VISIBLE : View.GONE);
-                    shareBtn.setVisibility(showShare ? View.VISIBLE : View.GONE);
-                    refreshBtn.setColorFilter(Color.parseColor(textColor));
-                    shareBtn.setColorFilter(Color.parseColor(textColor));
-                    String startupMode = ui.optString("startup_mode", "MENU");
-                    if ("DIRECT".equals(startupMode)) {
-                        String dType = ui.optString("direct_type", "WEB"); String dUrl = ui.optString("direct_url", "");
-                        if (!dUrl.isEmpty()) { openContent(dType, dUrl); }
-                    }
-                } else { titleText.setText(appName); }
-                JSONObject adsConfig = json.optJSONObject("ads_config");
-                if (adsConfig != null) { AdsManager.init(MainActivity.this, adsConfig); AdsManager.showBanner(MainActivity.this, bannerContainer); }
-                JSONArray mods = json.getJSONArray("modules");
-                for(int i=0; i<mods.length(); i++){
-                    JSONObject m = mods.getJSONObject(i);
-                    if (m.optBoolean("active", true)) { createStyledButton(m.getString("title"), m.getString("type"), m.getString("url")); }
-                }
-            } catch(Exception e){}
-        }
-    }
 }
 EOF
 
