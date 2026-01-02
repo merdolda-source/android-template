@@ -8,7 +8,7 @@ VERSION_CODE=$5
 VERSION_NAME=$6
 
 echo "=========================================="
-echo "   ULTRA APP V15 - GROUPS & UNIVERSAL FORMATS"
+echo "   ULTRA APP V16 - BUILD FIX & FALLBACK ICON"
 echo "=========================================="
 
 # --- 1. TEMİZLİK ---
@@ -18,14 +18,25 @@ rm -rf app/src/main/java/com/base/app/*
 TARGET_DIR="app/src/main/java/com/base/app"
 mkdir -p "$TARGET_DIR"
 
-# --- 2. ICON ---
+# --- 2. ICON (GELİŞMİŞ İNDİRME VE YEDEK PLAN) ---
 mkdir -p app/src/main/res/mipmap-xxxhdpi
+ICON_TARGET="app/src/main/res/mipmap-xxxhdpi/ic_launcher.png"
+
+# 1. Adım: Kullanıcının ikonunu indirmeyi dene
 if [ ! -z "$ICON_URL" ]; then 
-    echo "İkon indiriliyor..."
-    curl -L -k -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" --connect-timeout 30 --max-time 60 -o app/src/main/res/mipmap-xxxhdpi/ic_launcher.png "$ICON_URL" || echo "İkon uyarısı."
+    echo "Kullanıcı ikonu indiriliyor: $ICON_URL"
+    # -k (insecure) SSL hatalarını atla, -L yönlendirmeleri izle
+    curl -L -k -A "Mozilla/5.0" --connect-timeout 20 --max-time 60 -o "$ICON_TARGET" "$ICON_URL" || echo "Kullanıcı ikonu indirilemedi."
 fi
 
-# --- 3. BUILD.GRADLE (TÜM FORMATLAR İÇİN) ---
+# 2. Adım: Eğer indirme başarısız olduysa veya dosya boşsa, YEDEK İKON indir (Build patlamasın diye)
+if [ ! -s "$ICON_TARGET" ]; then
+    echo "⚠️ İkon bulunamadı! Varsayılan yedek ikon kullanılıyor..."
+    # Güvenilir bir kaynaktan varsayılan ikon indir
+    curl -L -k -o "$ICON_TARGET" "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3b/Android_new_logo_2019.svg/512px-Android_new_logo_2019.svg.png"
+fi
+
+# --- 3. BUILD.GRADLE (V15 ile Aynı) ---
 cat > app/build.gradle <<EOF
 plugins { id 'com.android.application' }
 android {
@@ -59,24 +70,24 @@ android {
 dependencies {
     implementation 'androidx.appcompat:appcompat:1.6.1'
     implementation 'com.google.android.material:material:1.11.0'
-    // --- EVRENSEL OYNATICI MODÜLLERİ ---
     implementation 'androidx.media3:media3-exoplayer:1.2.0'
-    implementation 'androidx.media3:media3-exoplayer-hls:1.2.0'  // M3U8
-    implementation 'androidx.media3:media3-exoplayer-dash:1.2.0' // DASH
-    implementation 'androidx.media3:media3-exoplayer-rtsp:1.2.0' // RTSP (Kamera/IPTV)
+    implementation 'androidx.media3:media3-exoplayer-hls:1.2.0'
+    implementation 'androidx.media3:media3-exoplayer-dash:1.2.0'
+    implementation 'androidx.media3:media3-exoplayer-rtsp:1.2.0'
     implementation 'androidx.media3:media3-exoplayer-smoothstreaming:1.2.0'
     implementation 'androidx.media3:media3-ui:1.2.0'
     implementation 'androidx.media3:media3-common:1.2.0'
-    implementation 'androidx.media3:media3-datasource-okhttp:1.2.0' // Güçlü ağ bağlantısı için
+    implementation 'androidx.media3:media3-datasource-okhttp:1.2.0'
     implementation 'com.unity3d.ads:unity-ads:4.9.2'
     implementation 'com.github.bumptech.glide:glide:4.16.0'
 }
 EOF
 
-# --- 4. MANIFEST ---
+# --- 4. MANIFEST (WARNING DÜZELTİLDİ) ---
+# package="com.base.app" kaldırıldı çünkü build.gradle içinde namespace var.
 cat > app/src/main/AndroidManifest.xml <<EOF
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.base.app">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.AD_ID" /> 
@@ -136,7 +147,7 @@ public class AdsManager {
 }
 EOF
 
-# --- 6. ChannelListActivity (KATEGORİ VE GRUP DESTEKLİ) ---
+# --- 6. ChannelListActivity (KATEGORİ & M3U FIX) ---
 cat > "$TARGET_DIR/ChannelListActivity.java" <<EOF
 package com.base.app;
 import android.app.Activity;
@@ -161,17 +172,10 @@ import com.bumptech.glide.Glide;
 
 public class ChannelListActivity extends Activity {
     private ListView listView;
-    
-    // VERİ YAPILARI
-    private Map<String, List<ChannelItem>> groupedChannels = new LinkedHashMap<>(); // Kategori -> Kanal Listesi
-    private List<String> groupNames = new ArrayList<>(); // Kategori İsimleri
-    private List<ChannelItem> currentList = new ArrayList<>(); // Ekranda görünen liste
-    
-    // MOD (KATEGORİ Mİ KANAL MI?)
+    private Map<String, List<ChannelItem>> groupedChannels = new LinkedHashMap<>();
+    private List<String> groupNames = new ArrayList<>();
+    private List<ChannelItem> currentList = new ArrayList<>();
     private boolean isShowingGroups = false;
-    private String currentGroup = "";
-
-    // RENKLER
     private String headerColor="#2196F3", textColor="#FFFFFF", bgColor="#F0F0F0", focusColor="#FF9800";
     private TextView titleText;
 
@@ -183,15 +187,12 @@ public class ChannelListActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        
-        // Renkleri Al
         headerColor = getIntent().getStringExtra("HEADER_COLOR");
         bgColor = getIntent().getStringExtra("BG_COLOR");
         textColor = getIntent().getStringExtra("TEXT_COLOR");
         focusColor = getIntent().getStringExtra("FOCUS_COLOR"); 
         if(focusColor == null) focusColor = "#FF9800";
 
-        // Arayüzü Kur
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setBackgroundColor(Color.parseColor(bgColor));
@@ -221,14 +222,10 @@ public class ChannelListActivity extends Activity {
         String type = getIntent().getStringExtra("TYPE");
         new FetchListTask(type).execute(listUrl);
         
-        // TIKLAMA OLAYI (GRUP MU KANAL MI?)
         listView.setOnItemClickListener((p,v,pos,id)->{
             if (isShowingGroups) {
-                // Kategoriye tıklandı -> Kanalları göster
-                String selectedGroup = groupNames.get(pos);
-                showChannels(selectedGroup);
+                showChannels(groupNames.get(pos));
             } else {
-                // Kanala tıklandı -> Oynat
                 ChannelItem item = currentList.get(pos);
                 Intent i = new Intent(ChannelListActivity.this, PlayerActivity.class);
                 i.putExtra("VIDEO_URL", item.url);
@@ -238,40 +235,27 @@ public class ChannelListActivity extends Activity {
         });
     }
 
-    // GERİ TUŞU YÖNETİMİ
     @Override
     public void onBackPressed() {
-        if (!isShowingGroups && groupNames.size() > 1) {
-            // Eğer kanal listesindeysek ve birden fazla grup varsa -> Kategorilere dön
-            showGroups();
-        } else {
-            // Kategorilerdeysek veya hiç grup yoksa -> Çık
-            super.onBackPressed();
-        }
+        if (!isShowingGroups && groupNames.size() > 1) { showGroups(); } else { super.onBackPressed(); }
     }
 
     private void showGroups() {
         isShowingGroups = true;
         titleText.setText("Kategoriler");
-        // Basit String adaptörü yerine özel adaptör kullanabiliriz ama şimdilik string yeterli
-        // Ancak şık görünmesi için ChannelAdapter benzeri bir yapı kullanalım
         listView.setAdapter(new CategoryAdapter(groupNames));
     }
 
     private void showChannels(String groupName) {
         isShowingGroups = false;
-        currentGroup = groupName;
         titleText.setText(groupName);
         currentList = groupedChannels.get(groupName);
         listView.setAdapter(new ChannelAdapter(currentList));
     }
 
-    // --- ADAPTERLER ---
     private class CategoryAdapter extends ArrayAdapter<String> {
         public CategoryAdapter(List<String> items) { super(ChannelListActivity.this, 0, items); }
-        public View getView(int position, View convertView, ViewGroup parent) {
-            return createRow(convertView, getItem(position), null, true);
-        }
+        public View getView(int position, View convertView, ViewGroup parent) { return createRow(convertView, getItem(position), null, true); }
     }
 
     private class ChannelAdapter extends ArrayAdapter<ChannelItem> {
@@ -282,7 +266,6 @@ public class ChannelListActivity extends Activity {
         }
     }
 
-    // Ortak Satır Oluşturucu
     private View createRow(View convertView, String text, String imageUrl, boolean isFolder) {
         if (convertView == null) {
             LinearLayout layout = new LinearLayout(getContext());
@@ -308,7 +291,7 @@ public class ChannelListActivity extends Activity {
         txt.setText(text);
         
         if (isFolder) {
-            img.setImageResource(android.R.drawable.ic_menu_sort_by_size); // Klasör ikonu
+            img.setImageResource(android.R.drawable.ic_menu_sort_by_size);
             img.setColorFilter(Color.parseColor(headerColor));
         } else {
             img.clearColorFilter();
@@ -316,7 +299,6 @@ public class ChannelListActivity extends Activity {
             else img.setImageResource(android.R.drawable.ic_menu_slideshow);
         }
 
-        // Arkaplan
         GradientDrawable normal = new GradientDrawable();
         normal.setColor(Color.WHITE); normal.setCornerRadius(15); normal.setStroke(1, Color.LTGRAY);
         GradientDrawable focused = new GradientDrawable();
@@ -347,40 +329,27 @@ public class ChannelListActivity extends Activity {
         protected void onPostExecute(String r){
             if(r==null){Toast.makeText(ChannelListActivity.this,"Hata",Toast.LENGTH_SHORT).show();return;}
             try{
-                groupedChannels.clear();
-                groupNames.clear();
+                groupedChannels.clear(); groupNames.clear();
                 
-                // M3U PARSER (GROUPS SUPPORT)
-                // group-title="Spor" -> Regex ile yakala
                 if(!r.trim().startsWith("{")) {
                     String[] lines = r.split("\n");
                     String currentTitle = "Kanal";
                     String currentImage = "";
                     String currentGroup = "Genel";
                     JSONObject currentHeaders = new JSONObject();
-                    
                     Pattern groupPattern = Pattern.compile("group-title=\"([^\"]*)\"");
                     Pattern logoPattern = Pattern.compile("tvg-logo=\"([^\"]*)\"");
 
                     for(String line : lines) {
-                        line = line.trim();
-                        if(line.isEmpty()) continue;
-                        
+                        line = line.trim(); if(line.isEmpty()) continue;
                         if(line.startsWith("#EXTINF")) {
                             if(line.contains(",")) currentTitle = line.substring(line.lastIndexOf(",")+1).trim();
-                            
-                            // Grup Bul
                             Matcher mGroup = groupPattern.matcher(line);
-                            if(mGroup.find()) currentGroup = mGroup.group(1);
-                            else currentGroup = "Genel"; // Grup yoksa Genel yap
-
-                            // Logo Bul
+                            if(mGroup.find()) currentGroup = mGroup.group(1); else currentGroup = "Genel";
                             Matcher mLogo = logoPattern.matcher(line);
                             if(mLogo.find()) currentImage = mLogo.group(1);
-                        } 
-                        else if(line.startsWith("#EXTVLCOPT:")) {
-                            String opt = line.substring(11);
-                            String[] parts = opt.split("=", 2);
+                        } else if(line.startsWith("#EXTVLCOPT:")) {
+                            String opt = line.substring(11); String[] parts = opt.split("=", 2);
                             if(parts.length==2) {
                                 try {
                                     if(parts[0].equalsIgnoreCase("http-referrer")) currentHeaders.put("Referer", parts[1]);
@@ -388,42 +357,24 @@ public class ChannelListActivity extends Activity {
                                     if(parts[0].equalsIgnoreCase("http-user-agent")) currentHeaders.put("User-Agent", parts[1]);
                                 } catch(Exception e){}
                             }
-                        }
-                        else if(!line.startsWith("#")) {
-                            // KANALI EKLE
+                        } else if(!line.startsWith("#")) {
                             if(!groupedChannels.containsKey(currentGroup)) {
                                 groupedChannels.put(currentGroup, new ArrayList<>());
                                 groupNames.add(currentGroup);
                             }
                             groupedChannels.get(currentGroup).add(new ChannelItem(currentTitle, line, currentImage, currentHeaders.toString()));
-                            
-                            // Sıfırla
-                            currentTitle = "Bilinmeyen Kanal";
-                            currentImage = "";
-                            currentHeaders = new JSONObject();
+                            currentTitle = "Bilinmeyen Kanal"; currentImage = ""; currentHeaders = new JSONObject();
                         }
                     }
-                } else {
-                    // JSON İÇİN GRUP MANTIĞI EKLENEBİLİR (ŞİMDİLİK DÜZ LİSTE)
-                    // (Önceki JSON kodu buraya eklenebilir, basit tutmak için atlıyorum)
                 }
-
-                // GÖRÜNTÜLEME MANTIĞI
-                if (groupNames.size() > 1) {
-                    showGroups(); // Birden fazla grup varsa kategorileri göster
-                } else if (groupNames.size() == 1) {
-                    showChannels(groupNames.get(0)); // Tek grup varsa direkt kanalları aç
-                } else {
-                    Toast.makeText(ChannelListActivity.this,"Kanal Bulunamadı",Toast.LENGTH_SHORT).show();
-                }
-
+                if (groupNames.size() > 1) showGroups(); else if (groupNames.size() == 1) showChannels(groupNames.get(0));
             }catch(Exception e){Toast.makeText(ChannelListActivity.this,"Liste Hatasi",Toast.LENGTH_SHORT).show();}
         }
     }
 }
 EOF
 
-# --- 7. PlayerActivity (EVRENSEL FORMAT DESTEĞİ) ---
+# --- 7. PlayerActivity ---
 cat > "$TARGET_DIR/PlayerActivity.java" <<EOF
 package com.base.app;
 import android.app.Activity;
@@ -457,7 +408,6 @@ public class PlayerActivity extends Activity {
         playerView.setShowNextButton(false);
         playerView.setShowPreviousButton(false);
         setContentView(playerView);
-        
         videoUrl = getIntent().getStringExtra("VIDEO_URL");
         headersJson = getIntent().getStringExtra("HEADERS_JSON");
         if(videoUrl != null) videoUrl = videoUrl.trim();
@@ -466,12 +416,8 @@ public class PlayerActivity extends Activity {
 
     private void initializePlayer() {
         if(videoUrl == null || videoUrl.isEmpty()) return;
-        
-        // Varsayılan User-Agent (Chrome gibi davran)
-        String userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+        String userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36";
         Map<String, String> requestProps = new HashMap<>();
-
-        // Headerları İşle
         if(headersJson != null && !headersJson.isEmpty()){
             try{
                 JSONObject h = new JSONObject(headersJson);
@@ -484,49 +430,29 @@ public class PlayerActivity extends Activity {
                 }
             }catch(Exception e){}
         }
-
-        // --- EVRENSEL OYNATICI KURULUMU ---
-        // DefaultHttpDataSource -> Tüm ağ isteklerini yönetir.
         DefaultHttpDataSource.Factory httpFactory = new DefaultHttpDataSource.Factory()
                 .setUserAgent(userAgent)
-                .setAllowCrossProtocolRedirects(true) // Yönlendirmelere izin ver (Örn: ?ID=... -> .mp4)
+                .setAllowCrossProtocolRedirects(true)
                 .setDefaultRequestProperties(requestProps);
-
-        // MediaSourceFactory -> Formatı otomatik algılar (HLS, DASH, Progressive)
-        DefaultMediaSourceFactory mediaFactory = new DefaultMediaSourceFactory(this)
-                .setDataSourceFactory(httpFactory);
-
-        player = new ExoPlayer.Builder(this)
-                .setMediaSourceFactory(mediaFactory)
-                .build();
-        
+        DefaultMediaSourceFactory mediaFactory = new DefaultMediaSourceFactory(this).setDataSourceFactory(httpFactory);
+        player = new ExoPlayer.Builder(this).setMediaSourceFactory(mediaFactory).build();
         playerView.setPlayer(player);
-
         try {
-            // MediaItem oluştur ve Oynat
-            MediaItem mediaItem = MediaItem.fromUri(Uri.parse(videoUrl));
-            player.setMediaItem(mediaItem);
+            player.setMediaItem(MediaItem.fromUri(Uri.parse(videoUrl)));
             player.prepare();
             player.setPlayWhenReady(true);
-        } catch(Exception e){
-            Toast.makeText(this, "Hata: " + e.getMessage(), Toast.LENGTH_LONG).show();
-        }
-
+        } catch(Exception e){ Toast.makeText(this, "Hata: " + e.getMessage(), Toast.LENGTH_LONG).show(); }
         player.addListener(new Player.Listener(){ 
             public void onPlayerError(PlaybackException e){ 
-                String err = "Oynatma Hatası";
-                if(e.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED) err = "Bağlantı Hatası";
-                else if(e.errorCode == PlaybackException.ERROR_CODE_PARSING_CONTAINER_MALFORMED) err = "Format Desteklenmiyor";
-                Toast.makeText(PlayerActivity.this, err + "\n" + e.getMessage(), Toast.LENGTH_LONG).show(); 
+                Toast.makeText(PlayerActivity.this, "Oynatma Hatasi", Toast.LENGTH_LONG).show(); 
             } 
         });
     }
-
     protected void onStop(){ super.onStop(); if(player!=null){player.release(); player=null;} }
 }
 EOF
 
-# --- MainActivity ve WebView (Öncekiyle Aynı) ---
+# --- 8. MainActivity (Font & UI) ---
 cat > "$TARGET_DIR/MainActivity.java" <<EOF
 package com.base.app;
 import android.app.Activity;
@@ -702,6 +628,7 @@ public class MainActivity extends Activity {
 }
 EOF
 
+# --- 9. WebView ---
 cat > "$TARGET_DIR/WebViewActivity.java" <<EOF
 package com.base.app;
 import android.app.Activity;
@@ -719,4 +646,4 @@ public class WebViewActivity extends Activity {
 }
 EOF
 
-echo "✅ ULTRA APP V15 TAMAMLANDI."
+echo "✅ ULTRA APP V16 TAMAMLANDI."
