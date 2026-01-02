@@ -8,7 +8,7 @@ VERSION_CODE=$5
 VERSION_NAME=$6
 
 echo "=========================================="
-echo "   ULTRA APP V21 - SPLASH FIX & SUPER PLAYER"
+echo "   ULTRA APP V22 - COOKIE & NETWORK CORE FIX"
 echo "=========================================="
 
 # --- 1. TEMİZLİK ---
@@ -22,7 +22,7 @@ mkdir -p "$TARGET_DIR"
 mkdir -p app/src/main/res/mipmap-xxxhdpi
 ICON_TARGET="app/src/main/res/mipmap-xxxhdpi/ic_launcher.png"
 if [ ! -z "$ICON_URL" ]; then 
-    curl -L -k -A "Mozilla/5.0" --connect-timeout 20 --max-time 60 -o "$ICON_TARGET" "$ICON_URL" || echo "İkon inemedi."
+    curl -L -k -A "Mozilla/5.0" --connect-timeout 20 --max-time 60 -o "$ICON_TARGET" "$ICON_URL" || echo "İkon uyarısı."
 fi
 if [ ! -s "$ICON_TARGET" ]; then
     curl -L -k -o "$ICON_TARGET" "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3b/Android_new_logo_2019.svg/512px-Android_new_logo_2019.svg.png"
@@ -89,7 +89,9 @@ cat > app/src/main/AndroidManifest.xml <<EOF
         </activity>
         <activity android:name=".WebViewActivity" />
         <activity android:name=".ChannelListActivity" />
-        <activity android:name=".PlayerActivity" android:configChanges="orientation|screenSize|keyboardHidden|smallestScreenSize|screenLayout" android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen" />
+        <activity android:name=".PlayerActivity" 
+            android:configChanges="orientation|screenSize|keyboardHidden|smallestScreenSize|screenLayout" 
+            android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen" />
     </application>
 </manifest>
 EOF
@@ -136,7 +138,7 @@ public class AdsManager {
 }
 EOF
 
-# --- 6. MainActivity (SPLASH FIX - MENÜ GÖRÜNMEZ) ---
+# --- 6. MainActivity ---
 cat > "$TARGET_DIR/MainActivity.java" <<EOF
 package com.base.app;
 import android.app.Activity;
@@ -165,13 +167,11 @@ public class MainActivity extends Activity {
     private ProgressBar loadingSpinner;
     private ImageView refreshBtn, shareBtn;
     
-    // Varsayılan değerler
     private String headerColor = "#2196F3", textColor = "#FFFFFF", bgColor = "#F0F0F0", focusColor = "#FF9800";
     private boolean showHeader = true;
     private String appName = "$APP_NAME";
     private int fontSize = 16;
     private int fontStyle = Typeface.BOLD;
-    private long lastBackPressTime = 0;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -179,23 +179,18 @@ public class MainActivity extends Activity {
         root = new RelativeLayout(this);
         root.setBackgroundColor(Color.WHITE);
 
-        // --- YÜKLENİYOR SİMGESİ (SPLASH) ---
         loadingSpinner = new ProgressBar(this);
         RelativeLayout.LayoutParams lp = new RelativeLayout.LayoutParams(-2, -2);
         lp.addRule(RelativeLayout.CENTER_IN_PARENT);
         root.addView(loadingSpinner, lp);
 
-        // --- ANA İÇERİK (GİZLİ BAŞLAR) ---
-        // Header, Banner ve Liste elemanlarını oluşturuyoruz ama GİZLİYORUZ.
-        // Veri gelince (onPostExecute) gösterilecek.
-        
         headerLayout = new LinearLayout(this);
         headerLayout.setId(View.generateViewId());
         headerLayout.setOrientation(LinearLayout.HORIZONTAL);
         headerLayout.setGravity(Gravity.CENTER_VERTICAL);
         headerLayout.setPadding(30, 30, 30, 30);
         headerLayout.setElevation(10f);
-        headerLayout.setVisibility(View.GONE); // GİZLİ
+        headerLayout.setVisibility(View.GONE);
         
         titleText = new TextView(this);
         titleText.setText(appName);
@@ -222,7 +217,7 @@ public class MainActivity extends Activity {
         bannerContainer.setId(View.generateViewId());
         bannerContainer.setOrientation(LinearLayout.VERTICAL);
         bannerContainer.setGravity(Gravity.CENTER);
-        bannerContainer.setVisibility(View.GONE); // GİZLİ
+        bannerContainer.setVisibility(View.GONE);
         RelativeLayout.LayoutParams bp = new RelativeLayout.LayoutParams(-1, -2);
         bp.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM);
         root.addView(bannerContainer, bp);
@@ -232,7 +227,7 @@ public class MainActivity extends Activity {
         contentContainer.setOrientation(LinearLayout.VERTICAL);
         contentContainer.setPadding(30, 30, 30, 150); 
         sv.addView(contentContainer);
-        sv.setVisibility(View.GONE); // GİZLİ
+        sv.setVisibility(View.GONE);
         
         RelativeLayout.LayoutParams sp = new RelativeLayout.LayoutParams(-1, -1);
         sp.addRule(RelativeLayout.BELOW, headerLayout.getId());
@@ -249,26 +244,17 @@ public class MainActivity extends Activity {
         startActivity(Intent.createChooser(i, "Paylaş"));
     }
 
-    public void onBackPressed() {
-        if (this.lastBackPressTime < System.currentTimeMillis() - 2000) {
-            Toast.makeText(this, "Çıkmak için tekrar basın", Toast.LENGTH_SHORT).show();
-            this.lastBackPressTime = System.currentTimeMillis();
-        } else { super.onBackPressed(); System.exit(0); }
-    }
-
     private void createStyledButton(String text, final String type, final String link) {
         Button btn = new Button(this);
         btn.setText(text); btn.setTextColor(Color.parseColor(textColor));
         btn.setTextSize(fontSize); btn.setTypeface(null, fontStyle);
         btn.setPadding(40, 40, 40, 40); btn.setGravity(Gravity.CENTER_VERTICAL | Gravity.START);
-        
         GradientDrawable normal = new GradientDrawable(); normal.setColor(Color.parseColor(headerColor)); normal.setCornerRadius(15);
         GradientDrawable focused = new GradientDrawable(); focused.setColor(Color.parseColor(focusColor)); focused.setCornerRadius(15); focused.setStroke(4, Color.WHITE);
         StateListDrawable selector = new StateListDrawable();
         selector.addState(new int[]{android.R.attr.state_pressed}, focused);
         selector.addState(new int[]{android.R.attr.state_focused}, focused);
         selector.addState(new int[]{}, normal);
-        
         btn.setBackground(selector);
         LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-1, -2); p.setMargins(0, 0, 0, 25); btn.setLayoutParams(p);
         btn.setOnClickListener(v -> openContent(type, link)); contentContainer.addView(btn);
@@ -298,49 +284,40 @@ public class MainActivity extends Activity {
         }
         protected void onPostExecute(String result) {
             if (result == null) return;
-            
             try {
                 JSONObject json = new JSONObject(result);
                 appName = json.optString("app_name", "App");
                 JSONObject ui = json.optJSONObject("ui_config");
                 
-                // ÖNCE AYARLARI OKU
                 if(ui != null) {
                     headerColor = ui.optString("header_color", "#2196F3");
                     textColor = ui.optString("text_color", "#FFFFFF");
                     bgColor = ui.optString("bg_color", "#F0F0F0");
                     focusColor = ui.optString("focus_color", "#FF9800");
                     showHeader = ui.optBoolean("show_header", true);
-                    
                     fontSize = ui.optInt("font_size", 16);
                     String fStyle = ui.optString("font_style", "BOLD");
                     if(fStyle.equals("NORMAL")) fontStyle = Typeface.NORMAL; 
                     else if(fStyle.equals("ITALIC")) fontStyle = Typeface.ITALIC; 
                     else fontStyle = Typeface.BOLD;
 
-                    // DİREKT AÇILIŞ KONTROLÜ (EN ÖNEMLİ KISIM)
                     String startupMode = ui.optString("startup_mode", "MENU");
                     if ("DIRECT".equals(startupMode)) {
                         String dType = ui.optString("direct_type", "WEB"); 
                         String dUrl = ui.optString("direct_url", "");
                         if (!dUrl.isEmpty()) { 
-                            // DİREKT İÇERİĞİ AÇ VE UYGULAMAYI KAPAT (ARKADA MENÜ KALMASIN)
                             openContent(dType, dUrl); 
                             finish(); 
-                            return; // Fonksiyondan çık, menüyü çizme.
+                            return; 
                         }
                     }
                 }
 
-                // EĞER BURAYA GELDİYSEK "MENU" MODUNDAYIZ DEMEKTİR.
-                // ŞİMDİ ARAYÜZÜ GÖSTER VE BOYAMALARI YAP.
-                loadingSpinner.setVisibility(View.GONE); // Yükleniyor'u gizle
-                ((ScrollView)contentContainer.getParent()).setVisibility(View.VISIBLE); // İçeriği aç
-                bannerContainer.setVisibility(View.VISIBLE); // Banner aç
-                
+                loadingSpinner.setVisibility(View.GONE);
+                ((ScrollView)contentContainer.getParent()).setVisibility(View.VISIBLE);
+                bannerContainer.setVisibility(View.VISIBLE);
                 if (showHeader) headerLayout.setVisibility(View.VISIBLE);
                 
-                // Renkleri Uygula
                 root.setBackgroundColor(Color.parseColor(bgColor));
                 headerLayout.setBackgroundColor(Color.parseColor(headerColor));
                 titleText.setText(appName);
@@ -350,7 +327,6 @@ public class MainActivity extends Activity {
                 refreshBtn.setColorFilter(Color.parseColor(textColor));
                 shareBtn.setColorFilter(Color.parseColor(textColor));
 
-                // Modülleri Ekle
                 contentContainer.removeAllViews();
                 JSONArray mods = json.getJSONArray("modules");
                 for(int i=0; i<mods.length(); i++){
@@ -360,20 +336,18 @@ public class MainActivity extends Activity {
                     }
                 }
                 
-                // Reklamları Yükle
                 JSONObject adsConfig = json.optJSONObject("ads_config");
                 if (adsConfig != null) { 
                     AdsManager.init(MainActivity.this, adsConfig); 
                     AdsManager.showBanner(MainActivity.this, bannerContainer); 
                 }
-
             } catch(Exception e){}
         }
     }
 }
 EOF
 
-# --- 7. ChannelListActivity ---
+# --- 7. ChannelListActivity (KATEGORİ & M3U FIX) ---
 cat > "$TARGET_DIR/ChannelListActivity.java" <<EOF
 package com.base.app;
 import android.app.Activity;
@@ -554,7 +528,6 @@ public class ChannelListActivity extends Activity {
             if(r==null){Toast.makeText(ChannelListActivity.this,"Hata",Toast.LENGTH_SHORT).show();return;}
             try{
                 groupedChannels.clear(); groupNames.clear();
-                
                 if("JSON_LIST".equals(type) || r.trim().startsWith("{")) {
                     try {
                         JSONObject root=new JSONObject(r); JSONArray arr=root.getJSONObject("list").getJSONArray("item");
@@ -576,7 +549,6 @@ public class ChannelListActivity extends Activity {
                         }
                     } catch(Exception e){}
                 } 
-                
                 if(groupedChannels.isEmpty() && !r.trim().startsWith("{")) {
                     String[] lines = r.split("\n");
                     String currentTitle = "Kanal";
@@ -585,7 +557,6 @@ public class ChannelListActivity extends Activity {
                     JSONObject currentHeaders = new JSONObject();
                     Pattern groupPattern = Pattern.compile("group-title=\"([^\"]*)\"");
                     Pattern logoPattern = Pattern.compile("tvg-logo=\"([^\"]*)\"");
-
                     for(String line : lines) {
                         line = line.trim(); if(line.isEmpty()) continue;
                         if(line.startsWith("#EXTINF")) {
@@ -594,8 +565,7 @@ public class ChannelListActivity extends Activity {
                             if(mGroup.find()) currentGroup = mGroup.group(1); else currentGroup = "Genel";
                             Matcher mLogo = logoPattern.matcher(line);
                             if(mLogo.find()) currentImage = mLogo.group(1);
-                        } 
-                        else if(line.startsWith("#EXTVLCOPT:")) {
+                        } else if(line.startsWith("#EXTVLCOPT:")) {
                             String opt = line.substring(11); String[] parts = opt.split("=", 2);
                             if(parts.length==2) {
                                 try {
@@ -604,8 +574,7 @@ public class ChannelListActivity extends Activity {
                                     if(parts[0].equalsIgnoreCase("http-user-agent")) currentHeaders.put("User-Agent", parts[1]);
                                 } catch(Exception e){}
                             }
-                        } 
-                        else if(!line.startsWith("#")) {
+                        } else if(!line.startsWith("#")) {
                             if(!groupedChannels.containsKey(currentGroup)) {
                                 groupedChannels.put(currentGroup, new ArrayList<>());
                                 groupNames.add(currentGroup);
@@ -615,18 +584,16 @@ public class ChannelListActivity extends Activity {
                         }
                     }
                 }
-
                 if (groupNames.size() > 1) showGroups(); 
                 else if (groupNames.size() == 1) showChannels(groupNames.get(0));
                 else Toast.makeText(ChannelListActivity.this,"Kanal Bulunamadı",Toast.LENGTH_SHORT).show();
-
             }catch(Exception e){Toast.makeText(ChannelListActivity.this,"Liste Hatasi",Toast.LENGTH_SHORT).show();}
         }
     }
 }
 EOF
 
-# --- 8. PlayerActivity (SUPER RESOLVER & ALL FORMATS) ---
+# --- 8. PlayerActivity (COOKIE & RESOLVER FIX) ---
 cat > "$TARGET_DIR/PlayerActivity.java" <<EOF
 package com.base.app;
 import android.app.Activity;
@@ -644,6 +611,9 @@ import androidx.media3.exoplayer.ExoPlayer;
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory;
 import androidx.media3.ui.PlayerView;
 import org.json.JSONObject;
+import java.net.CookieHandler;
+import java.net.CookieManager;
+import java.net.CookiePolicy;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.HashMap;
@@ -659,6 +629,9 @@ public class PlayerActivity extends Activity {
     @Override
     protected void onCreate(Bundle s) {
         super.onCreate(s);
+        // COOKIE MANAGER AKTİF ET (EN ÖNEMLİ KISIM)
+        CookieHandler.setDefault(new CookieManager(null, CookiePolicy.ACCEPT_ALL));
+
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
         playerView = new PlayerView(this);
@@ -707,7 +680,7 @@ public class PlayerActivity extends Activity {
     }
 
     private void initializePlayer(UrlInfo info) {
-        String userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36";
+        String userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
         Map<String, String> requestProps = new HashMap<>();
         
         if(headersJson != null && !headersJson.isEmpty()){
@@ -727,6 +700,7 @@ public class PlayerActivity extends Activity {
                 .setUserAgent(userAgent)
                 .setAllowCrossProtocolRedirects(true)
                 .setDefaultRequestProperties(requestProps);
+                
         DefaultMediaSourceFactory mediaFactory = new DefaultMediaSourceFactory(this).setDataSourceFactory(httpFactory);
         player = new ExoPlayer.Builder(this).setMediaSourceFactory(mediaFactory).build();
         playerView.setPlayer(player);
@@ -748,7 +722,7 @@ public class PlayerActivity extends Activity {
                 String err = "Hata oluştu";
                 if(e.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED) err = "Bağlantı Hatası";
                 else if(e.errorCode == PlaybackException.ERROR_CODE_PARSING_CONTAINER_MALFORMED) err = "Format Desteklenmiyor";
-                Toast.makeText(PlayerActivity.this, err, Toast.LENGTH_LONG).show(); 
+                Toast.makeText(PlayerActivity.this, err + "\n" + e.getMessage(), Toast.LENGTH_LONG).show(); 
             } 
         });
     }
@@ -774,4 +748,4 @@ public class WebViewActivity extends Activity {
 }
 EOF
 
-echo "✅ ULTRA APP V21 - SPLASH, DIRECT FIX & SUPER RESOLVER TAMAMLANDI."
+echo "✅ ULTRA APP V22 - COOKIE FIX & FINAL"
