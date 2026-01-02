@@ -8,7 +8,7 @@ VERSION_CODE=$5
 VERSION_NAME=$6
 
 echo "=========================================="
-echo "   ULTRA APP V16 - PART 1 (SETUP & MAIN)"
+echo "   ULTRA APP V16 - ULTIMATE (GROUPS+UNIVERSAL+FONTS)"
 echo "=========================================="
 
 # --- 1. TEMİZLİK ---
@@ -18,21 +18,17 @@ rm -rf app/src/main/java/com/base/app/*
 TARGET_DIR="app/src/main/java/com/base/app"
 mkdir -p "$TARGET_DIR"
 
-# --- 2. ICON (GÜÇLENDİRİLMİŞ İNDİRME) ---
+# --- 2. ICON ---
 mkdir -p app/src/main/res/mipmap-xxxhdpi
 ICON_TARGET="app/src/main/res/mipmap-xxxhdpi/ic_launcher.png"
-
 if [ ! -z "$ICON_URL" ]; then 
-    echo "İkon indiriliyor..."
-    curl -L -k -A "Mozilla/5.0" --connect-timeout 20 --max-time 60 -o "$ICON_TARGET" "$ICON_URL" || echo "İkon indirilemedi."
+    curl -L -k -A "Mozilla/5.0" --connect-timeout 20 --max-time 60 -o "$ICON_TARGET" "$ICON_URL" || echo "İkon inemedi."
 fi
-# Yedek İkon Kontrolü
 if [ ! -s "$ICON_TARGET" ]; then
-    echo "Yedek ikon kullanılıyor."
     curl -L -k -o "$ICON_TARGET" "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3b/Android_new_logo_2019.svg/512px-Android_new_logo_2019.svg.png"
 fi
 
-# --- 3. BUILD.GRADLE (EVRENSEL FORMAT DESTEKLİ) ---
+# --- 3. BUILD.GRADLE (EVRENSEL FORMATLAR) ---
 cat > app/build.gradle <<EOF
 plugins { id 'com.android.application' }
 android {
@@ -140,7 +136,7 @@ public class AdsManager {
 }
 EOF
 
-# --- 6. MainActivity (GİRİŞ EKRANI) ---
+# --- 6. MainActivity (GİRİŞ + FONT + DİREKT AÇILIŞ) ---
 cat > "$TARGET_DIR/MainActivity.java" <<EOF
 package com.base.app;
 import android.app.Activity;
@@ -167,7 +163,6 @@ public class MainActivity extends Activity {
     private LinearLayout contentContainer, bannerContainer, headerLayout;
     private TextView titleText;
     private ImageView refreshBtn, shareBtn;
-    
     private String headerColor = "#2196F3", textColor = "#FFFFFF", bgColor = "#F0F0F0", focusColor = "#FF9800";
     private boolean showRefresh = true, showShare = true, showHeader = true;
     private String headerTitle = "", appName = "$APP_NAME";
@@ -223,12 +218,10 @@ public class MainActivity extends Activity {
         contentContainer.setOrientation(LinearLayout.VERTICAL);
         contentContainer.setPadding(30, 30, 30, 150); 
         sv.addView(contentContainer);
-        
         RelativeLayout.LayoutParams sp = new RelativeLayout.LayoutParams(-1, -1);
         sp.addRule(RelativeLayout.BELOW, headerLayout.getId());
         sp.addRule(RelativeLayout.ABOVE, bannerContainer.getId());
         root.addView(sv, sp);
-
         setContentView(root);
         new FetchConfigTask().execute(CONFIG_URL);
     }
@@ -337,6 +330,7 @@ public class MainActivity extends Activity {
     }
 }
 EOF
+
 # --- 7. ChannelListActivity (KATEGORİ, M3U HEADER & JSON) ---
 cat > "$TARGET_DIR/ChannelListActivity.java" <<EOF
 package com.base.app;
@@ -521,7 +515,6 @@ public class ChannelListActivity extends Activity {
                 groupedChannels.clear(); groupNames.clear();
                 
                 if("JSON_LIST".equals(type) || r.trim().startsWith("{")) {
-                    // JSON PARSER
                     try {
                         JSONObject root=new JSONObject(r); JSONArray arr=root.getJSONObject("list").getJSONArray("item");
                         String defaultGroup = "Genel";
@@ -531,24 +524,18 @@ public class ChannelListActivity extends Activity {
                             if(url.isEmpty())continue;
                             String title = o.optString("title");
                             String image = o.optString("thumb_square", o.optString("image", ""));
-                            String group = o.optString("group", defaultGroup); // JSON'da grup varsa al
-                            
+                            String group = o.optString("group", defaultGroup);
                             JSONObject h=new JSONObject();
                             for(int k=1;k<=5;k++){
                                 String kn=o.optString("h"+k+"Key"), kv=o.optString("h"+k+"Val");
                                 if(!kn.isEmpty()&&!kn.equals("0")&&!kv.isEmpty()&&!kv.equals("0")) h.put(kn,kv);
                             }
-                            
-                            if(!groupedChannels.containsKey(group)) {
-                                groupedChannels.put(group, new ArrayList<>());
-                                groupNames.add(group);
-                            }
+                            if(!groupedChannels.containsKey(group)) { groupedChannels.put(group, new ArrayList<>()); groupNames.add(group); }
                             groupedChannels.get(group).add(new ChannelItem(title, url, image, h.toString()));
                         }
                     } catch(Exception e){}
                 } 
                 
-                // M3U PARSER (GROUPS & HEADERS)
                 if(groupedChannels.isEmpty() && !r.trim().startsWith("{")) {
                     String[] lines = r.split("\n");
                     String currentTitle = "Kanal";
