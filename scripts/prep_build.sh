@@ -8,7 +8,7 @@ VERSION_CODE=$5
 VERSION_NAME=$6
 
 echo "=========================================="
-echo "   ULTRA APP V17 - COMPILE FIX (getContext)"
+echo "   ULTRA APP V18 - URL RESOLVER & ALL FORMATS"
 echo "=========================================="
 
 # --- 1. TEMİZLİK ---
@@ -28,7 +28,7 @@ if [ ! -s "$ICON_TARGET" ]; then
     curl -L -k -o "$ICON_TARGET" "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3b/Android_new_logo_2019.svg/512px-Android_new_logo_2019.svg.png"
 fi
 
-# --- 3. BUILD.GRADLE ---
+# --- 3. BUILD.GRADLE (TÜM FORMATLAR) ---
 cat > app/build.gradle <<EOF
 plugins { id 'com.android.application' }
 android {
@@ -62,6 +62,7 @@ android {
 dependencies {
     implementation 'androidx.appcompat:appcompat:1.6.1'
     implementation 'com.google.android.material:material:1.11.0'
+    // TÜM OYNATICI FORMATLARI
     implementation 'androidx.media3:media3-exoplayer:1.2.0'
     implementation 'androidx.media3:media3-exoplayer-hls:1.2.0'
     implementation 'androidx.media3:media3-exoplayer-dash:1.2.0'
@@ -163,6 +164,7 @@ public class MainActivity extends Activity {
     private LinearLayout contentContainer, bannerContainer, headerLayout;
     private TextView titleText;
     private ImageView refreshBtn, shareBtn;
+    
     private String headerColor = "#2196F3", textColor = "#FFFFFF", bgColor = "#F0F0F0", focusColor = "#FF9800";
     private boolean showRefresh = true, showShare = true, showHeader = true;
     private String headerTitle = "", appName = "$APP_NAME";
@@ -331,7 +333,7 @@ public class MainActivity extends Activity {
 }
 EOF
 
-# --- 7. ChannelListActivity (COMPILE FIX: getContext -> ChannelListActivity.this) ---
+# --- 7. ChannelListActivity (KATEGORİ & M3U FIX) ---
 cat > "$TARGET_DIR/ChannelListActivity.java" <<EOF
 package com.base.app;
 import android.app.Activity;
@@ -585,11 +587,12 @@ public class ChannelListActivity extends Activity {
 }
 EOF
 
-# --- 8. PlayerActivity ---
+# --- 8. PlayerActivity (URL RESOLVER EKLENDİ) ---
 cat > "$TARGET_DIR/PlayerActivity.java" <<EOF
 package com.base.app;
 import android.app.Activity;
 import android.net.Uri;
+import android.os.AsyncTask;
 import android.os.Bundle;
 import android.view.WindowManager;
 import android.widget.Toast;
@@ -601,8 +604,11 @@ import androidx.media3.exoplayer.ExoPlayer;
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory;
 import androidx.media3.ui.PlayerView;
 import org.json.JSONObject;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 
 public class PlayerActivity extends Activity {
@@ -621,14 +627,49 @@ public class PlayerActivity extends Activity {
         setContentView(playerView);
         videoUrl = getIntent().getStringExtra("VIDEO_URL");
         headersJson = getIntent().getStringExtra("HEADERS_JSON");
-        if(videoUrl != null) videoUrl = videoUrl.trim();
-        initializePlayer();
+        
+        if(videoUrl != null && !videoUrl.isEmpty()) {
+            Toast.makeText(this, "Yükleniyor...", Toast.LENGTH_SHORT).show();
+            new ResolveUrlTask().execute(videoUrl.trim());
+        }
     }
 
-    private void initializePlayer() {
-        if(videoUrl == null || videoUrl.isEmpty()) return;
+    private class ResolveUrlTask extends AsyncTask<String, Void, String> {
+        @Override
+        protected String doInBackground(String... params) {
+            String urlString = params[0];
+            try {
+                // Sadece HTTP/HTTPS ise yönlendirme kontrolü yap
+                if (!urlString.startsWith("http")) return urlString;
+
+                URL url = new URL(urlString);
+                HttpURLConnection con = (HttpURLConnection) url.openConnection();
+                con.setInstanceFollowRedirects(false); // Manuel takip edeceğiz
+                con.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)");
+                con.setConnectTimeout(5000);
+                con.connect();
+
+                int responseCode = con.getResponseCode();
+                if (responseCode >= 300 && responseCode < 400) {
+                    String newUrl = con.getHeaderField("Location");
+                    if (newUrl != null) return newUrl;
+                }
+                return urlString; // Yönlendirme yoksa aynen döndür
+            } catch (Exception e) {
+                return urlString; // Hata olursa orijinali dene
+            }
+        }
+
+        @Override
+        protected void onPostExecute(String resolvedUrl) {
+            initializePlayer(resolvedUrl);
+        }
+    }
+
+    private void initializePlayer(String finalUrl) {
         String userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36";
         Map<String, String> requestProps = new HashMap<>();
+        
         if(headersJson != null && !headersJson.isEmpty()){
             try{
                 JSONObject h = new JSONObject(headersJson);
@@ -641,24 +682,36 @@ public class PlayerActivity extends Activity {
                 }
             }catch(Exception e){}
         }
+
         DefaultHttpDataSource.Factory httpFactory = new DefaultHttpDataSource.Factory()
                 .setUserAgent(userAgent)
                 .setAllowCrossProtocolRedirects(true)
                 .setDefaultRequestProperties(requestProps);
-        DefaultMediaSourceFactory mediaFactory = new DefaultMediaSourceFactory(this).setDataSourceFactory(httpFactory);
-        player = new ExoPlayer.Builder(this).setMediaSourceFactory(mediaFactory).build();
+                
+        DefaultMediaSourceFactory mediaFactory = new DefaultMediaSourceFactory(this)
+                .setDataSourceFactory(httpFactory);
+
+        player = new ExoPlayer.Builder(this)
+                .setMediaSourceFactory(mediaFactory)
+                .build();
+        
         playerView.setPlayer(player);
+        
         try {
-            player.setMediaItem(MediaItem.fromUri(Uri.parse(videoUrl)));
+            player.setMediaItem(MediaItem.fromUri(Uri.parse(finalUrl)));
             player.prepare();
             player.setPlayWhenReady(true);
-        } catch(Exception e){ Toast.makeText(this, "Hata: " + e.getMessage(), Toast.LENGTH_LONG).show(); }
+        } catch(Exception e){ 
+            Toast.makeText(this, "Hata: " + e.getMessage(), Toast.LENGTH_LONG).show(); 
+        }
+        
         player.addListener(new Player.Listener(){ 
             public void onPlayerError(PlaybackException e){ 
-                Toast.makeText(PlayerActivity.this, "Oynatma Hatasi", Toast.LENGTH_LONG).show(); 
+                Toast.makeText(PlayerActivity.this, "Oynatma Hatası: " + e.getMessage(), Toast.LENGTH_LONG).show(); 
             } 
         });
     }
+
     protected void onStop(){ super.onStop(); if(player!=null){player.release(); player=null;} }
 }
 EOF
@@ -681,4 +734,4 @@ public class WebViewActivity extends Activity {
 }
 EOF
 
-echo "✅ ULTRA APP V17 TAMAMLANDI."
+echo "✅ ULTRA APP V18 - URL RESOLVER & ALL FORMATS TAMAMLANDI."
