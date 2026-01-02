@@ -8,7 +8,7 @@ VERSION_CODE=$5
 VERSION_NAME=$6
 
 echo "=========================================="
-echo "   ULTRA APP V12 - M3U FIX & PRO UI"
+echo "   ULTRA APP V13 - M3U VLC OPT PARSER"
 echo "=========================================="
 
 # --- 1. TEMİZLİK ---
@@ -368,8 +368,7 @@ public class MainActivity extends Activity {
 }
 EOF
 
-# --- 7. ChannelListActivity.java (M3U FIX) ---
-# BURADA M3U PARSING MANTIĞI DÜZELTİLDİ
+# --- 7. ChannelListActivity.java (VLC OPTION PARSER FIX) ---
 cat > "$TARGET_DIR/ChannelListActivity.java" <<EOF
 package com.base.app;
 import android.app.Activity;
@@ -506,7 +505,8 @@ public class ChannelListActivity extends Activity {
             if(r==null){Toast.makeText(ChannelListActivity.this,"Hata",Toast.LENGTH_SHORT).show();return;}
             try{
                 channelList.clear();
-                // JSON ve M3U AYRIMI
+                
+                // --- JSON PARSING ---
                 if("JSON_LIST".equals(type) || r.trim().startsWith("{")){
                     try {
                         JSONObject root=new JSONObject(r); JSONArray arr=root.getJSONObject("list").getJSONArray("item");
@@ -523,17 +523,20 @@ public class ChannelListActivity extends Activity {
                             }
                             channelList.add(new ChannelItem(title, url, image, h.toString()));
                         }
-                    } catch(Exception e) {}
-                }
+                    } catch(Exception e){}
+                } 
                 
-                // M3U PARSER (JSON Başarısız olursa veya M3U ise)
+                // --- M3U PARSING (VLC OPTION SUPPORT) ---
                 if(channelList.isEmpty()) {
                     String[] lines = r.split("\n");
                     String currentTitle = "Kanal";
                     String currentImage = "";
+                    JSONObject currentHeaders = new JSONObject();
+                    
                     for(String line : lines) {
                         line = line.trim();
                         if(line.isEmpty()) continue;
+                        
                         if(line.startsWith("#EXTINF")) {
                             if(line.contains(",")) currentTitle = line.substring(line.lastIndexOf(",")+1).trim();
                             if(line.contains("tvg-logo=\"")) {
@@ -541,10 +544,27 @@ public class ChannelListActivity extends Activity {
                                 int e = line.indexOf("\"", s);
                                 if(e>s) currentImage = line.substring(s, e);
                             }
-                        } else if(!line.startsWith("#")) {
-                            channelList.add(new ChannelItem(currentTitle, line, currentImage, "{}"));
+                        } 
+                        else if(line.startsWith("#EXTVLCOPT:")) {
+                            // VLC Option Parsing: #EXTVLCOPT:http-referrer=http://site.com
+                            String opt = line.substring(11); // Remove prefix
+                            String[] parts = opt.split("=", 2);
+                            if(parts.length == 2) {
+                                String key = parts[0].toLowerCase();
+                                String val = parts[1];
+                                try {
+                                    if(key.equals("http-referrer")) currentHeaders.put("Referer", val);
+                                    else if(key.equals("http-origin")) currentHeaders.put("Origin", val);
+                                    else if(key.equals("http-user-agent")) currentHeaders.put("User-Agent", val);
+                                } catch(Exception e){}
+                            }
+                        }
+                        else if(!line.startsWith("#")) {
+                            // URL Line -> Add Item & Reset
+                            channelList.add(new ChannelItem(currentTitle, line, currentImage, currentHeaders.toString()));
                             currentTitle = "Bilinmeyen Kanal";
                             currentImage = "";
+                            currentHeaders = new JSONObject(); // Reset headers for next item
                         }
                     }
                 }
@@ -637,4 +657,4 @@ public class WebViewActivity extends Activity {
 }
 EOF
 
-echo "✅ ULTRA APP V12 - M3U FIX TAMAMLANDI."
+echo "✅ ULTRA APP V13 - VLC M3U FIX TAMAMLANDI."
