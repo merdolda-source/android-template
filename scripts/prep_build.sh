@@ -8,7 +8,7 @@ VERSION_CODE=$5
 VERSION_NAME=$6
 
 echo "=========================================="
-echo "   ULTRA APP V13 - M3U VLC OPT PARSER"
+echo "   ULTRA APP V14 - CONNECTION FIX"
 echo "=========================================="
 
 # --- 1. TEMİZLİK ---
@@ -18,9 +18,13 @@ rm -rf app/src/main/java/com/base/app/*
 TARGET_DIR="app/src/main/java/com/base/app"
 mkdir -p "$TARGET_DIR"
 
-# --- 2. ICON ---
+# --- 2. ICON (BAĞLANTI GÜÇLENDİRİLDİ) ---
+# Eğer ikon inmezse hata verip durmasın, devam etsin diye "|| true" ekledik.
 mkdir -p app/src/main/res/mipmap-xxxhdpi
-if [ ! -z "$ICON_URL" ]; then curl -L -o app/src/main/res/mipmap-xxxhdpi/ic_launcher.png "$ICON_URL"; fi
+if [ ! -z "$ICON_URL" ]; then 
+    echo "İkon indiriliyor..."
+    curl -L -k -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" --connect-timeout 30 --max-time 60 -o app/src/main/res/mipmap-xxxhdpi/ic_launcher.png "$ICON_URL" || echo "İkon indirilemedi, varsayılan kullanılacak."
+fi
 
 # --- 3. BUILD.GRADLE ---
 cat > app/build.gradle <<EOF
@@ -288,7 +292,8 @@ public class MainActivity extends Activity {
             try {
                 URL url = new URL(urls[0]);
                 HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-                conn.setRequestProperty("User-Agent", "AppFactory");
+                conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36");
+                conn.setConnectTimeout(10000); 
                 BufferedReader rd = new BufferedReader(new InputStreamReader(conn.getInputStream()));
                 StringBuilder res = new StringBuilder();
                 String line;
@@ -368,7 +373,7 @@ public class MainActivity extends Activity {
 }
 EOF
 
-# --- 7. ChannelListActivity.java (VLC OPTION PARSER FIX) ---
+# --- 7. ChannelListActivity.java ---
 cat > "$TARGET_DIR/ChannelListActivity.java" <<EOF
 package com.base.app;
 import android.app.Activity;
@@ -506,7 +511,7 @@ public class ChannelListActivity extends Activity {
             try{
                 channelList.clear();
                 
-                // --- JSON PARSING ---
+                // JSON ve M3U AYRIMI
                 if("JSON_LIST".equals(type) || r.trim().startsWith("{")){
                     try {
                         JSONObject root=new JSONObject(r); JSONArray arr=root.getJSONObject("list").getJSONArray("item");
@@ -523,10 +528,10 @@ public class ChannelListActivity extends Activity {
                             }
                             channelList.add(new ChannelItem(title, url, image, h.toString()));
                         }
-                    } catch(Exception e){}
+                    } catch(Exception e) {}
                 } 
                 
-                // --- M3U PARSING (VLC OPTION SUPPORT) ---
+                // M3U PARSING (VLC OPTION SUPPORT)
                 if(channelList.isEmpty()) {
                     String[] lines = r.split("\n");
                     String currentTitle = "Kanal";
@@ -546,8 +551,7 @@ public class ChannelListActivity extends Activity {
                             }
                         } 
                         else if(line.startsWith("#EXTVLCOPT:")) {
-                            // VLC Option Parsing: #EXTVLCOPT:http-referrer=http://site.com
-                            String opt = line.substring(11); // Remove prefix
+                            String opt = line.substring(11);
                             String[] parts = opt.split("=", 2);
                             if(parts.length == 2) {
                                 String key = parts[0].toLowerCase();
@@ -560,15 +564,13 @@ public class ChannelListActivity extends Activity {
                             }
                         }
                         else if(!line.startsWith("#")) {
-                            // URL Line -> Add Item & Reset
                             channelList.add(new ChannelItem(currentTitle, line, currentImage, currentHeaders.toString()));
                             currentTitle = "Bilinmeyen Kanal";
                             currentImage = "";
-                            currentHeaders = new JSONObject(); // Reset headers for next item
+                            currentHeaders = new JSONObject(); 
                         }
                     }
                 }
-                
                 listView.setAdapter(new ChannelAdapter(channelList));
             }catch(Exception e){Toast.makeText(ChannelListActivity.this,"Liste Hatasi",Toast.LENGTH_SHORT).show();}
         }
@@ -657,4 +659,4 @@ public class WebViewActivity extends Activity {
 }
 EOF
 
-echo "✅ ULTRA APP V13 - VLC M3U FIX TAMAMLANDI."
+echo "✅ ULTRA APP V14 - CONNECTION FIX + M3U FIX"
