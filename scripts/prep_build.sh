@@ -8,7 +8,7 @@ VERSION_CODE=$5
 VERSION_NAME=$6
 
 echo "=========================================="
-echo "   ULTRA APP V16 - ULTIMATE (GROUPS+UNIVERSAL+FONTS)"
+echo "   ULTRA APP V17 - COMPILE FIX (getContext)"
 echo "=========================================="
 
 # --- 1. TEMİZLİK ---
@@ -28,7 +28,7 @@ if [ ! -s "$ICON_TARGET" ]; then
     curl -L -k -o "$ICON_TARGET" "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3b/Android_new_logo_2019.svg/512px-Android_new_logo_2019.svg.png"
 fi
 
-# --- 3. BUILD.GRADLE (EVRENSEL FORMATLAR) ---
+# --- 3. BUILD.GRADLE ---
 cat > app/build.gradle <<EOF
 plugins { id 'com.android.application' }
 android {
@@ -136,7 +136,7 @@ public class AdsManager {
 }
 EOF
 
-# --- 6. MainActivity (GİRİŞ + FONT + DİREKT AÇILIŞ) ---
+# --- 6. MainActivity ---
 cat > "$TARGET_DIR/MainActivity.java" <<EOF
 package com.base.app;
 import android.app.Activity;
@@ -331,7 +331,7 @@ public class MainActivity extends Activity {
 }
 EOF
 
-# --- 7. ChannelListActivity (KATEGORİ, M3U HEADER & JSON) ---
+# --- 7. ChannelListActivity (COMPILE FIX: getContext -> ChannelListActivity.this) ---
 cat > "$TARGET_DIR/ChannelListActivity.java" <<EOF
 package com.base.app;
 import android.app.Activity;
@@ -451,18 +451,18 @@ public class ChannelListActivity extends Activity {
 
     private View createRow(View convertView, String text, String imageUrl, boolean isFolder) {
         if (convertView == null) {
-            LinearLayout layout = new LinearLayout(getContext());
+            LinearLayout layout = new LinearLayout(ChannelListActivity.this);
             layout.setOrientation(LinearLayout.HORIZONTAL);
             layout.setPadding(25, 25, 25, 25);
             layout.setGravity(Gravity.CENTER_VERTICAL);
             
-            ImageView icon = new ImageView(getContext());
+            ImageView icon = new ImageView(ChannelListActivity.this);
             icon.setId(101); icon.setScaleType(ImageView.ScaleType.CENTER_CROP);
             LinearLayout.LayoutParams imgParams = new LinearLayout.LayoutParams(100, 100);
             imgParams.setMargins(0, 0, 30, 0);
             layout.addView(icon, imgParams);
             
-            TextView tv = new TextView(getContext());
+            TextView tv = new TextView(ChannelListActivity.this);
             tv.setId(102); tv.setTextSize(16); tv.setTextColor(Color.BLACK); 
             tv.setTypeface(null, android.graphics.Typeface.BOLD);
             layout.addView(tv);
@@ -478,7 +478,7 @@ public class ChannelListActivity extends Activity {
             img.setColorFilter(Color.parseColor(headerColor));
         } else {
             img.clearColorFilter();
-            if(imageUrl != null && !imageUrl.isEmpty()) Glide.with(getContext()).load(imageUrl).into(img);
+            if(imageUrl != null && !imageUrl.isEmpty()) Glide.with(ChannelListActivity.this).load(imageUrl).into(img);
             else img.setImageResource(android.R.drawable.ic_menu_slideshow);
         }
 
@@ -585,7 +585,7 @@ public class ChannelListActivity extends Activity {
 }
 EOF
 
-# --- 8. PlayerActivity (UNIVERSAL FORMAT) ---
+# --- 8. PlayerActivity ---
 cat > "$TARGET_DIR/PlayerActivity.java" <<EOF
 package com.base.app;
 import android.app.Activity;
@@ -681,4 +681,4 @@ public class WebViewActivity extends Activity {
 }
 EOF
 
-echo "✅ ULTRA APP V16 TAMAMLANDI."
+echo "✅ ULTRA APP V17 TAMAMLANDI."
