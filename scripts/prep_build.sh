@@ -8,7 +8,7 @@ VERSION_CODE=$5
 VERSION_NAME=$6
 
 echo "=========================================="
-echo "   ULTRA APP V22 - COOKIE & NETWORK CORE FIX"
+echo "   ULTRA APP V23 - NATIVE PLAYER FIX"
 echo "=========================================="
 
 # --- 1. TEMİZLİK ---
@@ -22,7 +22,7 @@ mkdir -p "$TARGET_DIR"
 mkdir -p app/src/main/res/mipmap-xxxhdpi
 ICON_TARGET="app/src/main/res/mipmap-xxxhdpi/ic_launcher.png"
 if [ ! -z "$ICON_URL" ]; then 
-    curl -L -k -A "Mozilla/5.0" --connect-timeout 20 --max-time 60 -o "$ICON_TARGET" "$ICON_URL" || echo "İkon uyarısı."
+    curl -L -k -A "Mozilla/5.0" --connect-timeout 20 --max-time 60 -o "$ICON_TARGET" "$ICON_URL" || echo "İkon inemedi."
 fi
 if [ ! -s "$ICON_TARGET" ]; then
     curl -L -k -o "$ICON_TARGET" "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3b/Android_new_logo_2019.svg/512px-Android_new_logo_2019.svg.png"
@@ -89,9 +89,7 @@ cat > app/src/main/AndroidManifest.xml <<EOF
         </activity>
         <activity android:name=".WebViewActivity" />
         <activity android:name=".ChannelListActivity" />
-        <activity android:name=".PlayerActivity" 
-            android:configChanges="orientation|screenSize|keyboardHidden|smallestScreenSize|screenLayout" 
-            android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen" />
+        <activity android:name=".PlayerActivity" android:configChanges="orientation|screenSize|keyboardHidden|smallestScreenSize|screenLayout" android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen" />
     </application>
 </manifest>
 EOF
@@ -138,7 +136,7 @@ public class AdsManager {
 }
 EOF
 
-# --- 6. MainActivity ---
+# --- 6. MainActivity (SPLASH FIX + DIRECT MODE FIX) ---
 cat > "$TARGET_DIR/MainActivity.java" <<EOF
 package com.base.app;
 import android.app.Activity;
@@ -297,19 +295,12 @@ public class MainActivity extends Activity {
                     showHeader = ui.optBoolean("show_header", true);
                     fontSize = ui.optInt("font_size", 16);
                     String fStyle = ui.optString("font_style", "BOLD");
-                    if(fStyle.equals("NORMAL")) fontStyle = Typeface.NORMAL; 
-                    else if(fStyle.equals("ITALIC")) fontStyle = Typeface.ITALIC; 
-                    else fontStyle = Typeface.BOLD;
+                    if(fStyle.equals("NORMAL")) fontStyle = Typeface.NORMAL; else if(fStyle.equals("ITALIC")) fontStyle = Typeface.ITALIC; else fontStyle = Typeface.BOLD;
 
                     String startupMode = ui.optString("startup_mode", "MENU");
                     if ("DIRECT".equals(startupMode)) {
-                        String dType = ui.optString("direct_type", "WEB"); 
-                        String dUrl = ui.optString("direct_url", "");
-                        if (!dUrl.isEmpty()) { 
-                            openContent(dType, dUrl); 
-                            finish(); 
-                            return; 
-                        }
+                        String dType = ui.optString("direct_type", "WEB"); String dUrl = ui.optString("direct_url", "");
+                        if (!dUrl.isEmpty()) { openContent(dType, dUrl); finish(); return; }
                     }
                 }
 
@@ -331,16 +322,11 @@ public class MainActivity extends Activity {
                 JSONArray mods = json.getJSONArray("modules");
                 for(int i=0; i<mods.length(); i++){
                     JSONObject m = mods.getJSONObject(i);
-                    if (m.optBoolean("active", true)) { 
-                        createStyledButton(m.getString("title"), m.getString("type"), m.getString("url")); 
-                    }
+                    if (m.optBoolean("active", true)) { createStyledButton(m.getString("title"), m.getString("type"), m.getString("url")); }
                 }
                 
                 JSONObject adsConfig = json.optJSONObject("ads_config");
-                if (adsConfig != null) { 
-                    AdsManager.init(MainActivity.this, adsConfig); 
-                    AdsManager.showBanner(MainActivity.this, bannerContainer); 
-                }
+                if (adsConfig != null) { AdsManager.init(MainActivity.this, adsConfig); AdsManager.showBanner(MainActivity.this, bannerContainer); }
             } catch(Exception e){}
         }
     }
@@ -470,13 +456,11 @@ public class ChannelListActivity extends Activity {
             layout.setOrientation(LinearLayout.HORIZONTAL);
             layout.setPadding(25, 25, 25, 25);
             layout.setGravity(Gravity.CENTER_VERTICAL);
-            
             ImageView icon = new ImageView(ChannelListActivity.this);
             icon.setId(101); icon.setScaleType(ImageView.ScaleType.CENTER_CROP);
             LinearLayout.LayoutParams imgParams = new LinearLayout.LayoutParams(100, 100);
             imgParams.setMargins(0, 0, 30, 0);
             layout.addView(icon, imgParams);
-            
             TextView tv = new TextView(ChannelListActivity.this);
             tv.setId(102); tv.setTextSize(16); tv.setTextColor(Color.BLACK); 
             tv.setTypeface(null, android.graphics.Typeface.BOLD);
@@ -528,6 +512,7 @@ public class ChannelListActivity extends Activity {
             if(r==null){Toast.makeText(ChannelListActivity.this,"Hata",Toast.LENGTH_SHORT).show();return;}
             try{
                 groupedChannels.clear(); groupNames.clear();
+                
                 if("JSON_LIST".equals(type) || r.trim().startsWith("{")) {
                     try {
                         JSONObject root=new JSONObject(r); JSONArray arr=root.getJSONObject("list").getJSONArray("item");
@@ -549,6 +534,7 @@ public class ChannelListActivity extends Activity {
                         }
                     } catch(Exception e){}
                 } 
+                
                 if(groupedChannels.isEmpty() && !r.trim().startsWith("{")) {
                     String[] lines = r.split("\n");
                     String currentTitle = "Kanal";
@@ -557,6 +543,7 @@ public class ChannelListActivity extends Activity {
                     JSONObject currentHeaders = new JSONObject();
                     Pattern groupPattern = Pattern.compile("group-title=\"([^\"]*)\"");
                     Pattern logoPattern = Pattern.compile("tvg-logo=\"([^\"]*)\"");
+
                     for(String line : lines) {
                         line = line.trim(); if(line.isEmpty()) continue;
                         if(line.startsWith("#EXTINF")) {
@@ -565,7 +552,8 @@ public class ChannelListActivity extends Activity {
                             if(mGroup.find()) currentGroup = mGroup.group(1); else currentGroup = "Genel";
                             Matcher mLogo = logoPattern.matcher(line);
                             if(mLogo.find()) currentImage = mLogo.group(1);
-                        } else if(line.startsWith("#EXTVLCOPT:")) {
+                        } 
+                        else if(line.startsWith("#EXTVLCOPT:")) {
                             String opt = line.substring(11); String[] parts = opt.split("=", 2);
                             if(parts.length==2) {
                                 try {
@@ -574,7 +562,8 @@ public class ChannelListActivity extends Activity {
                                     if(parts[0].equalsIgnoreCase("http-user-agent")) currentHeaders.put("User-Agent", parts[1]);
                                 } catch(Exception e){}
                             }
-                        } else if(!line.startsWith("#")) {
+                        } 
+                        else if(!line.startsWith("#")) {
                             if(!groupedChannels.containsKey(currentGroup)) {
                                 groupedChannels.put(currentGroup, new ArrayList<>());
                                 groupNames.add(currentGroup);
@@ -584,16 +573,18 @@ public class ChannelListActivity extends Activity {
                         }
                     }
                 }
+
                 if (groupNames.size() > 1) showGroups(); 
                 else if (groupNames.size() == 1) showChannels(groupNames.get(0));
                 else Toast.makeText(ChannelListActivity.this,"Kanal Bulunamadı",Toast.LENGTH_SHORT).show();
+
             }catch(Exception e){Toast.makeText(ChannelListActivity.this,"Liste Hatasi",Toast.LENGTH_SHORT).show();}
         }
     }
 }
 EOF
 
-# --- 8. PlayerActivity (COOKIE & RESOLVER FIX) ---
+# --- 8. PlayerActivity (DIRECT PLAY & CROSS PROTOCOL) ---
 cat > "$TARGET_DIR/PlayerActivity.java" <<EOF
 package com.base.app;
 import android.app.Activity;
@@ -603,7 +594,6 @@ import android.os.Bundle;
 import android.view.WindowManager;
 import android.widget.Toast;
 import androidx.media3.common.MediaItem;
-import androidx.media3.common.MimeTypes;
 import androidx.media3.common.PlaybackException;
 import androidx.media3.common.Player;
 import androidx.media3.datasource.DefaultHttpDataSource;
@@ -614,11 +604,8 @@ import org.json.JSONObject;
 import java.net.CookieHandler;
 import java.net.CookieManager;
 import java.net.CookiePolicy;
-import java.net.HttpURLConnection;
-import java.net.URL;
 import java.util.HashMap;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Map;
 
 public class PlayerActivity extends Activity {
@@ -629,7 +616,7 @@ public class PlayerActivity extends Activity {
     @Override
     protected void onCreate(Bundle s) {
         super.onCreate(s);
-        // COOKIE MANAGER AKTİF ET (EN ÖNEMLİ KISIM)
+        // COOKIE YÖNETİMİ
         CookieHandler.setDefault(new CookieManager(null, CookiePolicy.ACCEPT_ALL));
 
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
@@ -642,45 +629,12 @@ public class PlayerActivity extends Activity {
         headersJson = getIntent().getStringExtra("HEADERS_JSON");
         
         if(videoUrl != null && !videoUrl.isEmpty()) {
-            Toast.makeText(this, "Bağlanılıyor...", Toast.LENGTH_SHORT).show();
-            new ResolveUrlTask().execute(videoUrl.trim());
+            initializePlayer(videoUrl.trim());
         }
     }
 
-    class UrlInfo { String url; String mimeType; UrlInfo(String u, String m) { url = u; mimeType = m; } }
-
-    private class ResolveUrlTask extends AsyncTask<String, Void, UrlInfo> {
-        @Override
-        protected UrlInfo doInBackground(String... params) {
-            String currentUrl = params[0];
-            String detectedMime = null;
-            try {
-                if (!currentUrl.startsWith("http")) return new UrlInfo(currentUrl, null);
-                for (int i = 0; i < 5; i++) {
-                    URL url = new URL(currentUrl);
-                    HttpURLConnection con = (HttpURLConnection) url.openConnection();
-                    con.setInstanceFollowRedirects(false); 
-                    con.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
-                    con.setConnectTimeout(8000);
-                    con.connect();
-                    int code = con.getResponseCode();
-                    if (code >= 300 && code < 400) {
-                        String next = con.getHeaderField("Location");
-                        if (next != null) { currentUrl = next; continue; }
-                    }
-                    detectedMime = con.getContentType();
-                    con.disconnect();
-                    break;
-                }
-            } catch (Exception e) {}
-            return new UrlInfo(currentUrl, detectedMime);
-        }
-        @Override
-        protected void onPostExecute(UrlInfo info) { initializePlayer(info); }
-    }
-
-    private void initializePlayer(UrlInfo info) {
-        String userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+    private void initializePlayer(String url) {
+        String userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36";
         Map<String, String> requestProps = new HashMap<>();
         
         if(headersJson != null && !headersJson.isEmpty()){
@@ -696,36 +650,40 @@ public class PlayerActivity extends Activity {
             }catch(Exception e){}
         }
 
+        // --- EXOPLAYER GÜÇLÜ AYARLARI ---
         DefaultHttpDataSource.Factory httpFactory = new DefaultHttpDataSource.Factory()
                 .setUserAgent(userAgent)
-                .setAllowCrossProtocolRedirects(true)
+                .setAllowCrossProtocolRedirects(true) // HTTP -> HTTPS İzni
                 .setDefaultRequestProperties(requestProps);
                 
-        DefaultMediaSourceFactory mediaFactory = new DefaultMediaSourceFactory(this).setDataSourceFactory(httpFactory);
-        player = new ExoPlayer.Builder(this).setMediaSourceFactory(mediaFactory).build();
+        DefaultMediaSourceFactory mediaFactory = new DefaultMediaSourceFactory(this)
+                .setDataSourceFactory(httpFactory);
+
+        player = new ExoPlayer.Builder(this)
+                .setMediaSourceFactory(mediaFactory)
+                .build();
+        
         playerView.setPlayer(player);
         
         try {
-            MediaItem.Builder item = new MediaItem.Builder().setUri(Uri.parse(info.url));
-            if (info.mimeType != null) {
-                if (info.mimeType.contains("mpegurl") || info.mimeType.contains("hls")) item.setMimeType(MimeTypes.APPLICATION_M3U8);
-                else if (info.mimeType.contains("dash")) item.setMimeType(MimeTypes.APPLICATION_MPD);
-                else if (info.mimeType.contains("video/mp4")) item.setMimeType(MimeTypes.APPLICATION_MP4);
-            }
-            player.setMediaItem(item.build());
+            MediaItem item = MediaItem.fromUri(Uri.parse(url));
+            player.setMediaItem(item);
             player.prepare();
             player.setPlayWhenReady(true);
-        } catch(Exception e){ Toast.makeText(this, "Hata: " + e.getMessage(), Toast.LENGTH_LONG).show(); }
+        } catch(Exception e){ 
+            Toast.makeText(this, "Hata: " + e.getMessage(), Toast.LENGTH_LONG).show(); 
+        }
         
         player.addListener(new Player.Listener(){ 
             public void onPlayerError(PlaybackException e){ 
-                String err = "Hata oluştu";
-                if(e.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED) err = "Bağlantı Hatası";
+                String err = "Oynatma Hatası";
+                if(e.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED) err = "Bağlantı Hatası (VPN Gerekebilir)";
                 else if(e.errorCode == PlaybackException.ERROR_CODE_PARSING_CONTAINER_MALFORMED) err = "Format Desteklenmiyor";
-                Toast.makeText(PlayerActivity.this, err + "\n" + e.getMessage(), Toast.LENGTH_LONG).show(); 
+                Toast.makeText(PlayerActivity.this, err, Toast.LENGTH_LONG).show(); 
             } 
         });
     }
+
     protected void onStop(){ super.onStop(); if(player!=null){player.release(); player=null;} }
 }
 EOF
@@ -748,4 +706,4 @@ public class WebViewActivity extends Activity {
 }
 EOF
 
-echo "✅ ULTRA APP V22 - COOKIE FIX & FINAL"
+echo "✅ ULTRA APP V23 - NATIVE PLAYER FIX TAMAMLANDI."
