@@ -6,9 +6,13 @@ CONFIG_URL=$3
 ICON_URL=$4
 VERSION_CODE=$5
 VERSION_NAME=$6
+# Yeni parametre olarak SPLASH_URL'i GitHub Action'dan bekliyoruz.
+# Ancak eski yapıyı bozmamak için JSON'dan çekmeyi tercih edelim.
+# GitHub Action'da bu parametre (SPLASH_URL) eklense iyi olur ama
+# şimdilik MainActivity içinde JSON'dan dinamik yükleteceğiz.
 
 echo "=========================================="
-echo "   ULTRA APP V23 - NATIVE PLAYER FIX"
+echo "   ULTRA APP V24 - RESUME, FULLSCREEN & SPLASH"
 echo "=========================================="
 
 # --- 1. TEMİZLİK ---
@@ -89,7 +93,10 @@ cat > app/src/main/AndroidManifest.xml <<EOF
         </activity>
         <activity android:name=".WebViewActivity" />
         <activity android:name=".ChannelListActivity" />
-        <activity android:name=".PlayerActivity" android:configChanges="orientation|screenSize|keyboardHidden|smallestScreenSize|screenLayout" android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen" />
+        <activity android:name=".PlayerActivity" 
+            android:configChanges="orientation|screenSize|keyboardHidden|smallestScreenSize|screenLayout" 
+            android:screenOrientation="sensorLandscape"
+            android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen" />
     </application>
 </manifest>
 EOF
@@ -136,7 +143,7 @@ public class AdsManager {
 }
 EOF
 
-# --- 6. MainActivity (SPLASH FIX + DIRECT MODE FIX) ---
+# --- 6. MainActivity (SPLASH SCREEN SUPPORT) ---
 cat > "$TARGET_DIR/MainActivity.java" <<EOF
 package com.base.app;
 import android.app.Activity;
@@ -156,12 +163,14 @@ import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import com.bumptech.glide.Glide;
 
 public class MainActivity extends Activity {
     private String CONFIG_URL = "$CONFIG_URL"; 
     private RelativeLayout root;
     private LinearLayout contentContainer, bannerContainer, headerLayout;
     private TextView titleText;
+    private ImageView splashImage;
     private ProgressBar loadingSpinner;
     private ImageView refreshBtn, shareBtn;
     
@@ -177,11 +186,19 @@ public class MainActivity extends Activity {
         root = new RelativeLayout(this);
         root.setBackgroundColor(Color.WHITE);
 
+        // --- SPLASH IMAGE & SPINNER ---
+        splashImage = new ImageView(this);
+        splashImage.setScaleType(ImageView.ScaleType.CENTER_CROP);
+        splashImage.setVisibility(View.GONE); // Default hidden until we get URL
+        RelativeLayout.LayoutParams splashParams = new RelativeLayout.LayoutParams(-1, -1);
+        root.addView(splashImage, splashParams);
+
         loadingSpinner = new ProgressBar(this);
         RelativeLayout.LayoutParams lp = new RelativeLayout.LayoutParams(-2, -2);
         lp.addRule(RelativeLayout.CENTER_IN_PARENT);
         root.addView(loadingSpinner, lp);
 
+        // --- ANA İÇERİK ---
         headerLayout = new LinearLayout(this);
         headerLayout.setId(View.generateViewId());
         headerLayout.setOrientation(LinearLayout.HORIZONTAL);
@@ -295,12 +312,44 @@ public class MainActivity extends Activity {
                     showHeader = ui.optBoolean("show_header", true);
                     fontSize = ui.optInt("font_size", 16);
                     String fStyle = ui.optString("font_style", "BOLD");
-                    if(fStyle.equals("NORMAL")) fontStyle = Typeface.NORMAL; else if(fStyle.equals("ITALIC")) fontStyle = Typeface.ITALIC; else fontStyle = Typeface.BOLD;
+                    if(fStyle.equals("NORMAL")) fontStyle = Typeface.NORMAL; 
+                    else if(fStyle.equals("ITALIC")) fontStyle = Typeface.ITALIC; 
+                    else fontStyle = Typeface.BOLD;
 
-                    String startupMode = ui.optString("startup_mode", "MENU");
-                    if ("DIRECT".equals(startupMode)) {
-                        String dType = ui.optString("direct_type", "WEB"); String dUrl = ui.optString("direct_url", "");
-                        if (!dUrl.isEmpty()) { openContent(dType, dUrl); finish(); return; }
+                    // SPLASH SCREEN LOGIC
+                    String splashUrl = ui.optString("splash_image", "");
+                    if(!splashUrl.isEmpty()){
+                        splashImage.setVisibility(View.VISIBLE);
+                        loadingSpinner.setVisibility(View.GONE);
+                        Glide.with(MainActivity.this).load(splashUrl).into(splashImage);
+                        
+                        // Splash süresi (3 saniye)
+                        new android.os.Handler().postDelayed(() -> {
+                            splashImage.setVisibility(View.GONE);
+                            finishSetup(json, ui);
+                        }, 3000);
+                    } else {
+                        finishSetup(json, ui);
+                    }
+                } else {
+                    finishSetup(json, ui);
+                }
+            } catch(Exception e){
+                loadingSpinner.setVisibility(View.GONE);
+                Toast.makeText(MainActivity.this, "Hata: " + e.getMessage(), Toast.LENGTH_LONG).show();
+            }
+        }
+
+        private void finishSetup(JSONObject json, JSONObject ui) {
+            try {
+                String startupMode = ui != null ? ui.optString("startup_mode", "MENU") : "MENU";
+                if ("DIRECT".equals(startupMode) && ui != null) {
+                    String dType = ui.optString("direct_type", "WEB"); 
+                    String dUrl = ui.optString("direct_url", "");
+                    if (!dUrl.isEmpty()) { 
+                        openContent(dType, dUrl); 
+                        finish(); 
+                        return; 
                     }
                 }
 
@@ -322,18 +371,23 @@ public class MainActivity extends Activity {
                 JSONArray mods = json.getJSONArray("modules");
                 for(int i=0; i<mods.length(); i++){
                     JSONObject m = mods.getJSONObject(i);
-                    if (m.optBoolean("active", true)) { createStyledButton(m.getString("title"), m.getString("type"), m.getString("url")); }
+                    if (m.optBoolean("active", true)) { 
+                        createStyledButton(m.getString("title"), m.getString("type"), m.getString("url")); 
+                    }
                 }
                 
                 JSONObject adsConfig = json.optJSONObject("ads_config");
-                if (adsConfig != null) { AdsManager.init(MainActivity.this, adsConfig); AdsManager.showBanner(MainActivity.this, bannerContainer); }
-            } catch(Exception e){}
+                if (adsConfig != null) { 
+                    AdsManager.init(MainActivity.this, adsConfig); 
+                    AdsManager.showBanner(MainActivity.this, bannerContainer); 
+                }
+            } catch (Exception e) {}
         }
     }
 }
 EOF
 
-# --- 7. ChannelListActivity (KATEGORİ & M3U FIX) ---
+# --- 7. ChannelListActivity ---
 cat > "$TARGET_DIR/ChannelListActivity.java" <<EOF
 package com.base.app;
 import android.app.Activity;
@@ -512,7 +566,6 @@ public class ChannelListActivity extends Activity {
             if(r==null){Toast.makeText(ChannelListActivity.this,"Hata",Toast.LENGTH_SHORT).show();return;}
             try{
                 groupedChannels.clear(); groupNames.clear();
-                
                 if("JSON_LIST".equals(type) || r.trim().startsWith("{")) {
                     try {
                         JSONObject root=new JSONObject(r); JSONArray arr=root.getJSONObject("list").getJSONArray("item");
@@ -534,7 +587,6 @@ public class ChannelListActivity extends Activity {
                         }
                     } catch(Exception e){}
                 } 
-                
                 if(groupedChannels.isEmpty() && !r.trim().startsWith("{")) {
                     String[] lines = r.split("\n");
                     String currentTitle = "Kanal";
@@ -543,7 +595,6 @@ public class ChannelListActivity extends Activity {
                     JSONObject currentHeaders = new JSONObject();
                     Pattern groupPattern = Pattern.compile("group-title=\"([^\"]*)\"");
                     Pattern logoPattern = Pattern.compile("tvg-logo=\"([^\"]*)\"");
-
                     for(String line : lines) {
                         line = line.trim(); if(line.isEmpty()) continue;
                         if(line.startsWith("#EXTINF")) {
@@ -552,8 +603,7 @@ public class ChannelListActivity extends Activity {
                             if(mGroup.find()) currentGroup = mGroup.group(1); else currentGroup = "Genel";
                             Matcher mLogo = logoPattern.matcher(line);
                             if(mLogo.find()) currentImage = mLogo.group(1);
-                        } 
-                        else if(line.startsWith("#EXTVLCOPT:")) {
+                        } else if(line.startsWith("#EXTVLCOPT:")) {
                             String opt = line.substring(11); String[] parts = opt.split("=", 2);
                             if(parts.length==2) {
                                 try {
@@ -562,8 +612,7 @@ public class ChannelListActivity extends Activity {
                                     if(parts[0].equalsIgnoreCase("http-user-agent")) currentHeaders.put("User-Agent", parts[1]);
                                 } catch(Exception e){}
                             }
-                        } 
-                        else if(!line.startsWith("#")) {
+                        } else if(!line.startsWith("#")) {
                             if(!groupedChannels.containsKey(currentGroup)) {
                                 groupedChannels.put(currentGroup, new ArrayList<>());
                                 groupNames.add(currentGroup);
@@ -573,27 +622,27 @@ public class ChannelListActivity extends Activity {
                         }
                     }
                 }
-
                 if (groupNames.size() > 1) showGroups(); 
                 else if (groupNames.size() == 1) showChannels(groupNames.get(0));
                 else Toast.makeText(ChannelListActivity.this,"Kanal Bulunamadı",Toast.LENGTH_SHORT).show();
-
             }catch(Exception e){Toast.makeText(ChannelListActivity.this,"Liste Hatasi",Toast.LENGTH_SHORT).show();}
         }
     }
 }
 EOF
 
-# --- 8. PlayerActivity (DIRECT PLAY & CROSS PROTOCOL) ---
+# --- 8. PlayerActivity (RESUME, FULLSCREEN, ROTATION) ---
 cat > "$TARGET_DIR/PlayerActivity.java" <<EOF
 package com.base.app;
 import android.app.Activity;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Bundle;
+import android.view.View;
 import android.view.WindowManager;
 import android.widget.Toast;
 import androidx.media3.common.MediaItem;
+import androidx.media3.common.MimeTypes;
 import androidx.media3.common.PlaybackException;
 import androidx.media3.common.Player;
 import androidx.media3.datasource.DefaultHttpDataSource;
@@ -612,28 +661,111 @@ public class PlayerActivity extends Activity {
     private ExoPlayer player;
     private PlayerView playerView;
     private String videoUrl, headersJson;
+    private long playbackPosition = 0;
+    private boolean playWhenReady = true;
 
     @Override
     protected void onCreate(Bundle s) {
         super.onCreate(s);
-        // COOKIE YÖNETİMİ
+        // COOKIE
         CookieHandler.setDefault(new CookieManager(null, CookiePolicy.ACCEPT_ALL));
 
+        // TAM EKRAN VE YAN ÇEVİRME
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
+        
+        // System UI (Navigation bar vs.) gizle
+        View decorView = getWindow().getDecorView();
+        decorView.setSystemUiVisibility(
+            View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+            | View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+            | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+            | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+            | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+            | View.SYSTEM_UI_FLAG_FULLSCREEN);
+
         playerView = new PlayerView(this);
         playerView.setShowNextButton(false);
         playerView.setShowPreviousButton(false);
         setContentView(playerView);
+        
         videoUrl = getIntent().getStringExtra("VIDEO_URL");
         headersJson = getIntent().getStringExtra("HEADERS_JSON");
         
-        if(videoUrl != null && !videoUrl.isEmpty()) {
-            initializePlayer(videoUrl.trim());
+        if (s != null) {
+            playbackPosition = s.getLong("playbackPosition", 0);
+            playWhenReady = s.getBoolean("playWhenReady", true);
         }
     }
 
-    private void initializePlayer(String url) {
+    @Override
+    protected void onStart() {
+        super.onStart();
+        if(videoUrl != null && !videoUrl.isEmpty()) {
+            new ResolveUrlTask().execute(videoUrl.trim());
+        }
+    }
+
+    @Override
+    protected void onStop() {
+        super.onStop();
+        releasePlayer();
+    }
+
+    @Override
+    protected void onSaveInstanceState(Bundle outState) {
+        super.onSaveInstanceState(outState);
+        if (player != null) {
+            outState.putLong("playbackPosition", player.getCurrentPosition());
+            outState.putBoolean("playWhenReady", player.getPlayWhenReady());
+        }
+    }
+
+    private void releasePlayer() {
+        if (player != null) {
+            playbackPosition = player.getCurrentPosition();
+            playWhenReady = player.getPlayWhenReady();
+            player.release();
+            player = null;
+        }
+    }
+
+    class UrlInfo { String url; String mimeType; UrlInfo(String u, String m) { url = u; mimeType = m; } }
+
+    private class ResolveUrlTask extends AsyncTask<String, Void, UrlInfo> {
+        @Override
+        protected UrlInfo doInBackground(String... params) {
+            // ... (Aynı Resolve Mantığı) ...
+            String currentUrl = params[0];
+            String detectedMime = null;
+            try {
+                if (!currentUrl.startsWith("http")) return new UrlInfo(currentUrl, null);
+                for (int i = 0; i < 5; i++) {
+                    URL url = new URL(currentUrl);
+                    HttpURLConnection con = (HttpURLConnection) url.openConnection();
+                    con.setInstanceFollowRedirects(false); 
+                    con.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
+                    con.setConnectTimeout(8000);
+                    con.connect();
+                    int code = con.getResponseCode();
+                    if (code >= 300 && code < 400) {
+                        String next = con.getHeaderField("Location");
+                        if (next != null) { currentUrl = next; continue; }
+                    }
+                    detectedMime = con.getContentType();
+                    con.disconnect();
+                    break;
+                }
+            } catch (Exception e) {}
+            return new UrlInfo(currentUrl, detectedMime);
+        }
+        @Override
+        protected void onPostExecute(UrlInfo info) { initializePlayer(info); }
+    }
+
+    private void initializePlayer(UrlInfo info) {
+        if (player != null) return; // Zaten varsa tekrar oluşturma
+
         String userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36";
         Map<String, String> requestProps = new HashMap<>();
         
@@ -650,41 +782,34 @@ public class PlayerActivity extends Activity {
             }catch(Exception e){}
         }
 
-        // --- EXOPLAYER GÜÇLÜ AYARLARI ---
         DefaultHttpDataSource.Factory httpFactory = new DefaultHttpDataSource.Factory()
                 .setUserAgent(userAgent)
-                .setAllowCrossProtocolRedirects(true) // HTTP -> HTTPS İzni
+                .setAllowCrossProtocolRedirects(true)
                 .setDefaultRequestProperties(requestProps);
                 
-        DefaultMediaSourceFactory mediaFactory = new DefaultMediaSourceFactory(this)
-                .setDataSourceFactory(httpFactory);
-
-        player = new ExoPlayer.Builder(this)
-                .setMediaSourceFactory(mediaFactory)
-                .build();
-        
+        DefaultMediaSourceFactory mediaFactory = new DefaultMediaSourceFactory(this).setDataSourceFactory(httpFactory);
+        player = new ExoPlayer.Builder(this).setMediaSourceFactory(mediaFactory).build();
         playerView.setPlayer(player);
         
         try {
-            MediaItem item = MediaItem.fromUri(Uri.parse(url));
-            player.setMediaItem(item);
+            MediaItem.Builder item = new MediaItem.Builder().setUri(Uri.parse(info.url));
+            if (info.mimeType != null) {
+                if (info.mimeType.contains("mpegurl") || info.mimeType.contains("hls")) item.setMimeType(MimeTypes.APPLICATION_M3U8);
+                else if (info.mimeType.contains("dash")) item.setMimeType(MimeTypes.APPLICATION_MPD);
+                else if (info.mimeType.contains("video/mp4")) item.setMimeType(MimeTypes.APPLICATION_MP4);
+            }
+            player.setMediaItem(item.build());
+            player.seekTo(playbackPosition); // KALDIĞI YERDEN DEVAM
             player.prepare();
-            player.setPlayWhenReady(true);
-        } catch(Exception e){ 
-            Toast.makeText(this, "Hata: " + e.getMessage(), Toast.LENGTH_LONG).show(); 
-        }
+            player.setPlayWhenReady(playWhenReady);
+        } catch(Exception e){ Toast.makeText(this, "Hata: " + e.getMessage(), Toast.LENGTH_LONG).show(); }
         
         player.addListener(new Player.Listener(){ 
             public void onPlayerError(PlaybackException e){ 
-                String err = "Oynatma Hatası";
-                if(e.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED) err = "Bağlantı Hatası (VPN Gerekebilir)";
-                else if(e.errorCode == PlaybackException.ERROR_CODE_PARSING_CONTAINER_MALFORMED) err = "Format Desteklenmiyor";
-                Toast.makeText(PlayerActivity.this, err, Toast.LENGTH_LONG).show(); 
+                Toast.makeText(PlayerActivity.this, "Oynatma Hatası", Toast.LENGTH_LONG).show(); 
             } 
         });
     }
-
-    protected void onStop(){ super.onStop(); if(player!=null){player.release(); player=null;} }
 }
 EOF
 
@@ -706,4 +831,4 @@ public class WebViewActivity extends Activity {
 }
 EOF
 
-echo "✅ ULTRA APP V23 - NATIVE PLAYER FIX TAMAMLANDI."
+echo "✅ ULTRA APP V24 TAMAMLANDI."
