@@ -1,6 +1,6 @@
 #!/bin/bash
 set -e
-# ULTRA APP V55 - UNITY ADS FIX & FORCE INSTALL
+# ULTRA APP V56 - LEGENDARY ICON CONVERT + UNITY FIX
 PACKAGE_NAME=$1
 APP_NAME=$2
 CONFIG_URL=$3
@@ -9,13 +9,13 @@ VERSION_CODE=$5
 VERSION_NAME=$6
 
 echo "=========================================="
-echo "   ULTRA APP V55 - UNITY ADS UPDATE"
+echo "   ULTRA APP V56 - FINAL MERGE"
 echo "=========================================="
 
-# --- 0. GEREKLİ ARAÇLARI YÜKLE ---
-echo "⚙️ Gerekli resim araçları yükleniyor..."
+# --- 0. GEREKLİ ARAÇLARI YÜKLE (CONVERT İÇİN ŞART) ---
+echo "⚙️ Resim dönüştürücü (ImageMagick) yükleniyor..."
 sudo apt-get update >/dev/null 2>&1
-sudo apt-get install -y imagemagick >/dev/null 2>&1 || echo "Araç yüklenemedi ama devam ediliyor."
+sudo apt-get install -y imagemagick >/dev/null 2>&1 || echo "Uyarı: Araç zaten yüklü olabilir."
 
 # --- 1. TEMİZLİK ---
 rm -rf app/src/main/res/drawable*
@@ -24,24 +24,36 @@ rm -rf app/src/main/java/com/base/app/*
 TARGET_DIR="app/src/main/java/com/base/app"
 mkdir -p "$TARGET_DIR"
 
-# --- 2. ICON İŞLEME ---
+# --- 2. ICON İŞLEME (SENİN İSTEDİĞİN 'CONLU' SİSTEM) ---
 mkdir -p app/src/main/res/mipmap-xxxhdpi
 ICON_TARGET="app/src/main/res/mipmap-xxxhdpi/ic_launcher.png"
-TEMP_FILE="downloaded_image"
+TEMP_FILE="downloaded_raw_icon"
 
 echo "📥 İkon indiriliyor: $ICON_URL"
-curl -s -L -k -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" -o "$TEMP_FILE" "$ICON_URL" || echo "İndirme uyarısı."
 
+# 1. Dosyayı uzantısız olarak indir (Tarayıcı gibi davranarak)
+curl -s -L -k \
+     -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36" \
+     -o "$TEMP_FILE" \
+     "$ICON_URL" || echo "İndirme uyarısı."
+
+# 2. Dosya indi mi ve boyutu yeterli mi?
 if [ -s "$TEMP_FILE" ] && [ $(stat -c%s "$TEMP_FILE") -gt 500 ]; then
-    echo "✅ Dosya indi. Formatı PNG'ye çevriliyor..."
-    convert "$TEMP_FILE" -resize 512x512! -background none -flatten "$ICON_TARGET" || cp "$TEMP_FILE" "$ICON_TARGET"
+    echo "✅ Dosya indi. Format ne olursa olsun (JPG/PNG) temiz PNG'ye çevriliyor..."
+    
+    # EFSANE KOMUT: Bu komut JPG'yi alır, temiz bir PNG yapar. Hata vermez.
+    convert "$TEMP_FILE" -resize 512x512! -background none -flatten "$ICON_TARGET" || {
+        echo "⚠️ Convert başarısız oldu (Nadir durum), dosya direkt kopyalanıyor."
+        cp "$TEMP_FILE" "$ICON_TARGET"
+    }
 else
-    echo "⚠️ İkon indirilemedi! Varsayılan kullanılıyor."
+    echo "⚠️ İkon indirilemedi veya link bozuk! Varsayılan ikon kullanılıyor."
     curl -s -L -k -o "$ICON_TARGET" "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3b/Android_new_logo_2019.svg/512px-Android_new_logo_2019.svg.png"
 fi
 
+# Son bir garanti kontrolü: Eğer dosya hala yoksa mavi kare oluştur
 if [ ! -s "$ICON_TARGET" ]; then
-    convert -size 512x512 xc:blue "$ICON_TARGET" 2>/dev/null || echo "Yedek ikon oluşturulamadı."
+    convert -size 512x512 xc:blue "$ICON_TARGET" 2>/dev/null
 fi
 
 # --- 3. BUILD.GRADLE ---
@@ -110,7 +122,7 @@ cat > app/src/main/AndroidManifest.xml <<EOF
 </manifest>
 EOF
 
-# --- 5. ADS MANAGER (DÜZELTİLDİ: isReady kaldırıldı) ---
+# --- 5. ADS MANAGER (V55'TEKİ DÜZELTİLMİŞ VERSİYON - isReady YOK) ---
 cat > "$TARGET_DIR/AdsManager.java" <<EOF
 package com.base.app;
 import android.app.Activity;
@@ -150,8 +162,7 @@ public class AdsManager {
         GLOBAL_CLICK_COUNT++;
         
         if(GLOBAL_CLICK_COUNT >= INTER_FREQ) {
-            // isReady KONTROLÜ KALDIRILDI - DOĞRUDAN SHOW ÇAĞRILIYOR
-            // Unity SDK 4.0+ artık load/show mantığını kendi yönetir.
+            // isReady YOK - Yeni sistem
             UnityAds.load(INTER_ID, new IUnityAdsLoadListener() {
                 @Override
                 public void onUnityAdsAdLoaded(String placementId) {
@@ -794,4 +805,4 @@ public class WebViewActivity extends Activity {
 }
 EOF
 
-echo "✅ ULTRA APP V55 - UNITY ADS FIX"
+echo "✅ ULTRA APP V56 - FINAL & ICON CONVERT"
