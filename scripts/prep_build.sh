@@ -1,6 +1,8 @@
 #!/bin/bash
 set -e
-# ULTRA APP V58 - FULL PLAYER FEATURES & SPEED FIX
+# ULTRA APP V63 - HEADER & ORIGIN SUPPORT (M3U #EXTVLCOPT FIX)
+# Bu sürüm M3U ve JSON içindeki Referer/Origin başlıklarını okur ve Player'a uygular.
+
 PACKAGE_NAME=$1
 APP_NAME=$2
 CONFIG_URL=$3
@@ -9,13 +11,12 @@ VERSION_CODE=$5
 VERSION_NAME=$6
 
 echo "=========================================="
-echo "   ULTRA APP V58 - PLAYER KING EDITION"
+echo "   ULTRA APP V63 - HEADER MASTER"
 echo "=========================================="
 
-# --- 0. GEREKLİ ARAÇLARI YÜKLE ---
-echo "⚙️ Sistem araçları hazırlanıyor..."
+# --- 0. SİSTEM HAZIRLIĞI ---
 sudo apt-get update >/dev/null 2>&1
-sudo apt-get install -y imagemagick >/dev/null 2>&1 || echo "Araçlar zaten var."
+sudo apt-get install -y imagemagick >/dev/null 2>&1 || true
 
 # --- 1. TEMİZLİK ---
 rm -rf app/src/main/res/drawable*
@@ -23,11 +24,11 @@ rm -rf app/src/main/res/mipmap*
 rm -rf app/src/main/java/com/base/app/*
 TARGET_DIR="app/src/main/java/com/base/app"
 mkdir -p "$TARGET_DIR"
-
-# --- 2. ICON (GARANTİLİ YÖNTEM - V57 İLE AYNI) ---
 mkdir -p app/src/main/res/mipmap-xxxhdpi
+
+# --- 2. İKON İŞLEME (GARANTİLİ) ---
 ICON_TARGET="app/src/main/res/mipmap-xxxhdpi/ic_launcher.png"
-TEMP_FILE="downloaded_raw_icon"
+TEMP_FILE="downloaded_icon_raw"
 
 echo "📥 İkon indiriliyor..."
 curl -s -L -k -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" -o "$TEMP_FILE" "$ICON_URL" || true
@@ -36,10 +37,9 @@ if [ -s "$TEMP_FILE" ] && [ $(stat -c%s "$TEMP_FILE") -gt 500 ]; then
     echo "✅ İkon işleniyor..."
     convert "$TEMP_FILE" -resize 512x512! -background none -flatten "$ICON_TARGET" || cp "$TEMP_FILE" "$ICON_TARGET"
 else
-    echo "⚠️ Varsayılan ikon kullanılıyor."
+    echo "⚠️ Varsayılan ikon."
     curl -s -L -k -o "$ICON_TARGET" "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3b/Android_new_logo_2019.svg/512px-Android_new_logo_2019.svg.png"
 fi
-
 if [ ! -s "$ICON_TARGET" ]; then convert -size 512x512 xc:blue "$ICON_TARGET"; fi
 
 # --- 3. BUILD.GRADLE ---
@@ -108,7 +108,7 @@ cat > app/src/main/AndroidManifest.xml <<EOF
 </manifest>
 EOF
 
-# --- 5. ADS MANAGER (V55'TEN DEVAM - SORUNSUZ) ---
+# --- 5. ADS MANAGER ---
 cat > "$TARGET_DIR/AdsManager.java" <<EOF
 package com.base.app;
 import android.app.Activity;
@@ -150,7 +150,7 @@ public class AdsManager {
             UnityAds.load(INTER_ID, new IUnityAdsLoadListener() {
                 public void onUnityAdsAdLoaded(String placementId) {
                     UnityAds.show(a, placementId, new IUnityAdsShowListener(){
-                        public void onUnityAdsShowComplete(String p, UnityAds.UnityAdsShowCompletionState s){ GLOBAL_CLICK_COUNT = 0; onComplete.run(); }
+                        public void onUnityAdsShowComplete(String p, UnityAds.UnityAdsShowCompletionState s){ GLOBAL_CLICK_COUNT=0; onComplete.run(); }
                         public void onUnityAdsShowFailure(String p, UnityAds.UnityAdsShowError e, String m){ onComplete.run(); }
                         public void onUnityAdsShowStart(String p){} public void onUnityAdsShowClick(String p){}
                     });
@@ -162,7 +162,7 @@ public class AdsManager {
 }
 EOF
 
-# --- 6. MainActivity ---
+# --- 6. MAIN ACTIVITY ---
 cat > "$TARGET_DIR/MainActivity.java" <<EOF
 package com.base.app;
 import android.app.Activity;
@@ -189,13 +189,13 @@ public class MainActivity extends Activity {
     private RelativeLayout root;
     private LinearLayout contentContainer, bannerContainer, headerLayout;
     private TextView titleText;
-    private ImageView splashImage;
+    private ImageView splashImage, refreshBtn, shareBtn;
     private ProgressBar loadingSpinner;
-    private ImageView refreshBtn, shareBtn;
-    private String headerColor = "#2196F3", textColor = "#FFFFFF", bgColor = "#F0F0F0", focusColor = "#FF9800";
-    private boolean showHeader = true;
-    private String appName = "$APP_NAME";
-    private String playerConfigStr = "";
+    private String headerColor="#2196F3", textColor="#FFFFFF", bgColor="#F0F0F0", focusColor="#FF9800";
+    private boolean showHeader=true;
+    private String appName="$APP_NAME";
+    private int fontSize=16, fontStyle=Typeface.BOLD;
+    private String playerConfigStr="";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -233,14 +233,12 @@ public class MainActivity extends Activity {
         headerLayout.addView(refreshBtn);
 
         RelativeLayout.LayoutParams hp = new RelativeLayout.LayoutParams(-1, -2);
-        hp.addRule(RelativeLayout.ALIGN_PARENT_TOP);
-        root.addView(headerLayout, hp);
+        hp.addRule(RelativeLayout.ALIGN_PARENT_TOP); root.addView(headerLayout, hp);
 
         bannerContainer = new LinearLayout(this); bannerContainer.setId(View.generateViewId());
         bannerContainer.setOrientation(LinearLayout.VERTICAL); bannerContainer.setGravity(Gravity.CENTER);
         RelativeLayout.LayoutParams bp = new RelativeLayout.LayoutParams(-1, -2);
-        bp.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM);
-        root.addView(bannerContainer, bp);
+        bp.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM); root.addView(bannerContainer, bp);
 
         ScrollView sv = new ScrollView(this);
         contentContainer = new LinearLayout(this);
@@ -256,13 +254,13 @@ public class MainActivity extends Activity {
 
     private void shareApp() {
         Intent i = new Intent(Intent.ACTION_SEND); i.setType("text/plain");
-        i.putExtra(Intent.EXTRA_TEXT, appName + " uygulamasını indir: https://play.google.com/store/apps/details?id=" + getPackageName());
+        i.putExtra(Intent.EXTRA_TEXT, appName + " indir: https://play.google.com/store/apps/details?id=" + getPackageName());
         startActivity(Intent.createChooser(i, "Paylaş"));
     }
 
     private void createStyledButton(String text, final String type, final String link, final String content) {
         Button btn = new Button(this); btn.setText(text); btn.setTextColor(Color.parseColor(textColor));
-        btn.setTextSize(16); btn.setTypeface(null, Typeface.BOLD);
+        btn.setTextSize(fontSize); btn.setTypeface(null, fontStyle);
         btn.setPadding(40, 40, 40, 40); btn.setGravity(Gravity.CENTER_VERTICAL | Gravity.START);
         GradientDrawable normal = new GradientDrawable(); normal.setColor(Color.parseColor(headerColor)); normal.setCornerRadius(15);
         GradientDrawable focused = new GradientDrawable(); focused.setColor(Color.parseColor(focusColor)); focused.setCornerRadius(15); focused.setStroke(4, Color.WHITE);
@@ -315,6 +313,9 @@ public class MainActivity extends Activity {
                     headerColor = ui.optString("header_color", "#2196F3"); textColor = ui.optString("text_color", "#FFFFFF");
                     bgColor = ui.optString("bg_color", "#F0F0F0"); focusColor = ui.optString("focus_color", "#FF9800");
                     showHeader = ui.optBoolean("show_header", true);
+                    fontSize = ui.optInt("font_size", 16);
+                    if("NORMAL".equals(ui.optString("font_style"))) fontStyle = Typeface.NORMAL;
+                    
                     String splashUrl = ui.optString("splash_image", "");
                     if(!splashUrl.isEmpty()) {
                         if(!splashUrl.startsWith("http")) splashUrl = CONFIG_URL.substring(0, CONFIG_URL.lastIndexOf("/") + 1) + splashUrl;
@@ -347,7 +348,7 @@ public class MainActivity extends Activity {
 }
 EOF
 
-# --- 7. ChannelListActivity ---
+# --- 7. CHANNEL LIST ACTIVITY (HEADER PARSING DÜZELTİLDİ) ---
 cat > "$TARGET_DIR/ChannelListActivity.java" <<EOF
 package com.base.app;
 import android.app.Activity;
@@ -358,7 +359,6 @@ import android.view.*;
 import android.widget.*;
 import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
-import android.graphics.drawable.StateListDrawable;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import java.io.BufferedReader;
@@ -432,7 +432,6 @@ public class ChannelListActivity extends Activity {
 
     @Override
     public void onBackPressed() { if (!isShowingGroups && groupNames.size() > 1) showGroups(); else super.onBackPressed(); }
-
     private void showGroups() { isShowingGroups = true; titleText.setText("Kategoriler"); listView.setAdapter(new CategoryAdapter(groupNames)); }
     private void showChannels(String groupName) { isShowingGroups = false; titleText.setText(groupName); currentList = groupedChannels.get(groupName); listView.setAdapter(new ChannelAdapter(currentList)); }
 
@@ -454,7 +453,6 @@ public class ChannelListActivity extends Activity {
         ImageView img = convertView.findViewById(101); TextView txt = convertView.findViewById(102); txt.setText(text);
         if (isFolder) { img.setImageResource(android.R.drawable.ic_menu_sort_by_size); img.setColorFilter(Color.parseColor(headerColor)); } 
         else { img.clearColorFilter(); if(imageUrl != null && !imageUrl.isEmpty()) Glide.with(ChannelListActivity.this).load(imageUrl).into(img); else img.setImageResource(android.R.drawable.ic_menu_slideshow); }
-        
         GradientDrawable bg = new GradientDrawable(); bg.setColor(Color.WHITE); bg.setCornerRadius(15);
         convertView.setBackground(bg);
         return convertView;
@@ -474,9 +472,11 @@ public class ChannelListActivity extends Activity {
             }catch(Exception e){return null;}
         }
         protected void onPostExecute(String r){
-            if(r==null){Toast.makeText(ChannelListActivity.this,"Hata",Toast.LENGTH_SHORT).show();return;}
+            if(r==null){Toast.makeText(ChannelListActivity.this,"Liste Hatasi",Toast.LENGTH_SHORT).show();return;}
             try{
                 groupedChannels.clear(); groupNames.clear();
+                
+                // JSON PARSING (KEY-VAL MAPPING FOR HEADERS)
                 if("JSON_LIST".equals(type) || r.trim().startsWith("{")) {
                     try {
                         JSONObject root=new JSONObject(r); JSONArray arr=root.getJSONObject("list").getJSONArray("item");
@@ -484,39 +484,62 @@ public class ChannelListActivity extends Activity {
                             JSONObject o=arr.getJSONObject(i);
                             String url=o.optString("media_url",o.optString("url",""));
                             if(url.isEmpty())continue;
-                            String title=o.optString("title"); String image=o.optString("thumb_square", o.optString("image", ""));
+                            String title=o.optString("title");
+                            String image=o.optString("thumb_square", o.optString("image", ""));
                             String group=o.optString("group", "Genel");
+                            
+                            // JSON içindeki h1Key/Val şeklindeki headerları topla
+                            JSONObject h = new JSONObject();
+                            for(int k=1; k<=5; k++){
+                                String key = o.optString("h"+k+"Key");
+                                String val = o.optString("h"+k+"Val");
+                                if(!key.isEmpty() && !key.equals("0")) h.put(key, val);
+                            }
+
                             if(!groupedChannels.containsKey(group)) { groupedChannels.put(group, new ArrayList<>()); groupNames.add(group); }
-                            groupedChannels.get(group).add(new ChannelItem(title, url, image, "{}"));
+                            groupedChannels.get(group).add(new ChannelItem(title, url, image, h.toString()));
                         }
                     } catch(Exception e){}
                 } 
+                
+                // M3U PARSING (WITH #EXTVLCOPT SUPPORT)
                 if(groupedChannels.isEmpty()) {
                     String[] lines = r.split("\n");
                     String currentTitle="Kanal", currentImage="", currentGroup="Genel";
+                    JSONObject currentHeaders = new JSONObject();
                     Pattern groupPattern = Pattern.compile("group-title=\"([^\"]*)\"");
                     Pattern logoPattern = Pattern.compile("tvg-logo=\"([^\"]*)\"");
+
                     for(String line : lines) {
                         line = line.trim(); if(line.isEmpty()) continue;
+                        
                         if(line.startsWith("#EXTINF")) {
                             if(line.contains(",")) currentTitle = line.substring(line.lastIndexOf(",")+1).trim();
                             Matcher mGroup = groupPattern.matcher(line); if(mGroup.find()) currentGroup = mGroup.group(1);
                             Matcher mLogo = logoPattern.matcher(line); if(mLogo.find()) currentImage = mLogo.group(1);
-                        } else if(!line.startsWith("#")) {
+                        } 
+                        // ÖZEL HEADER PARSING (#EXTVLCOPT)
+                        else if(line.startsWith("#EXTVLCOPT:")) {
+                            String opt = line.substring(11);
+                            if(opt.startsWith("http-referrer=")) currentHeaders.put("Referer", opt.substring(14));
+                            if(opt.startsWith("http-user-agent=")) currentHeaders.put("User-Agent", opt.substring(16));
+                            if(opt.startsWith("http-origin=")) currentHeaders.put("Origin", opt.substring(12));
+                        }
+                        else if(!line.startsWith("#")) {
                             if(!groupedChannels.containsKey(currentGroup)) { groupedChannels.put(currentGroup, new ArrayList<>()); groupNames.add(currentGroup); }
-                            groupedChannels.get(currentGroup).add(new ChannelItem(currentTitle, line, currentImage, "{}"));
-                            currentTitle="Kanal"; currentImage="";
+                            groupedChannels.get(currentGroup).add(new ChannelItem(currentTitle, line, currentImage, currentHeaders.toString()));
+                            currentTitle="Kanal"; currentImage=""; currentHeaders = new JSONObject(); // Sıfırla
                         }
                     }
                 }
                 if (groupNames.size() > 1) showGroups(); else if (groupNames.size() == 1) showChannels(groupNames.get(0));
-            }catch(Exception e){Toast.makeText(ChannelListActivity.this,"Liste Hatası",Toast.LENGTH_SHORT).show();}
+            }catch(Exception e){Toast.makeText(ChannelListActivity.this,"Hata",Toast.LENGTH_SHORT).show();}
         }
     }
 }
 EOF
 
-# --- 8. PlayerActivity (GELİŞMİŞ PLAYER + SPINNER + WATERMARK) ---
+# --- 8. PLAYER ACTIVITY (FULL HEADER SUPPORT) ---
 cat > "$TARGET_DIR/PlayerActivity.java" <<EOF
 package com.base.app;
 import android.app.Activity;
@@ -555,13 +578,12 @@ public class PlayerActivity extends Activity {
         playerView.setShowNextButton(false); playerView.setShowPreviousButton(false);
         root.addView(playerView);
 
-        // Spinner (Yükleniyor)
         loadingSpinner = new ProgressBar(this);
         FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(-2, -2);
         lp.gravity = Gravity.CENTER;
         root.addView(loadingSpinner, lp);
 
-        // Watermark (Yazı)
+        // Watermark Logic
         String configStr = getIntent().getStringExtra("PLAYER_CONFIG");
         if(configStr != null) {
             try {
@@ -600,7 +622,18 @@ public class PlayerActivity extends Activity {
                     URL url = new URL(currentUrl);
                     HttpURLConnection con = (HttpURLConnection) url.openConnection();
                     con.setInstanceFollowRedirects(false);
-                    con.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)");
+                    // Headerları burada da kullanmak lazım (Yönlendirmeleri takip etmek için)
+                    if(headersJson != null) {
+                        JSONObject h = new JSONObject(headersJson);
+                        Iterator<String> keys = h.keys();
+                        while(keys.hasNext()) {
+                            String key = keys.next();
+                            con.setRequestProperty(key, h.getString(key));
+                        }
+                    } else {
+                        con.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)");
+                    }
+                    
                     con.setConnectTimeout(8000); con.connect();
                     int code = con.getResponseCode();
                     if (code >= 300 && code < 400) {
@@ -618,13 +651,35 @@ public class PlayerActivity extends Activity {
 
     private void initializePlayer(UrlInfo info) {
         if (player != null) return;
+        
         String userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64)";
         Map<String, String> requestProps = new HashMap<>();
-        if(headersJson != null){ try{ JSONObject h=new JSONObject(headersJson); Iterator<String> k=h.keys(); while(k.hasNext()){ String key=k.next(); requestProps.put(key, h.getString(key)); } }catch(Exception e){} }
+        
+        // JSON'dan gelen Headerları ayıkla
+        if(headersJson != null){ 
+            try{ 
+                JSONObject h=new JSONObject(headersJson); 
+                Iterator<String> k=h.keys(); 
+                while(k.hasNext()){ 
+                    String key=k.next(); 
+                    String val = h.getString(key);
+                    if(key.equalsIgnoreCase("User-Agent")) userAgent = val; // Özel User-Agent varsa onu kullan
+                    else requestProps.put(key, val); 
+                } 
+            }catch(Exception e){} 
+        }
 
-        DefaultHttpDataSource.Factory httpFactory = new DefaultHttpDataSource.Factory().setUserAgent(userAgent).setAllowCrossProtocolRedirects(true).setDefaultRequestProperties(requestProps);
-        player = new ExoPlayer.Builder(this).setMediaSourceFactory(new DefaultMediaSourceFactory(this).setDataSourceFactory(httpFactory)).build();
+        DefaultHttpDataSource.Factory httpFactory = new DefaultHttpDataSource.Factory()
+            .setUserAgent(userAgent)
+            .setAllowCrossProtocolRedirects(true)
+            .setDefaultRequestProperties(requestProps); // Referer ve Origin buraya gider
+
+        player = new ExoPlayer.Builder(this)
+            .setMediaSourceFactory(new DefaultMediaSourceFactory(this).setDataSourceFactory(httpFactory))
+            .build();
+            
         playerView.setPlayer(player);
+        player.setPlayWhenReady(true);
         
         player.addListener(new Player.Listener() {
             public void onPlaybackStateChanged(int state) {
@@ -633,7 +688,7 @@ public class PlayerActivity extends Activity {
             }
             public void onPlayerError(PlaybackException e) {
                 loadingSpinner.setVisibility(View.GONE);
-                Toast.makeText(PlayerActivity.this, "Oynatma Hatası", Toast.LENGTH_LONG).show();
+                Toast.makeText(PlayerActivity.this, "Hata: " + e.getMessage(), Toast.LENGTH_LONG).show();
             }
         });
 
@@ -645,14 +700,13 @@ public class PlayerActivity extends Activity {
             }
             player.setMediaItem(item.build());
             player.prepare();
-            player.setPlayWhenReady(true);
-        } catch(Exception e){ Toast.makeText(this, "Hata", Toast.LENGTH_LONG).show(); }
+        } catch(Exception e){ Toast.makeText(this, "Başlatma Hatası", Toast.LENGTH_LONG).show(); }
     }
     protected void onStop(){ super.onStop(); if(player!=null){player.release(); player=null;} }
 }
 EOF
 
-# --- 9. WebView ---
+# --- 9. WEBVIEW ---
 cat > "$TARGET_DIR/WebViewActivity.java" <<EOF
 package com.base.app;
 import android.app.Activity;
@@ -674,4 +728,4 @@ public class WebViewActivity extends Activity {
 }
 EOF
 
-echo "✅ ULTRA APP V58 - FULL KING EDITION"
+echo "✅ ULTRA APP V63 - HEADER & ORIGIN MASTER DEPLOYED!"
