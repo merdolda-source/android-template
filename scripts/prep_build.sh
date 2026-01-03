@@ -8,7 +8,7 @@ VERSION_CODE=$5
 VERSION_NAME=$6
 
 echo "=========================================="
-echo "   ULTRA APP V27 - PLAYER ZOOM & FULL FIX"
+echo "   ULTRA APP V25 - COMPILE FIX & FULL PRO"
 echo "=========================================="
 
 # --- 1. TEMİZLİK ---
@@ -91,7 +91,7 @@ cat > app/src/main/AndroidManifest.xml <<EOF
         <activity android:name=".ChannelListActivity" />
         <activity android:name=".PlayerActivity" 
             android:configChanges="orientation|screenSize|keyboardHidden|smallestScreenSize|screenLayout" 
-            android:screenOrientation="sensor"
+            android:screenOrientation="sensorLandscape"
             android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen" />
     </application>
 </manifest>
@@ -297,7 +297,6 @@ public class MainActivity extends Activity {
                 JSONObject json = new JSONObject(result);
                 appName = json.optString("app_name", "App");
                 JSONObject ui = json.optJSONObject("ui_config");
-                
                 if(ui != null) {
                     headerColor = ui.optString("header_color", "#2196F3");
                     textColor = ui.optString("text_color", "#FFFFFF");
@@ -311,11 +310,7 @@ public class MainActivity extends Activity {
                     else fontStyle = Typeface.BOLD;
 
                     String splashUrl = ui.optString("splash_image", "");
-                    if(!splashUrl.isEmpty()) {
-                        if(!splashUrl.startsWith("http")) {
-                            String baseUrl = CONFIG_URL.substring(0, CONFIG_URL.lastIndexOf("/") + 1);
-                            splashUrl = baseUrl + splashUrl;
-                        }
+                    if(!splashUrl.isEmpty()){
                         splashImage.setVisibility(View.VISIBLE);
                         loadingSpinner.setVisibility(View.GONE);
                         Glide.with(MainActivity.this).load(splashUrl).into(splashImage);
@@ -626,7 +621,7 @@ public class ChannelListActivity extends Activity {
 }
 EOF
 
-# --- 8. PlayerActivity (PLAYER ZOOM & FILL SCREEN) ---
+# --- 8. PlayerActivity (RESUME, FULLSCREEN, ROTATION & IMPORT FIX) ---
 cat > "$TARGET_DIR/PlayerActivity.java" <<EOF
 package com.base.app;
 import android.app.Activity;
@@ -643,14 +638,13 @@ import androidx.media3.common.Player;
 import androidx.media3.datasource.DefaultHttpDataSource;
 import androidx.media3.exoplayer.ExoPlayer;
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory;
-import androidx.media3.ui.AspectRatioFrameLayout; // ZOOM İÇİN EKLENDİ
 import androidx.media3.ui.PlayerView;
 import org.json.JSONObject;
 import java.net.CookieHandler;
 import java.net.CookieManager;
 import java.net.CookiePolicy;
-import java.net.HttpURLConnection;
-import java.net.URL;
+import java.net.HttpURLConnection; // EKLENDİ
+import java.net.URL;               // EKLENDİ
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
@@ -682,10 +676,6 @@ public class PlayerActivity extends Activity {
         playerView = new PlayerView(this);
         playerView.setShowNextButton(false);
         playerView.setShowPreviousButton(false);
-        
-        // --- VİDEOYU EKRANA YAY (Siyah boşlukları kaldır) ---
-        playerView.setResizeMode(AspectRatioFrameLayout.RESIZE_MODE_FILL); 
-        
         setContentView(playerView);
         
         videoUrl = getIntent().getStringExtra("VIDEO_URL");
@@ -829,4 +819,4 @@ public class WebViewActivity extends Activity {
 }
 EOF
 
-echo "✅ ULTRA APP V27 TAMAMLANDI."
+echo "✅ ULTRA APP V25 TAMAMLANDI."
