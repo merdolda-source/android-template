@@ -1,6 +1,6 @@
 #!/bin/bash
 set -e
-# ULTRA APP V53 - FORCE CONVERT (JPG SUPPORT)
+# ULTRA APP V54 - FORCE INSTALL CONVERTER
 PACKAGE_NAME=$1
 APP_NAME=$2
 CONFIG_URL=$3
@@ -9,8 +9,13 @@ VERSION_CODE=$5
 VERSION_NAME=$6
 
 echo "=========================================="
-echo "   ULTRA APP V53 - ICON CONVERTER"
+echo "   ULTRA APP V54 - SYSTEM FIX"
 echo "=========================================="
+
+# --- 0. GEREKLİ ARAÇLARI YÜKLE (KRİTİK ADIM) ---
+echo "⚙️ Gerekli resim araçları yükleniyor..."
+sudo apt-get update >/dev/null 2>&1
+sudo apt-get install -y imagemagick >/dev/null 2>&1 || echo "Araç yüklenemedi ama devam ediliyor."
 
 # --- 1. TEMİZLİK ---
 rm -rf app/src/main/res/drawable*
@@ -19,34 +24,39 @@ rm -rf app/src/main/java/com/base/app/*
 TARGET_DIR="app/src/main/java/com/base/app"
 mkdir -p "$TARGET_DIR"
 
-# --- 2. ICON İNDİR VE DÖNÜŞTÜR (KRİTİK BÖLÜM) ---
+# --- 2. ICON İŞLEME (JPG -> PNG DÖNÜŞTÜRME) ---
 mkdir -p app/src/main/res/mipmap-xxxhdpi
 ICON_TARGET="app/src/main/res/mipmap-xxxhdpi/ic_launcher.png"
-TEMP_DOWNLOAD="temp_icon_file"
+TEMP_FILE="downloaded_image"
 
-echo "1. İkon indiriliyor..."
-# Uzantısız indiriyoruz (ne gelirse gelsin)
+echo "📥 İkon indiriliyor: $ICON_URL"
+
+# 1. Dosyayı indir (Uzantısız olarak)
 curl -s -L -k \
      -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" \
-     -o "$TEMP_DOWNLOAD" \
+     -o "$TEMP_FILE" \
      "$ICON_URL" || echo "İndirme uyarısı."
 
-# Dosya indi mi ve dolu mu?
-if [ -s "$TEMP_DOWNLOAD" ] && [ $(stat -c%s "$TEMP_DOWNLOAD") -gt 500 ]; then
-    echo "2. Dosya indi. PNG formatına dönüştürülüyor (Convert)..."
+# 2. Dosya indi mi kontrol et
+if [ -s "$TEMP_FILE" ] && [ $(stat -c%s "$TEMP_FILE") -gt 500 ]; then
+    echo "✅ Dosya indi. Formatı PNG'ye çevriliyor..."
     
-    # ImageMagick (convert) kullanarak dosyayı zorla PNG yapıyoruz.
-    # Bu komut JPG, BMP, GIF ne gelirse gelsin 512x512 PNG çıktısı verir.
-    # -background none -flatten: Şeffaflık sorunlarını çözer.
-    convert "$TEMP_DOWNLOAD" -resize 512x512! -background none -flatten "$ICON_TARGET" || echo "Convert başarısız, taşıma deneniyor."
-    
-    # Eğer convert komutu yoksa veya başarısızsa (fallback), direkt taşı
-    if [ ! -f "$ICON_TARGET" ]; then
-        mv "$TEMP_DOWNLOAD" "$ICON_TARGET"
-    fi
+    # ImageMagick ile dosya ne olursa olsun (JPG, GIF, WebP) PNG'ye zorla çevir
+    convert "$TEMP_FILE" -resize 512x512! -background none -flatten "$ICON_TARGET" || {
+        echo "❌ Convert başarısız oldu! (Manuel kopyalama deneniyor)"
+        cp "$TEMP_FILE" "$ICON_TARGET"
+    }
 else
-    echo "⚠️ İkon indirilemedi! Varsayılan ikon kullanılıyor."
+    echo "⚠️ İkon indirilemedi veya link hatalı!"
+    echo "🔄 Varsayılan Android ikonu kullanılıyor."
     curl -s -L -k -o "$ICON_TARGET" "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3b/Android_new_logo_2019.svg/512px-Android_new_logo_2019.svg.png"
+fi
+
+# Dosya oluşturuldu mu son kontrol
+if [ ! -s "$ICON_TARGET" ]; then
+    echo "🚨 İkon oluşturma tamamen başarısız! Acil durum ikonu oluşturuluyor."
+    # Mavi bir kare oluştur (En kötü senaryo kurtarıcısı)
+    convert -size 512x512 xc:blue "$ICON_TARGET" 2>/dev/null || echo "Buna da gücümüz yetmedi."
 fi
 
 # --- 3. BUILD.GRADLE ---
@@ -789,4 +799,4 @@ public class WebViewActivity extends Activity {
 }
 EOF
 
-echo "✅ ULTRA APP V53 - FINAL & FORMAT CONVERT"
+echo "✅ ULTRA APP V54 - FORCE INSTALL CONVERTER"
