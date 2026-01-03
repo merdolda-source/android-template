@@ -1,6 +1,6 @@
 #!/bin/bash
 set -e
-# ULTRA APP V50 - CONVERT (IMAGE MAGIC) EDITION
+# ULTRA APP V51 - JPG TO PNG CONVERTER
 PACKAGE_NAME=$1
 APP_NAME=$2
 CONFIG_URL=$3
@@ -9,7 +9,7 @@ VERSION_CODE=$5
 VERSION_NAME=$6
 
 echo "=========================================="
-echo "   ULTRA APP V50 - CONVERT FIX"
+echo "   ULTRA APP V51 - FORMAT FIX"
 echo "=========================================="
 
 # --- 1. TEMİZLİK ---
@@ -19,33 +19,37 @@ rm -rf app/src/main/java/com/base/app/*
 TARGET_DIR="app/src/main/java/com/base/app"
 mkdir -p "$TARGET_DIR"
 
-# --- 2. ICON İNDİRME (AAPT2 SAFE MODE) ---
+# --- 2. ICON (JPG -> PNG DÖNÜŞTÜRME) ---
 mkdir -p app/src/main/res/mipmap-xxxhdpi
 ICON_TARGET="app/src/main/res/mipmap-xxxhdpi/ic_launcher.png"
-TMP_ICON="downloaded_icon"
+TEMP_ICON="temp_downloaded_file" # Uzantısız indiriyoruz
 
-FALLBACK_ICON="https://raw.githubusercontent.com/google/material-design-icons/master/png/social/public/materialicons/128dp/1x/baseline_public_black_128dp.png"
+echo "1. İkon indiriliyor: $ICON_URL"
 
-echo "İkon indiriliyor: $ICON_URL"
+# Dosyayı indir (User-Agent ekliyoruz ki sunucu engellemesin)
+curl -s -L -k \
+     -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" \
+     -o "$TEMP_ICON" \
+     "$ICON_URL" || echo "İndirme uyarısı."
 
-curl -L -k -s \
-  -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120 Safari/537.36" \
-  -o "$TMP_ICON" \
-  "$ICON_URL" || true
-
-# ---- DOĞRULAMA ----
-ICON_TYPE=$(file --mime-type "$TMP_ICON" | awk '{print $2}')
-
-echo "İndirilen ikon türü: $ICON_TYPE"
-
-if [[ "$ICON_TYPE" == "image/png" ]] && [ $(stat -c%s "$TMP_ICON") -gt 1024 ]; then
-    echo "✅ PNG ikon geçerli"
-    mv "$TMP_ICON" "$ICON_TARGET"
+# Dosya indi mi kontrol et
+if [ -s "$TEMP_ICON" ] && [ $(stat -c%s "$TEMP_ICON") -gt 500 ]; then
+    echo "2. Dosya indi, PNG formatına dönüştürülüyor..."
+    
+    # İŞTE SİHİRLİ KOMUT (JPG gelse bile PNG yapar)
+    if command -v convert >/dev/null 2>&1; then
+        convert "$TEMP_ICON" -resize 512x512! -background none -flatten "$ICON_TARGET"
+        echo "✅ Convert işlemi başarılı."
+    else
+        # Convert yoksa (çok düşük ihtimal), basitçe adını değiştirir
+        mv "$TEMP_ICON" "$ICON_TARGET"
+        echo "⚠️ Convert bulunamadı, dosya direkt taşındı."
+    fi
 else
-    echo "⚠️ Geçersiz ikon (PNG değil). FALLBACK kullanılıyor."
-    curl -L -k -s -o "$ICON_TARGET" "$FALLBACK_ICON"
+    echo "⚠️ İkon indirilemedi! Varsayılan ikon kullanılıyor."
+    # Yedek ikon (Garanti olsun diye)
+    curl -s -L -k -o "$ICON_TARGET" "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3b/Android_new_logo_2019.svg/512px-Android_new_logo_2019.svg.png"
 fi
-
 
 # --- 3. BUILD.GRADLE ---
 cat > app/build.gradle <<EOF
@@ -113,7 +117,7 @@ cat > app/src/main/AndroidManifest.xml <<EOF
 </manifest>
 EOF
 
-# --- 5. ADS MANAGER ---
+# --- 5. ADS MANAGER (GLOBAL SAYAÇLI) ---
 cat > "$TARGET_DIR/AdsManager.java" <<EOF
 package com.base.app;
 import android.app.Activity;
@@ -787,4 +791,4 @@ public class WebViewActivity extends Activity {
 }
 EOF
 
-echo "✅ ULTRA APP V50 - CONVERT PRO EDITION"
+echo "✅ ULTRA APP V51 - FINAL CONVERT FIX"
