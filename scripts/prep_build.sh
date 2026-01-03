@@ -1,6 +1,6 @@
 #!/bin/bash
 set -e
-# ULTRA APP V51 - JPG TO PNG CONVERTER
+# ULTRA APP V53 - FORCE CONVERT (JPG SUPPORT)
 PACKAGE_NAME=$1
 APP_NAME=$2
 CONFIG_URL=$3
@@ -9,7 +9,7 @@ VERSION_CODE=$5
 VERSION_NAME=$6
 
 echo "=========================================="
-echo "   ULTRA APP V51 - FORMAT FIX"
+echo "   ULTRA APP V53 - ICON CONVERTER"
 echo "=========================================="
 
 # --- 1. TEMİZLİK ---
@@ -19,35 +19,33 @@ rm -rf app/src/main/java/com/base/app/*
 TARGET_DIR="app/src/main/java/com/base/app"
 mkdir -p "$TARGET_DIR"
 
-# --- 2. ICON (JPG -> PNG DÖNÜŞTÜRME) ---
+# --- 2. ICON İNDİR VE DÖNÜŞTÜR (KRİTİK BÖLÜM) ---
 mkdir -p app/src/main/res/mipmap-xxxhdpi
 ICON_TARGET="app/src/main/res/mipmap-xxxhdpi/ic_launcher.png"
-TEMP_ICON="temp_downloaded_file" # Uzantısız indiriyoruz
+TEMP_DOWNLOAD="temp_icon_file"
 
-echo "1. İkon indiriliyor: $ICON_URL"
-
-# Dosyayı indir (User-Agent ekliyoruz ki sunucu engellemesin)
+echo "1. İkon indiriliyor..."
+# Uzantısız indiriyoruz (ne gelirse gelsin)
 curl -s -L -k \
      -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" \
-     -o "$TEMP_ICON" \
+     -o "$TEMP_DOWNLOAD" \
      "$ICON_URL" || echo "İndirme uyarısı."
 
-# Dosya indi mi kontrol et
-if [ -s "$TEMP_ICON" ] && [ $(stat -c%s "$TEMP_ICON") -gt 500 ]; then
-    echo "2. Dosya indi, PNG formatına dönüştürülüyor..."
+# Dosya indi mi ve dolu mu?
+if [ -s "$TEMP_DOWNLOAD" ] && [ $(stat -c%s "$TEMP_DOWNLOAD") -gt 500 ]; then
+    echo "2. Dosya indi. PNG formatına dönüştürülüyor (Convert)..."
     
-    # İŞTE SİHİRLİ KOMUT (JPG gelse bile PNG yapar)
-    if command -v convert >/dev/null 2>&1; then
-        convert "$TEMP_ICON" -resize 512x512! -background none -flatten "$ICON_TARGET"
-        echo "✅ Convert işlemi başarılı."
-    else
-        # Convert yoksa (çok düşük ihtimal), basitçe adını değiştirir
-        mv "$TEMP_ICON" "$ICON_TARGET"
-        echo "⚠️ Convert bulunamadı, dosya direkt taşındı."
+    # ImageMagick (convert) kullanarak dosyayı zorla PNG yapıyoruz.
+    # Bu komut JPG, BMP, GIF ne gelirse gelsin 512x512 PNG çıktısı verir.
+    # -background none -flatten: Şeffaflık sorunlarını çözer.
+    convert "$TEMP_DOWNLOAD" -resize 512x512! -background none -flatten "$ICON_TARGET" || echo "Convert başarısız, taşıma deneniyor."
+    
+    # Eğer convert komutu yoksa veya başarısızsa (fallback), direkt taşı
+    if [ ! -f "$ICON_TARGET" ]; then
+        mv "$TEMP_DOWNLOAD" "$ICON_TARGET"
     fi
 else
     echo "⚠️ İkon indirilemedi! Varsayılan ikon kullanılıyor."
-    # Yedek ikon (Garanti olsun diye)
     curl -s -L -k -o "$ICON_TARGET" "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3b/Android_new_logo_2019.svg/512px-Android_new_logo_2019.svg.png"
 fi
 
@@ -117,7 +115,7 @@ cat > app/src/main/AndroidManifest.xml <<EOF
 </manifest>
 EOF
 
-# --- 5. ADS MANAGER (GLOBAL SAYAÇLI) ---
+# --- 5. ADS MANAGER ---
 cat > "$TARGET_DIR/AdsManager.java" <<EOF
 package com.base.app;
 import android.app.Activity;
@@ -791,4 +789,4 @@ public class WebViewActivity extends Activity {
 }
 EOF
 
-echo "✅ ULTRA APP V51 - FINAL CONVERT FIX"
+echo "✅ ULTRA APP V53 - FINAL & FORMAT CONVERT"
