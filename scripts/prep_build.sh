@@ -1,6 +1,6 @@
 #!/bin/bash
 set -e
-# ULTRA APP V41 - GLOBAL ADS, PLAYER OVERLAY & ANALYTICS
+# ULTRA APP V42 - ICON CRASH FIX & STABILITY
 PACKAGE_NAME=$1
 APP_NAME=$2
 CONFIG_URL=$3
@@ -9,7 +9,7 @@ VERSION_CODE=$5
 VERSION_NAME=$6
 
 echo "=========================================="
-echo "   ULTRA APP V41 - FINAL BUILDER"
+echo "   ULTRA APP V42 - ICON FIX EDITION"
 echo "=========================================="
 
 # --- 1. TEMİZLİK ---
@@ -19,18 +19,33 @@ rm -rf app/src/main/java/com/base/app/*
 TARGET_DIR="app/src/main/java/com/base/app"
 mkdir -p "$TARGET_DIR"
 
-# --- 2. ICON (GÜÇLENDİRİLMİŞ - BOZUK DOSYA ENGELLEYİCİ) ---
+# --- 2. ICON (GÜÇLENDİRİLMİŞ - HATA KORUMALI) ---
 mkdir -p app/src/main/res/mipmap-xxxhdpi
 ICON_TARGET="app/src/main/res/mipmap-xxxhdpi/ic_launcher.png"
+# Garantili çalışan bir PNG linki (Yedek)
 DEFAULT_ICON="https://upload.wikimedia.org/wikipedia/commons/thumb/3/3b/Android_new_logo_2019.svg/512px-Android_new_logo_2019.svg.png"
 
-echo "İkon indiriliyor..."
-# İkonu indir, eğer başarısız olursa veya dosya çok küçükse (bozuksa) varsayılanı kullan
-curl -s -L -k -o temp_icon.png "$ICON_URL" || echo "İndirme başarısız."
-if [ -s temp_icon.png ] && [ $(stat -c%s "temp_icon.png") -gt 100 ]; then
-    mv temp_icon.png "$ICON_TARGET"
-else
-    echo "⚠️ Özel ikon kullanılamadı, varsayılan Android ikonu kullanılıyor."
+echo "İkon kontrol ediliyor..."
+
+# 1. Kullanıcı ikonu var mı?
+if [ ! -z "$ICON_URL" ] && [ "$ICON_URL" != "null" ]; then
+    echo "Kullanıcı ikonu indiriliyor: $ICON_URL"
+    # İndirmeyi dene, hata verirse devam et (|| true)
+    curl -s -L -k -o temp_icon.png "$ICON_URL" || true
+    
+    # Dosya indi mi ve boyutu 500 byte'tan büyük mü? (Hata sayfaları küçüktür)
+    if [ -s temp_icon.png ] && [ $(stat -c%s "temp_icon.png") -gt 500 ]; then
+        echo "✅ İkon geçerli."
+        mv temp_icon.png "$ICON_TARGET"
+    else
+        echo "⚠️ İkon dosyası bozuk veya çok küçük. Varsayılan kullanılacak."
+        rm -f temp_icon.png
+    fi
+fi
+
+# 2. Eğer hala ikon yoksa (veya yukarıdaki başarısız olduysa) varsayılanı indir
+if [ ! -f "$ICON_TARGET" ]; then
+    echo "🔄 Varsayılan ikon indiriliyor..."
     curl -s -L -k -o "$ICON_TARGET" "$DEFAULT_ICON"
 fi
 
@@ -100,7 +115,7 @@ cat > app/src/main/AndroidManifest.xml <<EOF
 </manifest>
 EOF
 
-# --- 5. ADS MANAGER (GLOBAL SAYAÇLI) ---
+# --- 5. ADS MANAGER ---
 cat > "$TARGET_DIR/AdsManager.java" <<EOF
 package com.base.app;
 import android.app.Activity;
@@ -110,7 +125,6 @@ import com.unity3d.services.banners.*;
 import org.json.JSONObject;
 
 public class AdsManager {
-    // GLOBAL SAYAÇ: Uygulamanın her yerinde geçerli
     public static int GLOBAL_CLICK_COUNT = 0; 
     private static int INTER_FREQ = 3;
     private static boolean ENABLED = false, BANNER_ACTIVE = false;
@@ -125,7 +139,6 @@ public class AdsManager {
             BANNER_ID=j.optString("banner_id");
             INTER_ID=j.optString("inter_id"); 
             INTER_FREQ=j.optInt("inter_freq", 3);
-            
             if(ENABLED && !GAME_ID.isEmpty()) UnityAds.initialize(a.getApplicationContext(), GAME_ID, false, null);
         }catch(Exception e){}
     }
@@ -137,16 +150,14 @@ public class AdsManager {
         c.removeAllViews(); c.addView(b);
     }
 
-    // Global geçiş reklamı kontrolü
     public static void checkInterstitial(Activity a, Runnable onComplete) {
         if(!ENABLED) { onComplete.run(); return; }
-        
         GLOBAL_CLICK_COUNT++;
         if(GLOBAL_CLICK_COUNT >= INTER_FREQ) {
             if(UnityAds.isReady(INTER_ID)) {
                 UnityAds.show(a, INTER_ID, new IUnityAdsShowListener(){
                     public void onUnityAdsShowComplete(String p, UnityAds.UnityAdsShowCompletionState s){ 
-                        GLOBAL_CLICK_COUNT = 0; // Sayacı sıfırla
+                        GLOBAL_CLICK_COUNT = 0; 
                         onComplete.run(); 
                     }
                     public void onUnityAdsShowFailure(String p, UnityAds.UnityAdsShowError e, String m){ onComplete.run(); }
@@ -192,13 +203,12 @@ public class MainActivity extends Activity {
     private ProgressBar loadingSpinner;
     private ImageView refreshBtn, shareBtn;
     
-    // Panelden gelecek ayarlar
     private String headerColor = "#2196F3", textColor = "#FFFFFF", bgColor = "#F0F0F0", focusColor = "#FF9800";
     private boolean showHeader = true;
     private String appName = "$APP_NAME";
     private int fontSize = 16;
     private int fontStyle = Typeface.BOLD;
-    private String playerConfigStr = ""; // Player yazı ayarlarını tutar
+    private String playerConfigStr = "";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -206,7 +216,6 @@ public class MainActivity extends Activity {
         root = new RelativeLayout(this);
         root.setBackgroundColor(Color.WHITE);
 
-        // Splash
         splashImage = new ImageView(this);
         splashImage.setScaleType(ImageView.ScaleType.CENTER_CROP);
         splashImage.setVisibility(View.GONE); 
@@ -217,7 +226,6 @@ public class MainActivity extends Activity {
         lp.addRule(RelativeLayout.CENTER_IN_PARENT);
         root.addView(loadingSpinner, lp);
 
-        // Header
         headerLayout = new LinearLayout(this);
         headerLayout.setId(View.generateViewId());
         headerLayout.setOrientation(LinearLayout.HORIZONTAL);
@@ -247,7 +255,6 @@ public class MainActivity extends Activity {
         hp.addRule(RelativeLayout.ALIGN_PARENT_TOP);
         root.addView(headerLayout, hp);
 
-        // Banner
         bannerContainer = new LinearLayout(this);
         bannerContainer.setId(View.generateViewId());
         bannerContainer.setOrientation(LinearLayout.VERTICAL);
@@ -257,7 +264,6 @@ public class MainActivity extends Activity {
         bp.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM);
         root.addView(bannerContainer, bp);
 
-        // Content
         ScrollView sv = new ScrollView(this);
         contentContainer = new LinearLayout(this);
         contentContainer.setOrientation(LinearLayout.VERTICAL);
@@ -306,17 +312,17 @@ public class MainActivity extends Activity {
         }
         else if (type.equals("HTML")) {
             Intent i = new Intent(MainActivity.this, WebViewActivity.class);
-            i.putExtra("HTML_DATA", content); // HTML Kodunu gönder
+            i.putExtra("HTML_DATA", content); 
             startActivity(i);
         }
         else if (type.equals("IPTV") || type.equals("JSON_LIST") || type.equals("MANUAL_M3U")) {
             Intent i = new Intent(MainActivity.this, ChannelListActivity.class);
             i.putExtra("LIST_URL", link); 
-            i.putExtra("LIST_CONTENT", content); // Manuel M3U içeriği
+            i.putExtra("LIST_CONTENT", content);
             i.putExtra("TYPE", type);
             i.putExtra("BG_COLOR", bgColor); i.putExtra("HEADER_COLOR", headerColor); 
             i.putExtra("TEXT_COLOR", textColor); i.putExtra("FOCUS_COLOR", focusColor);
-            i.putExtra("PLAYER_CONFIG", playerConfigStr); // Player ayarlarını gönder
+            i.putExtra("PLAYER_CONFIG", playerConfigStr);
             startActivity(i);
         } 
         else if (type.equals("SINGLE_STREAM")) {
@@ -345,7 +351,7 @@ public class MainActivity extends Activity {
             try {
                 JSONObject json = new JSONObject(result);
                 appName = json.optString("app_name", "App");
-                playerConfigStr = json.optString("player_config", "{}"); // Player ayarlarını al
+                playerConfigStr = json.optString("player_config", "{}"); 
                 
                 JSONObject ui = json.optJSONObject("ui_config");
                 if(ui != null) {
@@ -393,7 +399,6 @@ public class MainActivity extends Activity {
                 JSONArray mods = json.getJSONArray("modules");
                 for(int i=0; i<mods.length(); i++){
                     JSONObject m = mods.getJSONObject(i);
-                    // content alanını da alıyoruz
                     createStyledButton(m.getString("title"), m.getString("type"), m.optString("url"), m.optString("content"));
                 }
                 
@@ -452,7 +457,7 @@ public class ChannelListActivity extends Activity {
         bgColor = getIntent().getStringExtra("BG_COLOR");
         textColor = getIntent().getStringExtra("TEXT_COLOR");
         focusColor = getIntent().getStringExtra("FOCUS_COLOR");
-        playerConfig = getIntent().getStringExtra("PLAYER_CONFIG"); // Player ayarı
+        playerConfig = getIntent().getStringExtra("PLAYER_CONFIG");
 
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
@@ -478,7 +483,7 @@ public class ChannelListActivity extends Activity {
         setContentView(root);
         
         String listUrl = getIntent().getStringExtra("LIST_URL");
-        String listContent = getIntent().getStringExtra("LIST_CONTENT"); // Manuel içerik
+        String listContent = getIntent().getStringExtra("LIST_CONTENT"); 
         String type = getIntent().getStringExtra("TYPE");
         
         new FetchListTask(type, listContent).execute(listUrl);
@@ -488,7 +493,6 @@ public class ChannelListActivity extends Activity {
                 showChannels(groupNames.get(pos));
             } else {
                 ChannelItem item = currentList.get(pos);
-                // Global reklam kontrolü
                 AdsManager.checkInterstitial(ChannelListActivity.this, () -> {
                     Intent i = new Intent(ChannelListActivity.this, PlayerActivity.class);
                     i.putExtra("VIDEO_URL", item.url);
@@ -518,7 +522,6 @@ public class ChannelListActivity extends Activity {
         listView.setAdapter(new ChannelAdapter(currentList));
     }
 
-    // Adapter sınıfları aynen kalıyor (kısaltma için özetledim)
     private class CategoryAdapter extends ArrayAdapter<String> {
         public CategoryAdapter(List<String> items) { super(ChannelListActivity.this, 0, items); }
         public View getView(int p, View v, ViewGroup pa) { return createRow(v, getItem(p), null, true); }
@@ -585,7 +588,6 @@ public class ChannelListActivity extends Activity {
             if(r==null){Toast.makeText(ChannelListActivity.this,"Hata",Toast.LENGTH_SHORT).show();return;}
             try{
                 groupedChannels.clear(); groupNames.clear();
-                // JSON ve M3U parse mantığı V19 ile aynı
                 if("JSON_LIST".equals(type) || r.trim().startsWith("{")) {
                     try {
                         JSONObject root=new JSONObject(r); JSONArray arr=root.getJSONObject("list").getJSONArray("item");
@@ -671,14 +673,12 @@ public class PlayerActivity extends Activity {
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
         
-        // FrameLayout: Player + Overlay için
         FrameLayout root = new FrameLayout(this);
         playerView = new PlayerView(this);
         playerView.setShowNextButton(false);
         playerView.setShowPreviousButton(false);
         root.addView(playerView);
 
-        // --- PLAYER ÜZERİ YAZI (WATERMARK) ---
         String configStr = getIntent().getStringExtra("PLAYER_CONFIG");
         if(configStr != null) {
             try {
@@ -689,7 +689,7 @@ public class PlayerActivity extends Activity {
                     overlay.setTextColor(Color.parseColor(cfg.optString("watermark_color", "#FFFFFF")));
                     overlay.setTextSize(18);
                     overlay.setPadding(30, 30, 30, 30);
-                    overlay.setBackgroundColor(Color.parseColor("#80000000")); // Yarı saydam arka plan
+                    overlay.setBackgroundColor(Color.parseColor("#80000000"));
                     FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(-2, -2);
                     String pos = cfg.optString("watermark_pos", "left");
                     params.gravity = (pos.equals("right") ? Gravity.TOP | Gravity.END : Gravity.TOP | Gravity.START);
@@ -700,12 +700,10 @@ public class PlayerActivity extends Activity {
         }
 
         setContentView(root);
-        
         videoUrl = getIntent().getStringExtra("VIDEO_URL");
         headersJson = getIntent().getStringExtra("HEADERS_JSON");
         
         if(videoUrl != null && !videoUrl.isEmpty()) {
-            Toast.makeText(this, "Bağlanılıyor...", Toast.LENGTH_SHORT).show();
             new ResolveUrlTask().execute(videoUrl.trim());
         }
     }
@@ -791,4 +789,4 @@ public class WebViewActivity extends Activity {
 }
 EOF
 
-echo "✅ ULTRA APP V41 - FULL & FINAL"
+echo "✅ ULTRA APP V42 - FINAL & SAFE"
