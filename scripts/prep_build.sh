@@ -8,7 +8,7 @@ VERSION_CODE=$5
 VERSION_NAME=$6
 
 echo "=========================================="
-echo "   ULTRA APP V26 - SPLASH URL FIX & SENSOR ROTATION"
+echo "   ULTRA APP V27 - PLAYER ZOOM & FULL FIX"
 echo "=========================================="
 
 # --- 1. TEMİZLİK ---
@@ -75,7 +75,7 @@ dependencies {
 }
 EOF
 
-# --- 4. MANIFEST (ROTATION FIX: 'sensor' yapıldı) ---
+# --- 4. MANIFEST ---
 cat > app/src/main/AndroidManifest.xml <<EOF
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -139,7 +139,7 @@ public class AdsManager {
 }
 EOF
 
-# --- 6. MainActivity (SPLASH URL FIX) ---
+# --- 6. MainActivity ---
 cat > "$TARGET_DIR/MainActivity.java" <<EOF
 package com.base.app;
 import android.app.Activity;
@@ -310,15 +310,12 @@ public class MainActivity extends Activity {
                     else if(fStyle.equals("ITALIC")) fontStyle = Typeface.ITALIC; 
                     else fontStyle = Typeface.BOLD;
 
-                    // SPLASH SCREEN FIX: Relative URL to Absolute
                     String splashUrl = ui.optString("splash_image", "");
                     if(!splashUrl.isEmpty()) {
-                        // Eğer http ile başlamıyorsa, domain'i önüne ekle
                         if(!splashUrl.startsWith("http")) {
                             String baseUrl = CONFIG_URL.substring(0, CONFIG_URL.lastIndexOf("/") + 1);
                             splashUrl = baseUrl + splashUrl;
                         }
-                        
                         splashImage.setVisibility(View.VISIBLE);
                         loadingSpinner.setVisibility(View.GONE);
                         Glide.with(MainActivity.this).load(splashUrl).into(splashImage);
@@ -629,7 +626,7 @@ public class ChannelListActivity extends Activity {
 }
 EOF
 
-# --- 8. PlayerActivity (RESUME & FULLSCREEN) ---
+# --- 8. PlayerActivity (PLAYER ZOOM & FILL SCREEN) ---
 cat > "$TARGET_DIR/PlayerActivity.java" <<EOF
 package com.base.app;
 import android.app.Activity;
@@ -646,6 +643,7 @@ import androidx.media3.common.Player;
 import androidx.media3.datasource.DefaultHttpDataSource;
 import androidx.media3.exoplayer.ExoPlayer;
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory;
+import androidx.media3.ui.AspectRatioFrameLayout; // ZOOM İÇİN EKLENDİ
 import androidx.media3.ui.PlayerView;
 import org.json.JSONObject;
 import java.net.CookieHandler;
@@ -684,6 +682,10 @@ public class PlayerActivity extends Activity {
         playerView = new PlayerView(this);
         playerView.setShowNextButton(false);
         playerView.setShowPreviousButton(false);
+        
+        // --- VİDEOYU EKRANA YAY (Siyah boşlukları kaldır) ---
+        playerView.setResizeMode(AspectRatioFrameLayout.RESIZE_MODE_FILL); 
+        
         setContentView(playerView);
         
         videoUrl = getIntent().getStringExtra("VIDEO_URL");
@@ -827,4 +829,4 @@ public class WebViewActivity extends Activity {
 }
 EOF
 
-echo "✅ ULTRA APP V26 TAMAMLANDI."
+echo "✅ ULTRA APP V27 TAMAMLANDI."
