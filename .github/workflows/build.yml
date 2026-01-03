@@ -9,20 +9,30 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # 1. Kaynak Kodları İndir
       - name: Kodları İndir
         uses: actions/checkout@v4
 
+      # 2. Java 17 Kurulumu (Android Build İçin Şart)
       - name: Java Kur (JDK 17)
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
 
+      # 3. Gradle Önbellekleme (Derleme Hızı İçin)
       - name: Gradle Cache
         uses: gradle/actions/setup-gradle@v3
         with:
           gradle-version: current
 
+      # 4. Keystore Dosyasını Çöz (Secret'tan Dosyaya Çevir)
+      - name: Decode Keystore
+        run: |
+          echo "${{ secrets.SIGNING_KEY_STORE_BASE64 }}" | base64 -d > app/keystore.jks
+
+      # 5. Hazırlık Scriptini Çalıştır (V28 ile Tam Uyumlu)
+      # Parametre Sırası: Package, AppName, ConfigURL, IconURL, VerCode, VerName
       - name: Script Çalıştır
         run: |
           sed -i 's/\r$//' scripts/prep_build.sh
@@ -30,22 +40,41 @@ jobs:
           chmod +x scripts/prep_build.sh
           
           echo "Script Başlatılıyor..."
-          # 4. Parametre olarak ICON_URL ekledik
+          
           ./scripts/prep_build.sh \
             "${{ github.event.client_payload.package_name }}" \
             "${{ github.event.client_payload.app_name }}" \
             "${{ github.event.client_payload.config_url }}" \
-            "${{ github.event.client_payload.icon_url }}"  \
-            '${{ github.event.client_payload.ads_config }}'\
+            "${{ github.event.client_payload.icon_url }}" \
             "${{ github.event.client_payload.version_code }}" \
-            "${{ github.event.client_payload.version_name }}"
+            "${{ github.event.client_payload.version_name }}"\
+            '${{ github.event.client_payload.ads_config }}'
 
-      - name: APK Derle (Debug)
-        run: ./gradlew assembleDebug --no-daemon
+      # 6. İmzalı APK ve AAB Derle (Release Modu)
+      - name: Build Signed Release
+        env:
+          SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
+          SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
+          SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
+        run: ./gradlew assembleRelease bundleRelease --no-daemon
 
-      - name: APK Yükle
+      # 7. Dosyaları GitHub Artifacts'a Yedekle
+      - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ github.event.client_payload.app_name }}-APK
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: ${{ github.event.client_payload.app_name }}-BUILD
+          path: |
+            app/build/outputs/apk/release/app-release.apk
+            app/build/outputs/bundle/release/app-release.aab
           retention-days: 1
+
+      # 8. Dosyaları Panele Gönder (Callback - CreatorApp24)
+      - name: Send to CreatorApp24 Panel
+        run: |
+          echo "Dosyalar sunucuya gönderiliyor..."
+          curl -v \
+            -F "apk=@app/build/outputs/apk/release/app-release.apk" \
+            -F "aab=@app/build/outputs/bundle/release/app-release.aab" \
+            -F "package_name=${{ github.event.client_payload.package_name }}" \
+            -F "secret=GIZLI_KEY_BURAYA" \
+            https://creatorapp24.com/git/callback.php
