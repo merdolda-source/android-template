@@ -6,13 +6,9 @@ CONFIG_URL=$3
 ICON_URL=$4
 VERSION_CODE=$5
 VERSION_NAME=$6
-# Yeni parametre olarak SPLASH_URL'i GitHub Action'dan bekliyoruz.
-# Ancak eski yapıyı bozmamak için JSON'dan çekmeyi tercih edelim.
-# GitHub Action'da bu parametre (SPLASH_URL) eklense iyi olur ama
-# şimdilik MainActivity içinde JSON'dan dinamik yükleteceğiz.
 
 echo "=========================================="
-echo "   ULTRA APP V24 - RESUME, FULLSCREEN & SPLASH"
+echo "   ULTRA APP V25 - COMPILE FIX & FULL PRO"
 echo "=========================================="
 
 # --- 1. TEMİZLİK ---
@@ -143,7 +139,7 @@ public class AdsManager {
 }
 EOF
 
-# --- 6. MainActivity (SPLASH SCREEN SUPPORT) ---
+# --- 6. MainActivity ---
 cat > "$TARGET_DIR/MainActivity.java" <<EOF
 package com.base.app;
 import android.app.Activity;
@@ -186,10 +182,9 @@ public class MainActivity extends Activity {
         root = new RelativeLayout(this);
         root.setBackgroundColor(Color.WHITE);
 
-        // --- SPLASH IMAGE & SPINNER ---
         splashImage = new ImageView(this);
         splashImage.setScaleType(ImageView.ScaleType.CENTER_CROP);
-        splashImage.setVisibility(View.GONE); // Default hidden until we get URL
+        splashImage.setVisibility(View.GONE); 
         RelativeLayout.LayoutParams splashParams = new RelativeLayout.LayoutParams(-1, -1);
         root.addView(splashImage, splashParams);
 
@@ -198,7 +193,6 @@ public class MainActivity extends Activity {
         lp.addRule(RelativeLayout.CENTER_IN_PARENT);
         root.addView(loadingSpinner, lp);
 
-        // --- ANA İÇERİK ---
         headerLayout = new LinearLayout(this);
         headerLayout.setId(View.generateViewId());
         headerLayout.setOrientation(LinearLayout.HORIZONTAL);
@@ -303,7 +297,6 @@ public class MainActivity extends Activity {
                 JSONObject json = new JSONObject(result);
                 appName = json.optString("app_name", "App");
                 JSONObject ui = json.optJSONObject("ui_config");
-                
                 if(ui != null) {
                     headerColor = ui.optString("header_color", "#2196F3");
                     textColor = ui.optString("text_color", "#FFFFFF");
@@ -316,14 +309,11 @@ public class MainActivity extends Activity {
                     else if(fStyle.equals("ITALIC")) fontStyle = Typeface.ITALIC; 
                     else fontStyle = Typeface.BOLD;
 
-                    // SPLASH SCREEN LOGIC
                     String splashUrl = ui.optString("splash_image", "");
                     if(!splashUrl.isEmpty()){
                         splashImage.setVisibility(View.VISIBLE);
                         loadingSpinner.setVisibility(View.GONE);
                         Glide.with(MainActivity.this).load(splashUrl).into(splashImage);
-                        
-                        // Splash süresi (3 saniye)
                         new android.os.Handler().postDelayed(() -> {
                             splashImage.setVisibility(View.GONE);
                             finishSetup(json, ui);
@@ -631,7 +621,7 @@ public class ChannelListActivity extends Activity {
 }
 EOF
 
-# --- 8. PlayerActivity (RESUME, FULLSCREEN, ROTATION) ---
+# --- 8. PlayerActivity (RESUME, FULLSCREEN, ROTATION & IMPORT FIX) ---
 cat > "$TARGET_DIR/PlayerActivity.java" <<EOF
 package com.base.app;
 import android.app.Activity;
@@ -653,6 +643,8 @@ import org.json.JSONObject;
 import java.net.CookieHandler;
 import java.net.CookieManager;
 import java.net.CookiePolicy;
+import java.net.HttpURLConnection; // EKLENDİ
+import java.net.URL;               // EKLENDİ
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
@@ -667,14 +659,11 @@ public class PlayerActivity extends Activity {
     @Override
     protected void onCreate(Bundle s) {
         super.onCreate(s);
-        // COOKIE
         CookieHandler.setDefault(new CookieManager(null, CookiePolicy.ACCEPT_ALL));
 
-        // TAM EKRAN VE YAN ÇEVİRME
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
         
-        // System UI (Navigation bar vs.) gizle
         View decorView = getWindow().getDecorView();
         decorView.setSystemUiVisibility(
             View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
@@ -735,7 +724,6 @@ public class PlayerActivity extends Activity {
     private class ResolveUrlTask extends AsyncTask<String, Void, UrlInfo> {
         @Override
         protected UrlInfo doInBackground(String... params) {
-            // ... (Aynı Resolve Mantığı) ...
             String currentUrl = params[0];
             String detectedMime = null;
             try {
@@ -764,7 +752,7 @@ public class PlayerActivity extends Activity {
     }
 
     private void initializePlayer(UrlInfo info) {
-        if (player != null) return; // Zaten varsa tekrar oluşturma
+        if (player != null) return; 
 
         String userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36";
         Map<String, String> requestProps = new HashMap<>();
@@ -799,7 +787,7 @@ public class PlayerActivity extends Activity {
                 else if (info.mimeType.contains("video/mp4")) item.setMimeType(MimeTypes.APPLICATION_MP4);
             }
             player.setMediaItem(item.build());
-            player.seekTo(playbackPosition); // KALDIĞI YERDEN DEVAM
+            player.seekTo(playbackPosition); 
             player.prepare();
             player.setPlayWhenReady(playWhenReady);
         } catch(Exception e){ Toast.makeText(this, "Hata: " + e.getMessage(), Toast.LENGTH_LONG).show(); }
@@ -831,4 +819,4 @@ public class WebViewActivity extends Activity {
 }
 EOF
 
-echo "✅ ULTRA APP V24 TAMAMLANDI."
+echo "✅ ULTRA APP V25 TAMAMLANDI."
