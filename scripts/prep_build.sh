@@ -1,6 +1,6 @@
 #!/bin/bash
 set -e
-# ULTRA APP V48 - REAL ICON DOWNLOADER (Browser Mode)
+# ULTRA APP V50 - CONVERT (IMAGE MAGIC) EDITION
 PACKAGE_NAME=$1
 APP_NAME=$2
 CONFIG_URL=$3
@@ -9,7 +9,7 @@ VERSION_CODE=$5
 VERSION_NAME=$6
 
 echo "=========================================="
-echo "   ULTRA APP V48 - ICON FIX (BROWSER MODE)"
+echo "   ULTRA APP V50 - CONVERT FIX"
 echo "=========================================="
 
 # --- 1. TEMİZLİK ---
@@ -19,29 +19,32 @@ rm -rf app/src/main/java/com/base/app/*
 TARGET_DIR="app/src/main/java/com/base/app"
 mkdir -p "$TARGET_DIR"
 
-# --- 2. ICON İNDİRME (GÜÇLENDİRİLMİŞ) ---
+# --- 2. ICON İŞLEME (ESKİ USÜL SAĞLAM YÖNTEM) ---
 mkdir -p app/src/main/res/mipmap-xxxhdpi
 ICON_TARGET="app/src/main/res/mipmap-xxxhdpi/ic_launcher.png"
+TEMP_ICON="temp_icon_raw"
 
-# Yedek ikon (Eğer senin sunucun tamamen kapalıysa build patlamasın diye)
-FALLBACK_ICON="https://upload.wikimedia.org/wikipedia/commons/thumb/3/3b/Android_new_logo_2019.svg/512px-Android_new_logo_2019.svg.png"
+echo "1. İkon indiriliyor: $ICON_URL"
 
-echo "İkon indiriliyor: $ICON_URL"
+# wget ile tarayıcı taklidi yaparak indir (curl yerine wget bazen daha iyidir)
+wget --user-agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64)" -O "$TEMP_ICON" "$ICON_URL" || echo "İndirme uyarısı."
 
-# TARAYICI GİBİ İNDİR (User-Agent Eklendi - Hata Çözümü Burası)
-curl -s -L -k \
-     -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" \
-     -o "downloaded_icon" \
-     "$ICON_URL" || echo "İndirme uyarısı."
+echo "2. İkon 'convert' ile işleniyor..."
 
-# Dosya kontrolü: İndi mi ve 1KB'dan büyük mü?
-if [ -s "downloaded_icon" ] && [ $(stat -c%s "downloaded_icon") -gt 500 ]; then
-    echo "✅ İkon başarıyla indi."
-    mv "downloaded_icon" "$ICON_TARGET"
+# İŞTE SENİN HATIRLADIĞIN SİHİRLİ KOMUT:
+# Bu komut dosyayı alır, ne olursa olsun temiz bir 512x512 PNG'ye çevirir.
+# Header hatalarını, bozuk verileri temizler.
+if command -v convert >/dev/null 2>&1; then
+    convert "$TEMP_ICON" -resize 512x512! -background none -flatten "$ICON_TARGET" || echo "Convert başarısız, orijinali deniyoruz."
 else
-    echo "⚠️ Senin ikonun indirilemedi (Sunucu engeli veya hatalı link)."
-    echo "⚠️ Sistem çökmemesi için geçici ikon kullanılıyor."
-    curl -s -L -k -o "$ICON_TARGET" "$FALLBACK_ICON"
+    # Eğer convert yoksa (ki github'da vardır), direkt taşı
+    mv "$TEMP_ICON" "$ICON_TARGET"
+fi
+
+# Son kontrol: Eğer convert başarısız olduysa ve dosya boşsa varsayılanı koy (Çökmesin diye)
+if [ ! -s "$ICON_TARGET" ]; then
+    echo "⚠️ İkon oluşturulamadı! Varsayılan kullanılıyor."
+    wget -O "$ICON_TARGET" "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3b/Android_new_logo_2019.svg/512px-Android_new_logo_2019.svg.png"
 fi
 
 # --- 3. BUILD.GRADLE ---
@@ -784,4 +787,4 @@ public class WebViewActivity extends Activity {
 }
 EOF
 
-echo "✅ ULTRA APP V48 - FINAL & REAL ICON"
+echo "✅ ULTRA APP V50 - CONVERT PRO EDITION"
