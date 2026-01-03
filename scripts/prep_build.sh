@@ -1,6 +1,6 @@
 #!/bin/bash
 set -e
-# ULTRA APP V42 - ICON CRASH FIX & STABILITY
+# ULTRA APP V43 - ICON SAFEGUARD & STABILITY
 PACKAGE_NAME=$1
 APP_NAME=$2
 CONFIG_URL=$3
@@ -9,7 +9,7 @@ VERSION_CODE=$5
 VERSION_NAME=$6
 
 echo "=========================================="
-echo "   ULTRA APP V42 - ICON FIX EDITION"
+echo "   ULTRA APP V43 - ICON SAFEGUARD"
 echo "=========================================="
 
 # --- 1. TEMİZLİK ---
@@ -19,31 +19,31 @@ rm -rf app/src/main/java/com/base/app/*
 TARGET_DIR="app/src/main/java/com/base/app"
 mkdir -p "$TARGET_DIR"
 
-# --- 2. ICON (GÜÇLENDİRİLMİŞ - HATA KORUMALI) ---
+# --- 2. ICON (GÜÇLENDİRİLMİŞ - BOZUK DOSYA ENGELLEYİCİ) ---
 mkdir -p app/src/main/res/mipmap-xxxhdpi
 ICON_TARGET="app/src/main/res/mipmap-xxxhdpi/ic_launcher.png"
-# Garantili çalışan bir PNG linki (Yedek)
+# Garantili çalışan varsayılan ikon
 DEFAULT_ICON="https://upload.wikimedia.org/wikipedia/commons/thumb/3/3b/Android_new_logo_2019.svg/512px-Android_new_logo_2019.svg.png"
 
-echo "İkon kontrol ediliyor..."
+echo "İkon durumu kontrol ediliyor..."
 
 # 1. Kullanıcı ikonu var mı?
 if [ ! -z "$ICON_URL" ] && [ "$ICON_URL" != "null" ]; then
     echo "Kullanıcı ikonu indiriliyor: $ICON_URL"
-    # İndirmeyi dene, hata verirse devam et (|| true)
+    # İndirmeyi dene (sessiz mod, hata verirse devam et)
     curl -s -L -k -o temp_icon.png "$ICON_URL" || true
     
-    # Dosya indi mi ve boyutu 500 byte'tan büyük mü? (Hata sayfaları küçüktür)
-    if [ -s temp_icon.png ] && [ $(stat -c%s "temp_icon.png") -gt 500 ]; then
+    # Dosya indi mi ve boyutu 1KB'dan büyük mü? (Hata sayfaları genelde küçüktür)
+    if [ -s temp_icon.png ] && [ $(stat -c%s "temp_icon.png") -gt 1000 ]; then
         echo "✅ İkon geçerli."
         mv temp_icon.png "$ICON_TARGET"
     else
-        echo "⚠️ İkon dosyası bozuk veya çok küçük. Varsayılan kullanılacak."
+        echo "⚠️ İkon dosyası bozuk veya indirilemedi. Varsayılan kullanılacak."
         rm -f temp_icon.png
     fi
 fi
 
-# 2. Eğer hala ikon yoksa (veya yukarıdaki başarısız olduysa) varsayılanı indir
+# 2. Eğer hala ikon yoksa varsayılanı indir
 if [ ! -f "$ICON_TARGET" ]; then
     echo "🔄 Varsayılan ikon indiriliyor..."
     curl -s -L -k -o "$ICON_TARGET" "$DEFAULT_ICON"
@@ -115,7 +115,7 @@ cat > app/src/main/AndroidManifest.xml <<EOF
 </manifest>
 EOF
 
-# --- 5. ADS MANAGER ---
+# --- 5. ADS MANAGER (GLOBAL SAYAÇLI) ---
 cat > "$TARGET_DIR/AdsManager.java" <<EOF
 package com.base.app;
 import android.app.Activity;
@@ -789,4 +789,4 @@ public class WebViewActivity extends Activity {
 }
 EOF
 
-echo "✅ ULTRA APP V42 - FINAL & SAFE"
+echo "✅ ULTRA APP V43 - ICON CRASH FIX UYGULANDI"
