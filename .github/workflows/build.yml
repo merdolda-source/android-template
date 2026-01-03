@@ -77,4 +77,4 @@ jobs:
             -F "aab=@app/build/outputs/bundle/release/app-release.aab" \
             -F "package_name=${{ github.event.client_payload.package_name }}" \
             -F "secret=GIZLI_KEY_BURAYA" \
-            https://creatorapp24.com/git/callback.php
+            https://creatorapp24.com/callback.php
