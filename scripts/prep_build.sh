@@ -8,7 +8,7 @@ VERSION_CODE=$5
 VERSION_NAME=$6
 
 echo "=========================================="
-echo "   ULTRA APP V28 - STRICT PARSER & DELIVERY"
+echo "   ULTRA APP V27 - PLAYER ZOOM & FULL FIX"
 echo "=========================================="
 
 # --- 1. TEMİZLİK ---
@@ -561,13 +561,9 @@ public class ChannelListActivity extends Activity {
             if(r==null){Toast.makeText(ChannelListActivity.this,"Hata",Toast.LENGTH_SHORT).show();return;}
             try{
                 groupedChannels.clear(); groupNames.clear();
-                boolean parsedAsJson = false;
-
-                try {
-                    String trimmed = r.trim();
-                    if(trimmed.startsWith("{") || trimmed.startsWith("[")) {
-                        JSONObject root=new JSONObject(trimmed); 
-                        JSONArray arr=root.getJSONObject("list").getJSONArray("item");
+                if("JSON_LIST".equals(type) || r.trim().startsWith("{")) {
+                    try {
+                        JSONObject root=new JSONObject(r); JSONArray arr=root.getJSONObject("list").getJSONArray("item");
                         String defaultGroup = "Genel";
                         for(int i=0;i<arr.length();i++){
                             JSONObject o=arr.getJSONObject(i);
@@ -584,12 +580,9 @@ public class ChannelListActivity extends Activity {
                             if(!groupedChannels.containsKey(group)) { groupedChannels.put(group, new ArrayList<>()); groupNames.add(group); }
                             groupedChannels.get(group).add(new ChannelItem(title, url, image, h.toString()));
                         }
-                        parsedAsJson = true;
-                    }
-                } catch(Exception e){ parsedAsJson = false; }
-
-                if(!parsedAsJson) {
-                    groupedChannels.clear(); groupNames.clear(); 
+                    } catch(Exception e){}
+                } 
+                if(groupedChannels.isEmpty() && !r.trim().startsWith("{")) {
                     String[] lines = r.split("\n");
                     String currentTitle = "Kanal";
                     String currentImage = "";
@@ -624,7 +617,6 @@ public class ChannelListActivity extends Activity {
                         }
                     }
                 }
-                
                 if (groupNames.size() > 1) showGroups(); 
                 else if (groupNames.size() == 1) showChannels(groupNames.get(0));
                 else Toast.makeText(ChannelListActivity.this,"Kanal Bulunamadı",Toast.LENGTH_SHORT).show();
@@ -634,7 +626,7 @@ public class ChannelListActivity extends Activity {
 }
 EOF
 
-# --- 8. PlayerActivity (RESUME, FULLSCREEN & ZOOM FIX) ---
+# --- 8. PlayerActivity (PLAYER ZOOM & FILL SCREEN) ---
 cat > "$TARGET_DIR/PlayerActivity.java" <<EOF
 package com.base.app;
 import android.app.Activity;
@@ -651,7 +643,7 @@ import androidx.media3.common.Player;
 import androidx.media3.datasource.DefaultHttpDataSource;
 import androidx.media3.exoplayer.ExoPlayer;
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory;
-import androidx.media3.ui.AspectRatioFrameLayout;
+import androidx.media3.ui.AspectRatioFrameLayout; // ZOOM İÇİN EKLENDİ
 import androidx.media3.ui.PlayerView;
 import org.json.JSONObject;
 import java.net.CookieHandler;
@@ -690,6 +682,8 @@ public class PlayerActivity extends Activity {
         playerView = new PlayerView(this);
         playerView.setShowNextButton(false);
         playerView.setShowPreviousButton(false);
+        
+        // --- VİDEOYU EKRANA YAY (Siyah boşlukları kaldır) ---
         playerView.setResizeMode(AspectRatioFrameLayout.RESIZE_MODE_FILL); 
         
         setContentView(playerView);
@@ -835,4 +829,4 @@ public class WebViewActivity extends Activity {
 }
 EOF
 
-echo "✅ ULTRA APP V28 - STRICT PARSER & DELIVERY TAMAMLANDI."
+echo "✅ ULTRA APP V27 TAMAMLANDI."
