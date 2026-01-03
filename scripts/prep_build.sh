@@ -8,7 +8,7 @@ VERSION_CODE=$5
 VERSION_NAME=$6
 
 echo "=========================================="
-echo "   ULTRA APP V25 - COMPILE FIX & FULL PRO"
+echo "   ULTRA APP V26 - SPLASH URL FIX & SENSOR ROTATION"
 echo "=========================================="
 
 # --- 1. TEMİZLİK ---
@@ -75,7 +75,7 @@ dependencies {
 }
 EOF
 
-# --- 4. MANIFEST ---
+# --- 4. MANIFEST (ROTATION FIX: 'sensor' yapıldı) ---
 cat > app/src/main/AndroidManifest.xml <<EOF
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -91,7 +91,7 @@ cat > app/src/main/AndroidManifest.xml <<EOF
         <activity android:name=".ChannelListActivity" />
         <activity android:name=".PlayerActivity" 
             android:configChanges="orientation|screenSize|keyboardHidden|smallestScreenSize|screenLayout" 
-            android:screenOrientation="sensorLandscape"
+            android:screenOrientation="sensor"
             android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen" />
     </application>
 </manifest>
@@ -139,7 +139,7 @@ public class AdsManager {
 }
 EOF
 
-# --- 6. MainActivity ---
+# --- 6. MainActivity (SPLASH URL FIX) ---
 cat > "$TARGET_DIR/MainActivity.java" <<EOF
 package com.base.app;
 import android.app.Activity;
@@ -297,6 +297,7 @@ public class MainActivity extends Activity {
                 JSONObject json = new JSONObject(result);
                 appName = json.optString("app_name", "App");
                 JSONObject ui = json.optJSONObject("ui_config");
+                
                 if(ui != null) {
                     headerColor = ui.optString("header_color", "#2196F3");
                     textColor = ui.optString("text_color", "#FFFFFF");
@@ -309,8 +310,15 @@ public class MainActivity extends Activity {
                     else if(fStyle.equals("ITALIC")) fontStyle = Typeface.ITALIC; 
                     else fontStyle = Typeface.BOLD;
 
+                    // SPLASH SCREEN FIX: Relative URL to Absolute
                     String splashUrl = ui.optString("splash_image", "");
-                    if(!splashUrl.isEmpty()){
+                    if(!splashUrl.isEmpty()) {
+                        // Eğer http ile başlamıyorsa, domain'i önüne ekle
+                        if(!splashUrl.startsWith("http")) {
+                            String baseUrl = CONFIG_URL.substring(0, CONFIG_URL.lastIndexOf("/") + 1);
+                            splashUrl = baseUrl + splashUrl;
+                        }
+                        
                         splashImage.setVisibility(View.VISIBLE);
                         loadingSpinner.setVisibility(View.GONE);
                         Glide.with(MainActivity.this).load(splashUrl).into(splashImage);
@@ -621,7 +629,7 @@ public class ChannelListActivity extends Activity {
 }
 EOF
 
-# --- 8. PlayerActivity (RESUME, FULLSCREEN, ROTATION & IMPORT FIX) ---
+# --- 8. PlayerActivity (RESUME & FULLSCREEN) ---
 cat > "$TARGET_DIR/PlayerActivity.java" <<EOF
 package com.base.app;
 import android.app.Activity;
@@ -643,8 +651,8 @@ import org.json.JSONObject;
 import java.net.CookieHandler;
 import java.net.CookieManager;
 import java.net.CookiePolicy;
-import java.net.HttpURLConnection; // EKLENDİ
-import java.net.URL;               // EKLENDİ
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
@@ -819,4 +827,4 @@ public class WebViewActivity extends Activity {
 }
 EOF
 
-echo "✅ ULTRA APP V25 TAMAMLANDI."
+echo "✅ ULTRA APP V26 TAMAMLANDI."
