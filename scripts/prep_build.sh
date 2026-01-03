@@ -1,6 +1,6 @@
 #!/bin/bash
 set -e
-# ULTRA APP V45 - TEST ICON MODE
+# ULTRA APP V48 - REAL ICON DOWNLOADER (Browser Mode)
 PACKAGE_NAME=$1
 APP_NAME=$2
 CONFIG_URL=$3
@@ -9,7 +9,7 @@ VERSION_CODE=$5
 VERSION_NAME=$6
 
 echo "=========================================="
-echo "   ULTRA APP V45 - TEST ICON MODE"
+echo "   ULTRA APP V48 - ICON FIX (BROWSER MODE)"
 echo "=========================================="
 
 # --- 1. TEMİZLİK ---
@@ -19,21 +19,29 @@ rm -rf app/src/main/java/com/base/app/*
 TARGET_DIR="app/src/main/java/com/base/app"
 mkdir -p "$TARGET_DIR"
 
-# --- 2. ICON (TEST MODU) ---
-# Senin ikonunu İNDİRMİYORUZ. Sağlam bir test ikonu kullanıyoruz.
+# --- 2. ICON İNDİRME (GÜÇLENDİRİLMİŞ) ---
 mkdir -p app/src/main/res/mipmap-xxxhdpi
 ICON_TARGET="app/src/main/res/mipmap-xxxhdpi/ic_launcher.png"
 
-echo "Test ikonu indiriliyor..."
-curl -s -L -k -o "$ICON_TARGET" "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e3/Android_Studio_icon_%282023%29.svg/512px-Android_Studio_icon_%282023%29.svg.png"
+# Yedek ikon (Eğer senin sunucun tamamen kapalıysa build patlamasın diye)
+FALLBACK_ICON="https://upload.wikimedia.org/wikipedia/commons/thumb/3/3b/Android_new_logo_2019.svg/512px-Android_new_logo_2019.svg.png"
 
-# İkon gerçekten indi mi kontrol et
-if [ -s "$ICON_TARGET" ]; then
-    echo "✅ Test ikonu başarıyla indi."
+echo "İkon indiriliyor: $ICON_URL"
+
+# TARAYICI GİBİ İNDİR (User-Agent Eklendi - Hata Çözümü Burası)
+curl -s -L -k \
+     -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" \
+     -o "downloaded_icon" \
+     "$ICON_URL" || echo "İndirme uyarısı."
+
+# Dosya kontrolü: İndi mi ve 1KB'dan büyük mü?
+if [ -s "downloaded_icon" ] && [ $(stat -c%s "downloaded_icon") -gt 500 ]; then
+    echo "✅ İkon başarıyla indi."
+    mv "downloaded_icon" "$ICON_TARGET"
 else
-    echo "🚨 Test ikonu bile inemedi! GitHub internetinde sorun olabilir."
-    # Acil durum: Boş dosya olmasın diye elle 1 piksellik bir şeyler uydurmayalım, direkt hata verelim ki görelim.
-    exit 1
+    echo "⚠️ Senin ikonun indirilemedi (Sunucu engeli veya hatalı link)."
+    echo "⚠️ Sistem çökmemesi için geçici ikon kullanılıyor."
+    curl -s -L -k -o "$ICON_TARGET" "$FALLBACK_ICON"
 fi
 
 # --- 3. BUILD.GRADLE ---
@@ -776,4 +784,4 @@ public class WebViewActivity extends Activity {
 }
 EOF
 
-echo "✅ ULTRA APP V45 - TEST ICON MODU AKTİF"
+echo "✅ ULTRA APP V48 - FINAL & REAL ICON"
