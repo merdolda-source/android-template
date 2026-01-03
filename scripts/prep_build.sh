@@ -1,6 +1,6 @@
 #!/bin/bash
 set -e
-# ULTRA APP V54 - FORCE INSTALL CONVERTER
+# ULTRA APP V55 - UNITY ADS FIX & FORCE INSTALL
 PACKAGE_NAME=$1
 APP_NAME=$2
 CONFIG_URL=$3
@@ -9,10 +9,10 @@ VERSION_CODE=$5
 VERSION_NAME=$6
 
 echo "=========================================="
-echo "   ULTRA APP V54 - SYSTEM FIX"
+echo "   ULTRA APP V55 - UNITY ADS UPDATE"
 echo "=========================================="
 
-# --- 0. GEREKLİ ARAÇLARI YÜKLE (KRİTİK ADIM) ---
+# --- 0. GEREKLİ ARAÇLARI YÜKLE ---
 echo "⚙️ Gerekli resim araçları yükleniyor..."
 sudo apt-get update >/dev/null 2>&1
 sudo apt-get install -y imagemagick >/dev/null 2>&1 || echo "Araç yüklenemedi ama devam ediliyor."
@@ -24,39 +24,24 @@ rm -rf app/src/main/java/com/base/app/*
 TARGET_DIR="app/src/main/java/com/base/app"
 mkdir -p "$TARGET_DIR"
 
-# --- 2. ICON İŞLEME (JPG -> PNG DÖNÜŞTÜRME) ---
+# --- 2. ICON İŞLEME ---
 mkdir -p app/src/main/res/mipmap-xxxhdpi
 ICON_TARGET="app/src/main/res/mipmap-xxxhdpi/ic_launcher.png"
 TEMP_FILE="downloaded_image"
 
 echo "📥 İkon indiriliyor: $ICON_URL"
+curl -s -L -k -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" -o "$TEMP_FILE" "$ICON_URL" || echo "İndirme uyarısı."
 
-# 1. Dosyayı indir (Uzantısız olarak)
-curl -s -L -k \
-     -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" \
-     -o "$TEMP_FILE" \
-     "$ICON_URL" || echo "İndirme uyarısı."
-
-# 2. Dosya indi mi kontrol et
 if [ -s "$TEMP_FILE" ] && [ $(stat -c%s "$TEMP_FILE") -gt 500 ]; then
     echo "✅ Dosya indi. Formatı PNG'ye çevriliyor..."
-    
-    # ImageMagick ile dosya ne olursa olsun (JPG, GIF, WebP) PNG'ye zorla çevir
-    convert "$TEMP_FILE" -resize 512x512! -background none -flatten "$ICON_TARGET" || {
-        echo "❌ Convert başarısız oldu! (Manuel kopyalama deneniyor)"
-        cp "$TEMP_FILE" "$ICON_TARGET"
-    }
+    convert "$TEMP_FILE" -resize 512x512! -background none -flatten "$ICON_TARGET" || cp "$TEMP_FILE" "$ICON_TARGET"
 else
-    echo "⚠️ İkon indirilemedi veya link hatalı!"
-    echo "🔄 Varsayılan Android ikonu kullanılıyor."
+    echo "⚠️ İkon indirilemedi! Varsayılan kullanılıyor."
     curl -s -L -k -o "$ICON_TARGET" "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3b/Android_new_logo_2019.svg/512px-Android_new_logo_2019.svg.png"
 fi
 
-# Dosya oluşturuldu mu son kontrol
 if [ ! -s "$ICON_TARGET" ]; then
-    echo "🚨 İkon oluşturma tamamen başarısız! Acil durum ikonu oluşturuluyor."
-    # Mavi bir kare oluştur (En kötü senaryo kurtarıcısı)
-    convert -size 512x512 xc:blue "$ICON_TARGET" 2>/dev/null || echo "Buna da gücümüz yetmedi."
+    convert -size 512x512 xc:blue "$ICON_TARGET" 2>/dev/null || echo "Yedek ikon oluşturulamadı."
 fi
 
 # --- 3. BUILD.GRADLE ---
@@ -125,7 +110,7 @@ cat > app/src/main/AndroidManifest.xml <<EOF
 </manifest>
 EOF
 
-# --- 5. ADS MANAGER ---
+# --- 5. ADS MANAGER (DÜZELTİLDİ: isReady kaldırıldı) ---
 cat > "$TARGET_DIR/AdsManager.java" <<EOF
 package com.base.app;
 import android.app.Activity;
@@ -163,18 +148,28 @@ public class AdsManager {
     public static void checkInterstitial(Activity a, Runnable onComplete) {
         if(!ENABLED) { onComplete.run(); return; }
         GLOBAL_CLICK_COUNT++;
+        
         if(GLOBAL_CLICK_COUNT >= INTER_FREQ) {
-            if(UnityAds.isReady(INTER_ID)) {
-                UnityAds.show(a, INTER_ID, new IUnityAdsShowListener(){
-                    public void onUnityAdsShowComplete(String p, UnityAds.UnityAdsShowCompletionState s){ 
-                        GLOBAL_CLICK_COUNT = 0; 
-                        onComplete.run(); 
-                    }
-                    public void onUnityAdsShowFailure(String p, UnityAds.UnityAdsShowError e, String m){ onComplete.run(); }
-                    public void onUnityAdsShowStart(String p){}
-                    public void onUnityAdsShowClick(String p){}
-                });
-            } else { onComplete.run(); }
+            // isReady KONTROLÜ KALDIRILDI - DOĞRUDAN SHOW ÇAĞRILIYOR
+            // Unity SDK 4.0+ artık load/show mantığını kendi yönetir.
+            UnityAds.load(INTER_ID, new IUnityAdsLoadListener() {
+                @Override
+                public void onUnityAdsAdLoaded(String placementId) {
+                    UnityAds.show(a, placementId, new IUnityAdsShowListener(){
+                        public void onUnityAdsShowComplete(String p, UnityAds.UnityAdsShowCompletionState s){ 
+                            GLOBAL_CLICK_COUNT = 0; 
+                            onComplete.run(); 
+                        }
+                        public void onUnityAdsShowFailure(String p, UnityAds.UnityAdsShowError e, String m){ onComplete.run(); }
+                        public void onUnityAdsShowStart(String p){}
+                        public void onUnityAdsShowClick(String p){}
+                    });
+                }
+                @Override
+                public void onUnityAdsFailedToLoad(String placementId, UnityAds.UnityAdsLoadError error, String message) {
+                    onComplete.run();
+                }
+            });
         } else {
             onComplete.run();
         }
@@ -799,4 +794,4 @@ public class WebViewActivity extends Activity {
 }
 EOF
 
-echo "✅ ULTRA APP V54 - FORCE INSTALL CONVERTER"
+echo "✅ ULTRA APP V55 - UNITY ADS FIX"
