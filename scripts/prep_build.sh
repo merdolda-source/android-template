@@ -19,33 +19,33 @@ rm -rf app/src/main/java/com/base/app/*
 TARGET_DIR="app/src/main/java/com/base/app"
 mkdir -p "$TARGET_DIR"
 
-# --- 2. ICON İŞLEME (ESKİ USÜL SAĞLAM YÖNTEM) ---
+# --- 2. ICON İNDİRME (AAPT2 SAFE MODE) ---
 mkdir -p app/src/main/res/mipmap-xxxhdpi
 ICON_TARGET="app/src/main/res/mipmap-xxxhdpi/ic_launcher.png"
-TEMP_ICON="temp_icon_raw"
+TMP_ICON="downloaded_icon"
 
-echo "1. İkon indiriliyor: $ICON_URL"
+FALLBACK_ICON="https://raw.githubusercontent.com/google/material-design-icons/master/png/social/public/materialicons/128dp/1x/baseline_public_black_128dp.png"
 
-# wget ile tarayıcı taklidi yaparak indir (curl yerine wget bazen daha iyidir)
-wget --user-agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64)" -O "$TEMP_ICON" "$ICON_URL" || echo "İndirme uyarısı."
+echo "İkon indiriliyor: $ICON_URL"
 
-echo "2. İkon 'convert' ile işleniyor..."
+curl -L -k -s \
+  -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120 Safari/537.36" \
+  -o "$TMP_ICON" \
+  "$ICON_URL" || true
 
-# İŞTE SENİN HATIRLADIĞIN SİHİRLİ KOMUT:
-# Bu komut dosyayı alır, ne olursa olsun temiz bir 512x512 PNG'ye çevirir.
-# Header hatalarını, bozuk verileri temizler.
-if command -v convert >/dev/null 2>&1; then
-    convert "$TEMP_ICON" -resize 512x512! -background none -flatten "$ICON_TARGET" || echo "Convert başarısız, orijinali deniyoruz."
+# ---- DOĞRULAMA ----
+ICON_TYPE=$(file --mime-type "$TMP_ICON" | awk '{print $2}')
+
+echo "İndirilen ikon türü: $ICON_TYPE"
+
+if [[ "$ICON_TYPE" == "image/png" ]] && [ $(stat -c%s "$TMP_ICON") -gt 1024 ]; then
+    echo "✅ PNG ikon geçerli"
+    mv "$TMP_ICON" "$ICON_TARGET"
 else
-    # Eğer convert yoksa (ki github'da vardır), direkt taşı
-    mv "$TEMP_ICON" "$ICON_TARGET"
+    echo "⚠️ Geçersiz ikon (PNG değil). FALLBACK kullanılıyor."
+    curl -L -k -s -o "$ICON_TARGET" "$FALLBACK_ICON"
 fi
 
-# Son kontrol: Eğer convert başarısız olduysa ve dosya boşsa varsayılanı koy (Çökmesin diye)
-if [ ! -s "$ICON_TARGET" ]; then
-    echo "⚠️ İkon oluşturulamadı! Varsayılan kullanılıyor."
-    wget -O "$ICON_TARGET" "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3b/Android_new_logo_2019.svg/512px-Android_new_logo_2019.svg.png"
-fi
 
 # --- 3. BUILD.GRADLE ---
 cat > app/build.gradle <<EOF
