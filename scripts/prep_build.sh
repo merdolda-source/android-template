@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
-# ULTRA APP V71 - REPO FIX (403 FORBIDDEN RESOLVED)
-# Bu sürüm Gradle repository ayarlarını düzelterek 403 hatalarını çözer.
+# ULTRA APP V64 - FULL VERSION (HEADERS + MENUS + SPEED + ICON FIX)
+# Bu sürüm: V63'ün Header desteğini ve V59'un Tasarım/Hız özelliklerini birleştirir.
 
 PACKAGE_NAME=$1
 APP_NAME=$2
@@ -11,10 +11,11 @@ VERSION_CODE=$5
 VERSION_NAME=$6
 
 echo "=========================================="
-echo "   ULTRA APP V71 - REPO FIX"
+echo "   ULTRA APP V64 - THE FINAL MERGE"
 echo "=========================================="
 
 # --- 0. SİSTEM HAZIRLIĞI ---
+echo "⚙️ Gerekli araçlar yükleniyor..."
 sudo apt-get update >/dev/null 2>&1
 sudo apt-get install -y imagemagick >/dev/null 2>&1 || true
 
@@ -26,36 +27,28 @@ TARGET_DIR="app/src/main/java/com/base/app"
 mkdir -p "$TARGET_DIR"
 mkdir -p app/src/main/res/mipmap-xxxhdpi
 
-# --- 2. İKON İŞLEME ---
+# --- 2. İKON İŞLEME (CONVERT - ASLA HATA VERMEZ) ---
 ICON_TARGET="app/src/main/res/mipmap-xxxhdpi/ic_launcher.png"
 TEMP_FILE="downloaded_icon_raw"
 
 echo "📥 İkon indiriliyor..."
-curl -s -L -k -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" -o "$TEMP_FILE" "$ICON_URL" || true
+# Tarayıcı gibi davranarak indir (403 hatasını önler)
+curl -s -L -k -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" -o "$TEMP_FILE" "$ICON_URL" || true
 
 if [ -s "$TEMP_FILE" ] && [ $(stat -c%s "$TEMP_FILE") -gt 500 ]; then
+    echo "✅ İkon işleniyor (JPG/PNG -> PNG)..."
+    # Ne gelirse gelsin temiz PNG yap
     convert "$TEMP_FILE" -resize 512x512! -background none -flatten "$ICON_TARGET" || cp "$TEMP_FILE" "$ICON_TARGET"
 else
+    echo "⚠️ İkon inemedi, varsayılan kullanılıyor."
     curl -s -L -k -o "$ICON_TARGET" "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3b/Android_new_logo_2019.svg/512px-Android_new_logo_2019.svg.png"
 fi
+# Son sigorta: Dosya hala yoksa mavi kare oluştur
 if [ ! -s "$ICON_TARGET" ]; then convert -size 512x512 xc:blue "$ICON_TARGET"; fi
 
-# --- 3. ROOT BUILD.GRADLE (REPO FIX BURADA) ---
-# Projenin ana build.gradle dosyasını (varsa) güncellemek veya 
-# app/build.gradle içine repository bloğunu eklemek gerekir.
-# Biz garanti olsun diye app/build.gradle içine ekliyoruz.
-
+# --- 3. BUILD.GRADLE ---
 cat > app/build.gradle <<EOF
-plugins { 
-    id 'com.android.application' 
-}
-
-repositories {
-    google()
-    mavenCentral()
-    maven { url 'https://jitpack.io' }
-}
-
+plugins { id 'com.android.application' }
 android {
     namespace 'com.base.app'
     compileSdk 34
@@ -66,17 +59,9 @@ android {
         versionCode $VERSION_CODE
         versionName "$VERSION_NAME"
     }
-    signingConfigs {
-        release {
-            storeFile file("keystore.jks")
-            storePassword System.getenv("SIGNING_STORE_PASSWORD")
-            keyAlias System.getenv("SIGNING_KEY_ALIAS")
-            keyPassword System.getenv("SIGNING_KEY_PASSWORD")
-        }
-    }
     buildTypes {
         release {
-            signingConfig signingConfigs.release
+            signingConfig signingConfigs.debug
             minifyEnabled true
             shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
@@ -84,7 +69,6 @@ android {
     }
     compileOptions { sourceCompatibility 1.8; targetCompatibility 1.8; }
 }
-
 dependencies {
     implementation 'androidx.appcompat:appcompat:1.6.1'
     implementation 'com.google.android.material:material:1.11.0'
@@ -113,6 +97,7 @@ cat > app/src/main/AndroidManifest.xml <<EOF
         <activity android:name=".ChannelListActivity" />
         <activity android:name=".PlayerActivity" 
             android:configChanges="orientation|screenSize|keyboardHidden|smallestScreenSize|screenLayout" 
+            android:screenOrientation="sensor"
             android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen" />
     </application>
 </manifest>
@@ -166,7 +151,7 @@ public class AdsManager {
 }
 EOF
 
-# --- 6. MAIN ACTIVITY ---
+# --- 6. MAIN ACTIVITY (MENÜ TİPLERİ EKLENDİ) ---
 cat > "$TARGET_DIR/MainActivity.java" <<EOF
 package com.base.app;
 import android.app.Activity;
@@ -183,7 +168,7 @@ import com.bumptech.glide.Glide;
 
 public class MainActivity extends Activity {
     private String CONFIG_URL = "$CONFIG_URL"; 
-    private LinearLayout container;
+    private LinearLayout contentContainer;
     private String hColor="#2196F3", tColor="#FFFFFF", bColor="#F0F0F0", fColor="#FF9800", menuType="LIST";
     private TextView titleTxt;
     private ImageView splash, refreshBtn, shareBtn;
@@ -216,9 +201,9 @@ public class MainActivity extends Activity {
         hp.addRule(RelativeLayout.ALIGN_PARENT_TOP); root.addView(headerLayout, hp);
 
         ScrollView sv = new ScrollView(this);
-        container = new LinearLayout(this); container.setOrientation(LinearLayout.VERTICAL);
-        container.setPadding(20,20,20,100);
-        sv.addView(container);
+        contentContainer = new LinearLayout(this); contentContainer.setOrientation(LinearLayout.VERTICAL);
+        contentContainer.setPadding(20,20,20,100);
+        sv.addView(contentContainer);
         
         RelativeLayout.LayoutParams sp = new RelativeLayout.LayoutParams(-1,-1);
         sp.addRule(RelativeLayout.BELOW, headerLayout.getId()); root.addView(sv, sp);
@@ -233,12 +218,13 @@ public class MainActivity extends Activity {
         startActivity(Intent.createChooser(i, "Paylaş"));
     }
 
+    // 4 TİP MENÜ MANTIĞI
     private void addBtn(String txt, String type, String url, String cont) {
         View v = null;
         if(menuType.equals("GRID")) {
             if(currentRow == null || currentRow.getChildCount() >= 2) {
                 currentRow = new LinearLayout(this); currentRow.setOrientation(0); currentRow.setWeightSum(2);
-                container.addView(currentRow);
+                contentContainer.addView(currentRow);
             }
             Button b = new Button(this); b.setText(txt);
             b.setBackgroundColor(Color.parseColor(hColor)); b.setTextColor(Color.parseColor(tColor));
@@ -248,28 +234,25 @@ public class MainActivity extends Activity {
             currentRow.addView(b); return;
         } 
         else if(menuType.equals("CARD")) {
-            TextView t = new TextView(this); t.setText(txt); t.setTextSize(24); t.setGravity(Gravity.CENTER);
+            TextView t = new TextView(this); t.setText(txt); t.setTextSize(22); t.setGravity(Gravity.CENTER);
             t.setTextColor(Color.parseColor(tColor)); t.setBackgroundColor(Color.parseColor(hColor));
-            t.setPadding(50,150,50,150);
-            LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-1, -2); p.setMargins(0,0,0,30); t.setLayoutParams(p);
-            v = t;
-            v.setOnClickListener(x->AdsManager.checkInter(this,()->open(type,url,cont)));
+            t.setPadding(50,120,50,120);
+            LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-1, -2); p.setMargins(0,0,0,20); t.setLayoutParams(p);
+            v=t; v.setOnClickListener(x->AdsManager.checkInter(this,()->open(type,url,cont)));
         } 
         else if(menuType.equals("TILE")) {
             Button b = new Button(this); b.setText(txt); b.setTextSize(18);
             b.setBackgroundColor(Color.parseColor(hColor)); b.setTextColor(Color.parseColor(tColor));
             LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-1, -2); p.setMargins(0,0,0,5); b.setLayoutParams(p);
-            v = b;
-            v.setOnClickListener(x->AdsManager.checkInter(this,()->open(type,url,cont)));
+            v=b; v.setOnClickListener(x->AdsManager.checkInter(this,()->open(type,url,cont)));
         }
-        else {
-            Button b = new Button(this); b.setText(txt); b.setPadding(40,40,40,40); 
-            b.setTextColor(Color.parseColor(tColor)); b.setBackgroundColor(Color.parseColor(hColor));
+        else { // LIST
+            Button b = new Button(this); b.setText(txt); b.setPadding(40,40,40,40); b.setGravity(Gravity.LEFT|Gravity.CENTER_VERTICAL);
+            b.setBackgroundColor(Color.parseColor(hColor)); b.setTextColor(Color.parseColor(tColor));
             LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-1, -2); p.setMargins(0,0,0,20); b.setLayoutParams(p);
-            v = b;
-            v.setOnClickListener(x->AdsManager.checkInter(this,()->open(type,url,cont)));
+            v=b; v.setOnClickListener(x->AdsManager.checkInter(this,()->open(type,url,cont)));
         }
-        if(v!=null) container.addView(v);
+        if(v!=null) contentContainer.addView(v);
     }
 
     private void open(String t, String u, String c) {
@@ -302,11 +285,8 @@ public class MainActivity extends Activity {
                 
                 titleTxt.setText(j.optString("app_name")); titleTxt.setTextColor(Color.parseColor(tColor));
                 headerLayout.setBackgroundColor(Color.parseColor(hColor));
-                ((View)container.getParent()).setBackgroundColor(Color.parseColor(bColor));
-                
+                ((View)contentContainer.getParent()).setBackgroundColor(Color.parseColor(bColor));
                 if(!ui.optBoolean("show_header",true)) headerLayout.setVisibility(View.GONE);
-                refreshBtn.setVisibility(ui.optBoolean("show_refresh",true)?View.VISIBLE:View.GONE);
-                shareBtn.setVisibility(ui.optBoolean("show_share",true)?View.VISIBLE:View.GONE);
                 
                 String spl = ui.optString("splash_image");
                 if(!spl.isEmpty()){
@@ -315,7 +295,7 @@ public class MainActivity extends Activity {
                     new android.os.Handler().postDelayed(()->splash.setVisibility(View.GONE),3000);
                 }
 
-                container.removeAllViews();
+                contentContainer.removeAllViews();
                 JSONArray m=j.getJSONArray("modules");
                 for(int i=0;i<m.length();i++) {
                     JSONObject o=m.getJSONObject(i);
@@ -328,7 +308,7 @@ public class MainActivity extends Activity {
 }
 EOF
 
-# --- 7. CHANNEL LIST ---
+# --- 7. CHANNEL LIST (V63 HEADER/ORIGIN PARSER DAHİL) ---
 cat > "$TARGET_DIR/ChannelListActivity.java" <<EOF
 package com.base.app;
 import android.app.Activity;
@@ -338,6 +318,7 @@ import android.os.Bundle;
 import android.widget.*;
 import android.view.*;
 import android.graphics.Color;
+import android.graphics.drawable.GradientDrawable;
 import org.json.*;
 import java.io.*;
 import java.net.*;
@@ -396,6 +377,7 @@ public class ChannelListActivity extends Activity {
             if(r==null)return;
             try {
                 groups.clear(); gNames.clear();
+                // JSON Parsing (Header Destekli)
                 if("JSON_LIST".equals(t) || r.trim().startsWith("{")) {
                     try {
                         JSONObject root=new JSONObject(r); JSONArray arr=root.getJSONObject("list").getJSONArray("item");
@@ -413,6 +395,7 @@ public class ChannelListActivity extends Activity {
                         }
                     }catch(Exception e){}
                 }
+                // M3U Parsing (#EXTVLCOPT Destekli)
                 if(groups.isEmpty()) {
                     String[] lines=r.split("\n"); String curT="Kanal", curI="", curG="Genel"; JSONObject curH=new JSONObject();
                     Pattern pG=Pattern.compile("group-title=\"([^\"]*)\""), pL=Pattern.compile("tvg-logo=\"([^\"]*)\"");
@@ -455,7 +438,7 @@ public class ChannelListActivity extends Activity {
                 txt.setText(d.get(p).toString()); img.setImageResource(android.R.drawable.ic_menu_sort_by_size); img.setColorFilter(Color.parseColor(hC));
             } else {
                 Item i=(Item)d.get(p); txt.setText(i.n);
-                if(!i.i.isEmpty()) Glide.with(ChannelListActivity.this).load(i.i).into(img); else img.setImageResource(android.R.drawable.ic_media_play); img.clearColorFilter();
+                if(!i.i.isEmpty()) Glide.with(ChannelListActivity.this).load(i.i).into(img); else img.setImageResource(android.R.drawable.ic_menu_slideshow); img.clearColorFilter();
             }
             return v;
         }
@@ -463,161 +446,88 @@ public class ChannelListActivity extends Activity {
 }
 EOF
 
-# --- 8. PLAYER ---
+# --- 8. PLAYER (VOL 27 BUFFER + HEADERS) ---
 cat > "$TARGET_DIR/PlayerActivity.java" <<EOF
 package com.base.app;
 import android.app.Activity;
-import android.net.Uri;
-import android.os.AsyncTask;
 import android.os.Bundle;
-import android.view.*;
 import android.widget.*;
+import android.view.*;
 import android.graphics.Color;
-import androidx.media3.common.*;
-import androidx.media3.datasource.DefaultHttpDataSource;
+import androidx.media3.common.MediaItem;
 import androidx.media3.exoplayer.ExoPlayer;
-import androidx.media3.exoplayer.source.DefaultMediaSourceFactory;
 import androidx.media3.ui.PlayerView;
 import androidx.media3.exoplayer.DefaultLoadControl;
 import androidx.media3.exoplayer.upstream.DefaultAllocator;
+import androidx.media3.datasource.DefaultHttpDataSource;
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory;
 import org.json.JSONObject;
-import java.net.HttpURLConnection;
-import java.net.URL;
 import java.util.*;
 
 public class PlayerActivity extends Activity {
-    private ExoPlayer player;
-    private PlayerView playerView;
-    private ProgressBar loadingSpinner;
-    private String videoUrl, headersJson;
-
-    @Override
+    ExoPlayer p;
     protected void onCreate(Bundle s) {
         super.onCreate(s);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
         
         FrameLayout root = new FrameLayout(this); root.setBackgroundColor(Color.BLACK);
-        playerView = new PlayerView(this); 
-        playerView.setShowNextButton(false); playerView.setShowPreviousButton(false);
-        root.addView(playerView);
-
-        loadingSpinner = new ProgressBar(this);
-        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(-2, -2);
-        lp.gravity = Gravity.CENTER;
-        root.addView(loadingSpinner, lp);
-
-        // Watermark
-        String configStr = getIntent().getStringExtra("PLAYER_CONFIG");
-        if(configStr != null) {
-            try {
-                JSONObject cfg = new JSONObject(configStr);
-                if(cfg.optBoolean("enable_overlay", false)) {
-                    TextView overlay = new TextView(this);
-                    overlay.setText(cfg.optString("watermark_text", ""));
-                    overlay.setTextColor(Color.parseColor(cfg.optString("watermark_color", "#FFFFFF")));
-                    overlay.setTextSize(18); overlay.setPadding(30, 30, 30, 30);
-                    overlay.setBackgroundColor(Color.parseColor("#80000000"));
-                    FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(-2, -2);
-                    String pos = cfg.optString("watermark_pos", "left");
-                    params.gravity = (pos.equals("right") ? Gravity.TOP | Gravity.END : Gravity.TOP | Gravity.START);
-                    params.setMargins(40, 40, 40, 40);
-                    root.addView(overlay, params);
-                }
-            } catch(Exception e) {}
-        }
-
-        setContentView(root);
-        videoUrl = getIntent().getStringExtra("VIDEO_URL");
-        headersJson = getIntent().getStringExtra("HEADERS_JSON");
+        PlayerView v=new PlayerView(this); 
+        v.setShowNextButton(false); v.setShowPreviousButton(false);
+        root.addView(v);
         
-        if(videoUrl != null && !videoUrl.isEmpty()) new ResolveUrlTask().execute(videoUrl.trim());
-    }
+        // Watermark Overlay
+        try {
+            JSONObject cfg = new JSONObject(getIntent().getStringExtra("PLAYER_CONFIG"));
+            if(cfg.optBoolean("enable_overlay", false)) {
+                TextView ov = new TextView(this);
+                ov.setText(cfg.optString("watermark_text"));
+                ov.setTextColor(Color.parseColor(cfg.optString("watermark_color", "#FFFFFF")));
+                ov.setTextSize(18); ov.setPadding(30,30,30,30);
+                ov.setBackgroundColor(Color.parseColor("#80000000"));
+                FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(-2,-2);
+                String pos = cfg.optString("watermark_pos", "left");
+                lp.gravity = (pos.equals("right") ? Gravity.TOP|Gravity.END : Gravity.TOP|Gravity.START);
+                lp.setMargins(40,40,40,40); root.addView(ov, lp);
+            }
+        } catch(Exception e){}
 
-    class UrlInfo { String url; String mimeType; UrlInfo(String u, String m) { url = u; mimeType = m; } }
-
-    private class ResolveUrlTask extends AsyncTask<String, Void, UrlInfo> {
-        protected UrlInfo doInBackground(String... params) {
-            String currentUrl = params[0];
-            String detectedMime = null;
-            try {
-                if (!currentUrl.startsWith("http")) return new UrlInfo(currentUrl, null);
-                for (int i = 0; i < 5; i++) {
-                    URL url = new URL(currentUrl);
-                    HttpURLConnection con = (HttpURLConnection) url.openConnection();
-                    con.setInstanceFollowRedirects(false);
-                    if(headersJson != null) {
-                        JSONObject h = new JSONObject(headersJson);
-                        Iterator<String> keys = h.keys();
-                        while(keys.hasNext()) { String key = keys.next(); con.setRequestProperty(key, h.getString(key)); }
-                    } else {
-                        con.setRequestProperty("User-Agent", "Mozilla/5.0");
-                    }
-                    con.setConnectTimeout(8000); con.connect();
-                    int code = con.getResponseCode();
-                    if (code >= 300 && code < 400) {
-                        String next = con.getHeaderField("Location");
-                        if (next != null) { currentUrl = next; continue; }
-                    }
-                    detectedMime = con.getContentType();
-                    con.disconnect(); break;
+        // HEADERS SETUP
+        String ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64)";
+        Map<String,String> props = new HashMap<>();
+        String hJson = getIntent().getStringExtra("HEADERS_JSON");
+        if(hJson!=null){
+            try{
+                JSONObject h=new JSONObject(hJson); Iterator<String> k=h.keys();
+                while(k.hasNext()){
+                    String key=k.next(); String val=h.getString(key);
+                    if(key.equalsIgnoreCase("User-Agent")) ua=val; else props.put(key,val);
                 }
-            } catch (Exception e) {}
-            return new UrlInfo(currentUrl, detectedMime);
-        }
-        protected void onPostExecute(UrlInfo info) { initializePlayer(info); }
-    }
-
-    private void initializePlayer(UrlInfo info) {
-        if (player != null) return;
-        String userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64)";
-        Map<String, String> requestProps = new HashMap<>();
-        if(headersJson != null){ 
-            try{ JSONObject h=new JSONObject(headersJson); Iterator<String> k=h.keys(); 
-            while(k.hasNext()){ String key=k.next(); String val = h.getString(key); if(key.equalsIgnoreCase("User-Agent")) userAgent = val; else requestProps.put(key, val); } 
-            }catch(Exception e){} 
+            }catch(Exception e){}
         }
 
-        DefaultHttpDataSource.Factory httpFactory = new DefaultHttpDataSource.Factory()
-            .setUserAgent(userAgent)
-            .setAllowCrossProtocolRedirects(true)
-            .setDefaultRequestProperties(requestProps);
-
+        // AKICILIK AYARLARI (VOL 27) + HEADER ENTEGRASYONU
         DefaultLoadControl lc = new DefaultLoadControl.Builder()
             .setAllocator(new DefaultAllocator(true, 16 * 1024))
             .setBufferDurationsMs(50000, 50000, 2500, 5000)
             .build();
+            
+        DefaultHttpDataSource.Factory http = new DefaultHttpDataSource.Factory()
+            .setUserAgent(ua).setAllowCrossProtocolRedirects(true).setDefaultRequestProperties(props);
 
-        player = new ExoPlayer.Builder(this)
+        p=new ExoPlayer.Builder(this)
             .setLoadControl(lc)
-            .setMediaSourceFactory(new DefaultMediaSourceFactory(this).setDataSourceFactory(httpFactory))
+            .setMediaSourceFactory(new DefaultMediaSourceFactory(http))
             .build();
             
-        playerView.setPlayer(player);
-        player.setPlayWhenReady(true);
+        v.setPlayer(p);
         
-        player.addListener(new Player.Listener() {
-            public void onPlaybackStateChanged(int state) {
-                if (state == Player.STATE_BUFFERING) loadingSpinner.setVisibility(View.VISIBLE);
-                else loadingSpinner.setVisibility(View.GONE);
-            }
-            public void onPlayerError(PlaybackException e) {
-                loadingSpinner.setVisibility(View.GONE);
-                Toast.makeText(PlayerActivity.this, "Hata: " + e.getMessage(), Toast.LENGTH_LONG).show();
-            }
-        });
-
-        try {
-            MediaItem.Builder item = new MediaItem.Builder().setUri(Uri.parse(info.url));
-            if (info.mimeType != null) {
-                if (info.mimeType.contains("mpegurl")) item.setMimeType(MimeTypes.APPLICATION_M3U8);
-                else if (info.mimeType.contains("dash")) item.setMimeType(MimeTypes.APPLICATION_MPD);
-            }
-            player.setMediaItem(item.build());
-            player.prepare();
-        } catch(Exception e){ Toast.makeText(this, "Başlatma Hatası", Toast.LENGTH_LONG).show(); }
+        String u=getIntent().getStringExtra("VIDEO_URL");
+        if(u!=null) { p.setMediaItem(MediaItem.fromUri(u)); p.prepare(); p.play(); }
+        
+        setContentView(root);
     }
-    protected void onStop(){ super.onStop(); if(player!=null){player.release(); player=null;} }
+    protected void onStop(){super.onStop(); if(p!=null)p.release();}
 }
 EOF
 
@@ -626,21 +536,19 @@ cat > "$TARGET_DIR/WebViewActivity.java" <<EOF
 package com.base.app;
 import android.app.Activity;
 import android.os.Bundle;
-import android.webkit.WebSettings;
-import android.webkit.WebView;
-import android.webkit.WebViewClient;
+import android.webkit.*;
 import android.util.Base64;
 public class WebViewActivity extends Activity {
     protected void onCreate(Bundle s) {
         super.onCreate(s); WebView w=new WebView(this); setContentView(w);
-        String u=getIntent().getStringExtra("WEB_URL");
-        String html=getIntent().getStringExtra("HTML_DATA");
         w.getSettings().setJavaScriptEnabled(true); w.getSettings().setDomStorageEnabled(true);
-        w.setWebViewClient(new WebViewClient()); 
-        if (html != null && !html.isEmpty()) w.loadData(Base64.encodeToString(html.getBytes(), Base64.NO_PADDING), "text/html", "base64");
+        w.setWebViewClient(new WebViewClient());
+        String u=getIntent().getStringExtra("WEB_URL");
+        String h=getIntent().getStringExtra("HTML_DATA");
+        if(h!=null && !h.isEmpty()) w.loadData(Base64.encodeToString(h.getBytes(),Base64.NO_PADDING),"text/html","base64");
         else w.loadUrl(u);
     }
 }
 EOF
 
-echo "✅ ULTRA APP V71 - REPO FIX DEPLOYED"
+echo "✅ ULTRA APP V64 - MISSION ACCOMPLISHED"
