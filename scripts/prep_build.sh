@@ -1,12 +1,12 @@
 #!/bin/bash
 set -e
-# ULTRA APP V110 - THE COMPLETE SYSTEM (UNABRIDGED)
-# 1. JSON Flat List Strategy
-# 2. M3U Grouping Strategy
-# 3. Manual Header Injection Engine
-# 4. Deep Link Resolver
-# 5. Full Screen Player
-# 6. Android TV Design Engine
+# ULTRA APP V112 - POE ENHANCED + FULL SCREEN + ORIENTATION FIX
+# Özellikler:
+# 1. Full Screen Video (Immersive Sticky Mode)
+# 2. Sensor Landscape (Ekranı çevirince döner)
+# 3. Keep Screen On (Video izlerken ekran kapanmaz)
+# 4. JSON Flat List & M3U Grouping (Poe Mantığı Korundu)
+# 5. Header Injection (Referer/Origin/User-Agent)
 
 PACKAGE_NAME=$1
 APP_NAME=$2
@@ -16,10 +16,10 @@ VERSION_CODE=$5
 VERSION_NAME=$6
 
 echo "=========================================="
-echo "   ULTRA APP V110 - SYSTEM DEPLOY"
+echo "   ULTRA APP V112 - SYSTEM DEPLOY"
 echo "=========================================="
 
-# 0. SİSTEM
+# 0. SİSTEM HAZIRLIĞI
 sudo apt-get update >/dev/null 2>&1
 sudo apt-get install -y imagemagick >/dev/null 2>&1 || true
 
@@ -28,7 +28,7 @@ rm -rf app/src/main/res/drawable* app/src/main/res/mipmap* app/src/main/java/com
 TARGET_DIR="app/src/main/java/com/base/app"
 mkdir -p "$TARGET_DIR" app/src/main/res/mipmap-xxxhdpi
 
-# 2. İKON
+# 2. İKON İŞLEME
 ICON_TARGET="app/src/main/res/mipmap-xxxhdpi/ic_launcher.png"
 TEMP="dl_icon"
 curl -s -L -k -A "Mozilla/5.0" -o "$TEMP" "$ICON_URL" || true
@@ -43,7 +43,7 @@ rootProject.name = "AppBuilderTemplate"
 include ':app'
 EOF
 
-# 4. APP GRADLE
+# 4. APP BUILD.GRADLE
 cat > app/build.gradle <<EOF
 plugins { id 'com.android.application' }
 android {
@@ -66,19 +66,30 @@ dependencies {
 }
 EOF
 
-# 5. MANIFEST
+# 5. MANIFEST (FULL SCREEN & ORIENTATION AYARLARI EKLENDİ)
 cat > app/src/main/AndroidManifest.xml <<EOF
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-    <uses-feature android:name="android.software.leanback" android:required="false" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" /> <uses-feature android:name="android.software.leanback" android:required="false" />
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
+    
     <application android:allowBackup="true" android:label="$APP_NAME" android:icon="@mipmap/ic_launcher" android:banner="@mipmap/ic_launcher" android:usesCleartextTraffic="true" android:theme="@android:style/Theme.DeviceDefault.Light.NoActionBar">
-        <activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /><category android:name="android.intent.category.LEANBACK_LAUNCHER" /></intent-filter></activity>
+        <activity android:name=".MainActivity" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+            </intent-filter>
+        </activity>
         <activity android:name=".WebViewActivity" />
         <activity android:name=".ChannelListActivity" />
-        <activity android:name=".PlayerActivity" android:configChanges="orientation|screenSize|keyboardHidden|smallestScreenSize|screenLayout" android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen" />
+        
+        <activity android:name=".PlayerActivity" 
+            android:configChanges="orientation|screenSize|keyboardHidden|smallestScreenSize|screenLayout" 
+            android:screenOrientation="sensorLandscape"
+            android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen" />
     </application>
 </manifest>
 EOF
@@ -118,23 +129,6 @@ public class MainActivity extends Activity {
         setContentView(root); new Fetch().execute(CONFIG_URL);
     }
     private void addBtn(String txt, String type, String url, String cont, String ua, String ref, String org) {
-
-        // REF/ORIGIN AUTO-FIX (Biri varsa diğeri türetilsin)
-        try{
-            if(ref != null) ref = ref.trim();
-            if(org != null) org = org.trim();
-            if(ref != null && !ref.isEmpty() && (org == null || org.isEmpty())){
-                android.net.Uri ru = android.net.Uri.parse(ref);
-                if(ru.getScheme()!=null && ru.getHost()!=null){
-                    org = ru.getScheme() + "://" + ru.getHost();
-                    if(ru.getPort() > 0) org += ":" + ru.getPort();
-                }
-            }
-            if(org != null && !org.isEmpty() && (ref == null || ref.isEmpty())){
-                ref = org.endsWith("/") ? org : (org + "/");
-            }
-        }catch(Exception e){}
-
         JSONObject h = new JSONObject(); try { if(!ua.isEmpty()) h.put("User-Agent", ua); if(!ref.isEmpty()) h.put("Referer", ref); if(!org.isEmpty()) h.put("Origin", org); } catch(Exception e){}
         String hStr = h.toString();
         View v = null;
@@ -181,7 +175,6 @@ public class MainActivity extends Activity {
                 if(!ui.optBoolean("show_header",true)) headerLayout.setVisibility(View.GONE);
                 String spl = ui.optString("splash_image");
                 if(!spl.isEmpty()){ if(!spl.startsWith("http")) spl=CONFIG_URL.substring(0,CONFIG_URL.lastIndexOf("/")+1)+spl; splash.setVisibility(View.VISIBLE); Glide.with(MainActivity.this).load(spl).into(splash); new android.os.Handler().postDelayed(()->splash.setVisibility(View.GONE),3000); }
-                currentRow = null;
                 container.removeAllViews(); JSONArray m=j.getJSONArray("modules");
                 for(int i=0;i<m.length();i++) { JSONObject o=m.getJSONObject(i); addBtn(o.getString("title"), o.getString("type"), o.optString("url"), o.optString("content"), o.optString("ua"), o.optString("ref"), o.optString("org")); }
                 AdsManager.init(MainActivity.this, j.optJSONObject("ads_config"));
@@ -191,7 +184,7 @@ public class MainActivity extends Activity {
 }
 EOF
 
-# 8. CHANNEL LIST (SMART PARSER + CLICK FIX)
+# 8. CHANNEL LIST
 cat > "$TARGET_DIR/ChannelListActivity.java" <<EOF
 package com.base.app;
 import android.app.Activity; import android.content.Intent; import android.os.AsyncTask; import android.os.Bundle; import android.widget.*; import android.view.*; import android.graphics.drawable.*; import android.graphics.Color; import org.json.*; import java.io.*; import java.net.*; import java.util.*; import java.util.regex.*; import com.bumptech.glide.Glide; import com.bumptech.glide.request.RequestOptions;
@@ -252,8 +245,7 @@ public class ChannelListActivity extends Activity {
             if(r==null)return;
             try {
                 groups.clear(); gNames.clear();
-                
-                // 1. JSON LOGIC: ALWAYS FLAT LIST (NO GROUPS)
+                // JSON LOGIC: FLAT LIST (GROUP IGNORED FOR JSON)
                 if("JSON_LIST".equals(t) || r.trim().startsWith("{")) {
                     try {
                         JSONObject root=new JSONObject(r); JSONArray arr=root.getJSONObject("list").getJSONArray("item");
@@ -264,30 +256,11 @@ public class ChannelListActivity extends Activity {
                             String u=o.optString("media_url",o.optString("url")); if(u.isEmpty())continue;
                             JSONObject head=new JSONObject();
                             for(int k=1;k<=5;k++) { String kn=o.optString("h"+k+"Key"), kv=o.optString("h"+k+"Val"); if(!kn.isEmpty() && !kn.equals("0")) head.put(kn,kv); }
-
-                            // REF/ORIGIN AUTO-FIX for JSON items
-                            try{
-                                String rf = head.optString("Referer", head.optString("referer",""));
-                                String og = head.optString("Origin", head.optString("origin",""));
-                                if(!rf.isEmpty() && og.isEmpty()){
-                                    android.net.Uri ru = android.net.Uri.parse(rf);
-                                    if(ru.getScheme()!=null && ru.getHost()!=null){
-                                        og = ru.getScheme() + "://" + ru.getHost();
-                                        if(ru.getPort() > 0) og += ":" + ru.getPort();
-                                        head.put("Origin", og);
-                                    }
-                                }
-                                if(!og.isEmpty() && rf.isEmpty()){
-                                    head.put("Referer", og.endsWith("/") ? og : (og + "/"));
-                                }
-                            }catch(Exception e){}
-
                             groups.get(flatGroup).add(new Item(o.optString("title"), u, o.optString("thumb_square"), head.toString()));
                         }
                     }catch(Exception e){}
                 }
-                
-                // 2. M3U LOGIC: RESPECT GROUPS
+                // M3U LOGIC: RESPECT GROUPS
                 if(groups.isEmpty()) {
                     String[] lines=r.split("\n"); String curT="Kanal", curI="", curG="Genel"; JSONObject curH=new JSONObject();
                     Pattern pG=Pattern.compile("group-title=\"([^\"]*)\""), pL=Pattern.compile("tvg-logo=\"([^\"]*)\"");
@@ -340,25 +313,6 @@ public class ChannelListActivity extends Activity {
             l.setLayoutParams(params);
 
             ImageView img=v.findViewById(1); TextView txt=v.findViewById(2);
-
-            // TEXT COLOR (Kaybolma gibi görünmesin)
-            try { txt.setTextColor(Color.parseColor(tC)); } catch(Exception e){ txt.setTextColor(Color.WHITE); }
-            txt.setTextSize(16);
-            txt.setSingleLine(true);
-            txt.setEllipsize(android.text.TextUtils.TruncateAt.END);
-
-            // Layout weight (Text daralıp kaybolmasın)
-            if(txt.getLayoutParams() == null || !(txt.getLayoutParams() instanceof LinearLayout.LayoutParams)){
-                txt.setLayoutParams(new LinearLayout.LayoutParams(0, -2, 1.0f));
-            } else {
-                LinearLayout.LayoutParams tp = (LinearLayout.LayoutParams) txt.getLayoutParams();
-                tp.width = 0; tp.weight = 1.0f;
-                txt.setLayoutParams(tp);
-            }
-
-            // Glide recycle fix
-            try { Glide.with(ChannelListActivity.this).clear(img); } catch(Exception e){}
-
             img.setLayoutParams(new LinearLayout.LayoutParams(120,120)); ((LinearLayout.LayoutParams)img.getLayoutParams()).setMargins(0,0,30,0);
             RequestOptions opts = new RequestOptions(); if(lIcon.equals("CIRCLE")) opts = opts.circleCrop();
 
@@ -373,7 +327,7 @@ public class ChannelListActivity extends Activity {
 }
 EOF
 
-# 9. PLAYER (HEADER INJECTION + FULLSCREEN + DEEP LINK RESOLVER)
+# 9. PLAYER (FULLSCREEN + KEEP SCREEN ON + ROTATION)
 cat > "$TARGET_DIR/PlayerActivity.java" <<EOF
 package com.base.app;
 import android.app.Activity;
@@ -404,10 +358,21 @@ public class PlayerActivity extends Activity {
     @Override
     protected void onCreate(Bundle s) {
         super.onCreate(s);
+        
+        // --- 1. FULLSCREEN & KEEP SCREEN ON ---
         requestWindowFeature(Window.FEATURE_NO_TITLE);
         getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
-        // HIDE SYSTEM UI (FULL SCREEN)
-        getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON); // Ekran Kapanmaz!
+        
+        // Hide Navigation & Status Bar (Immersive Sticky)
+        getWindow().getDecorView().setSystemUiVisibility(
+            View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+            | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+            | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+            | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+            | View.SYSTEM_UI_FLAG_FULLSCREEN
+            | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+        );
         
         FrameLayout root = new FrameLayout(this); root.setBackgroundColor(Color.BLACK);
         playerView = new PlayerView(this); 
@@ -526,4 +491,4 @@ package com.base.app; import android.app.Activity; import android.os.Bundle; imp
 public class WebViewActivity extends Activity { protected void onCreate(Bundle s) { super.onCreate(s); WebView w=new WebView(this); setContentView(w); w.getSettings().setJavaScriptEnabled(true); String u=getIntent().getStringExtra("WEB_URL"); String h=getIntent().getStringExtra("HTML_DATA"); if(h!=null&&!h.isEmpty())w.loadData(Base64.encodeToString(h.getBytes(),0),"text/html","base64"); else w.loadUrl(u); } }
 EOF
 
-echo "✅ ULTRA APP V110 - SYSTEM DEPLOYED"
+echo "✅ ULTRA APP V112 - FULL SCREEN & ORIENTATION FIX DEPLOYED"
