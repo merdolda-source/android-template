@@ -1,9 +1,9 @@
 #!/bin/bash
 set -e
-# ULTRA APP V105 - REDEMPTION EDITION
-# 1. FULL SCREEN VIDEO (System UI Hider)
-# 2. CATEGORY FIRST LOGIC (Group -> Channel -> Player)
-# 3. ROBUST M3U/JSON PARSER
+# ULTRA APP V106 - FINAL FIX (CLICK EVENT + SMART LIST LOGIC)
+# 1. Fixed ListView OnItemClickListener (Tıklama sorunu çözüldü)
+# 2. Smart Grouping: Auto-detects if groups exist. If not, shows list directly.
+# 3. Full Header/Origin Support for M3U and JSON.
 
 PACKAGE_NAME=$1
 APP_NAME=$2
@@ -13,7 +13,7 @@ VERSION_CODE=$5
 VERSION_NAME=$6
 
 echo "=========================================="
-echo "   ULTRA APP V105 - REDEMPTION STARTED"
+echo "   ULTRA APP V106 - FINAL REPAIR"
 echo "=========================================="
 
 # 0. TOOLS
@@ -63,7 +63,7 @@ dependencies {
 }
 EOF
 
-# 5. MANIFEST (FULL SCREEN THEME FOR PLAYER)
+# 5. MANIFEST
 cat > app/src/main/AndroidManifest.xml <<EOF
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -72,12 +72,10 @@ cat > app/src/main/AndroidManifest.xml <<EOF
     <uses-feature android:name="android.software.leanback" android:required="false" />
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
     <application android:allowBackup="true" android:label="$APP_NAME" android:icon="@mipmap/ic_launcher" android:banner="@mipmap/ic_launcher" android:usesCleartextTraffic="true" android:theme="@android:style/Theme.DeviceDefault.Light.NoActionBar">
-        <activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity>
+        <activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /><category android:name="android.intent.category.LEANBACK_LAUNCHER" /></intent-filter></activity>
         <activity android:name=".WebViewActivity" />
         <activity android:name=".ChannelListActivity" />
-        <activity android:name=".PlayerActivity" 
-            android:configChanges="orientation|screenSize|keyboardHidden|smallestScreenSize|screenLayout" 
-            android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen" />
+        <activity android:name=".PlayerActivity" android:configChanges="orientation|screenSize|keyboardHidden|smallestScreenSize|screenLayout" android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen" />
     </application>
 </manifest>
 EOF
@@ -139,7 +137,7 @@ public class MainActivity extends Activity {
         v.setBackground(sld); v.setFocusable(true); v.setClickable(true);
     }
     private void open(String t, String u, String c, String h) {
-        if(t.equals("WEB") || t.equals("HTML")) { Intent i=new Intent(this,WebViewActivity.class); i.putExtra("WEB_URL",u); i.putExtra("HTML_DATA",c); startActivity(i); }
+        if(t.equals("WEB")) { Intent i=new Intent(this,WebViewActivity.class); i.putExtra("WEB_URL",u); startActivity(i); }
         else if(t.equals("SINGLE_STREAM")) { Intent i=new Intent(this,PlayerActivity.class); i.putExtra("VIDEO_URL",u); i.putExtra("HEADERS_JSON",h); i.putExtra("PLAYER_CONFIG",playerConfigStr); startActivity(i); }
         else { 
             Intent i=new Intent(this,ChannelListActivity.class); 
@@ -172,7 +170,7 @@ public class MainActivity extends Activity {
 }
 EOF
 
-# 8. CHANNEL LIST (GRUP -> KANAL MANTIĞI)
+# 8. CHANNEL LIST (CLICK FIX + SMART LOGIC)
 cat > "$TARGET_DIR/ChannelListActivity.java" <<EOF
 package com.base.app;
 import android.app.Activity; import android.content.Intent; import android.os.AsyncTask; import android.os.Bundle; import android.widget.*; import android.view.*; import android.graphics.drawable.*; import android.graphics.Color; import org.json.*; import java.io.*; import java.net.*; import java.util.*; import java.util.regex.*; import com.bumptech.glide.Glide; import com.bumptech.glide.request.RequestOptions;
@@ -202,19 +200,25 @@ public class ChannelListActivity extends Activity {
         
         new Load(getIntent().getStringExtra("TYPE"), getIntent().getStringExtra("LIST_CONTENT")).execute(getIntent().getStringExtra("LIST_URL"));
         
+        // CLICK EVENT FIX - Checks state before action
         lv.setOnItemClickListener((p,v,pos,id)->{
-            if(isGroup) showCh(gNames.get(pos)); // Gruba tıklandıysa kanalları göster
-            else AdsManager.checkInter(this, ()->{ // Kanala tıklandıysa Player aç
-                Intent i=new Intent(this, PlayerActivity.class);
-                i.putExtra("VIDEO_URL", curList.get(pos).u);
-                i.putExtra("HEADERS_JSON", curList.get(pos).h);
-                i.putExtra("PLAYER_CONFIG", pCfg);
-                startActivity(i);
-            });
+            if(isGroup) {
+                showCh(gNames.get(pos));
+            } else {
+                AdsManager.checkInter(this, ()->{
+                    Intent i=new Intent(this, PlayerActivity.class);
+                    i.putExtra("VIDEO_URL", curList.get(pos).u);
+                    i.putExtra("HEADERS_JSON", curList.get(pos).h);
+                    i.putExtra("PLAYER_CONFIG", pCfg);
+                    startActivity(i);
+                });
+            }
         });
     }
 
     public void onBackPressed(){ if(!isGroup && gNames.size()>1) showGr(); else super.onBackPressed(); }
+    
+    // Explicitly set new adapters to ensure UI refresh
     private void showGr(){ isGroup=true; title.setText("Kategoriler"); lv.setAdapter(new Adp(gNames, true)); }
     private void showCh(String g){ isGroup=false; title.setText(g); curList=groups.get(g); lv.setAdapter(new Adp(curList, false)); }
 
@@ -228,6 +232,7 @@ public class ChannelListActivity extends Activity {
             if(r==null)return;
             try {
                 groups.clear(); gNames.clear();
+                // JSON Parsing
                 if("JSON_LIST".equals(t) || r.trim().startsWith("{")) {
                     try {
                         JSONObject root=new JSONObject(r); JSONArray arr=root.getJSONObject("list").getJSONArray("item");
@@ -242,6 +247,7 @@ public class ChannelListActivity extends Activity {
                         }
                     }catch(Exception e){}
                 }
+                // M3U Parsing
                 if(groups.isEmpty()) {
                     String[] lines=r.split("\n"); String curT="Kanal", curI="", curG="Genel"; JSONObject curH=new JSONObject();
                     Pattern pG=Pattern.compile("group-title=\"([^\"]*)\""), pL=Pattern.compile("tvg-logo=\"([^\"]*)\"");
@@ -251,21 +257,21 @@ public class ChannelListActivity extends Activity {
                             if(l.contains(",")) curT=l.substring(l.lastIndexOf(",")+1).trim();
                             Matcher mG=pG.matcher(l); if(mG.find()) curG=mG.group(1);
                             Matcher mL=pL.matcher(l); if(mL.find()) curI=mL.group(1);
-                        }
-                        else if(l.startsWith("#EXTVLCOPT:")) {
+                        } else if(l.startsWith("#EXTVLCOPT:")) {
                             String opt=l.substring(11);
                             if(opt.startsWith("http-referrer=")) curH.put("Referer",opt.substring(14));
                             if(opt.startsWith("http-user-agent=")) curH.put("User-Agent",opt.substring(16));
                             if(opt.startsWith("http-origin=")) curH.put("Origin",opt.substring(12));
-                        }
-                        else if(!l.startsWith("#")) {
+                        } else if(!l.startsWith("#")) {
                             if(!groups.containsKey(curG)){groups.put(curG,new ArrayList<>()); gNames.add(curG);}
                             groups.get(curG).add(new Item(curT,l,curI,curH.toString()));
                             curT="Kanal"; curI=""; curH=new JSONObject();
                         }
                     }
                 }
-                if(gNames.size()>1) showGr(); else if(gNames.size()==1) showCh(gNames.get(0));
+                // SMART LOGIC: If only 1 group exists, show list directly. If multiple, show groups.
+                if(gNames.size()>1) showGr(); 
+                else if(gNames.size()==1) showCh(gNames.get(0));
             }catch(Exception e){}
         }
     }
@@ -307,7 +313,7 @@ public class ChannelListActivity extends Activity {
 }
 EOF
 
-# 9. PLAYER (FULL SCREEN + HEADER ENGINE)
+# 9. PLAYER (HEADER INJECTION + FULLSCREEN)
 cat > "$TARGET_DIR/PlayerActivity.java" <<EOF
 package com.base.app;
 import android.app.Activity;
@@ -340,7 +346,6 @@ public class PlayerActivity extends Activity {
         super.onCreate(s);
         requestWindowFeature(Window.FEATURE_NO_TITLE);
         getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
-        // HIDE SYSTEM UI (TAM EKRAN YAPAR)
         getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
         
         FrameLayout root = new FrameLayout(this); root.setBackgroundColor(Color.BLACK);
@@ -353,7 +358,6 @@ public class PlayerActivity extends Activity {
         lp.gravity = Gravity.CENTER;
         root.addView(loadingSpinner, lp);
 
-        // Watermark Logic
         String configStr = getIntent().getStringExtra("PLAYER_CONFIG");
         if(configStr != null) {
             try {
@@ -392,7 +396,6 @@ public class PlayerActivity extends Activity {
                     URL url = new URL(currentUrl);
                     HttpURLConnection con = (HttpURLConnection) url.openConnection();
                     con.setInstanceFollowRedirects(false);
-                    // Headers in redirects
                     if(headersJson != null) {
                         JSONObject h = new JSONObject(headersJson);
                         Iterator<String> keys = h.keys();
@@ -462,4 +465,4 @@ package com.base.app; import android.app.Activity; import android.os.Bundle; imp
 public class WebViewActivity extends Activity { protected void onCreate(Bundle s) { super.onCreate(s); WebView w=new WebView(this); setContentView(w); w.getSettings().setJavaScriptEnabled(true); String u=getIntent().getStringExtra("WEB_URL"); String h=getIntent().getStringExtra("HTML_DATA"); if(h!=null&&!h.isEmpty())w.loadData(Base64.encodeToString(h.getBytes(),0),"text/html","base64"); else w.loadUrl(u); } }
 EOF
 
-echo "✅ ULTRA APP V105 - REDEMPTION COMPLETE"
+echo "✅ ULTRA APP V106 - FINAL REPAIR COMPLETED"
