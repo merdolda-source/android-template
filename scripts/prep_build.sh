@@ -118,6 +118,23 @@ public class MainActivity extends Activity {
         setContentView(root); new Fetch().execute(CONFIG_URL);
     }
     private void addBtn(String txt, String type, String url, String cont, String ua, String ref, String org) {
+
+        // REF/ORIGIN AUTO-FIX (Biri varsa diğeri türetilsin)
+        try{
+            if(ref != null) ref = ref.trim();
+            if(org != null) org = org.trim();
+            if(ref != null && !ref.isEmpty() && (org == null || org.isEmpty())){
+                android.net.Uri ru = android.net.Uri.parse(ref);
+                if(ru.getScheme()!=null && ru.getHost()!=null){
+                    org = ru.getScheme() + "://" + ru.getHost();
+                    if(ru.getPort() > 0) org += ":" + ru.getPort();
+                }
+            }
+            if(org != null && !org.isEmpty() && (ref == null || ref.isEmpty())){
+                ref = org.endsWith("/") ? org : (org + "/");
+            }
+        }catch(Exception e){}
+
         JSONObject h = new JSONObject(); try { if(!ua.isEmpty()) h.put("User-Agent", ua); if(!ref.isEmpty()) h.put("Referer", ref); if(!org.isEmpty()) h.put("Origin", org); } catch(Exception e){}
         String hStr = h.toString();
         View v = null;
@@ -164,6 +181,7 @@ public class MainActivity extends Activity {
                 if(!ui.optBoolean("show_header",true)) headerLayout.setVisibility(View.GONE);
                 String spl = ui.optString("splash_image");
                 if(!spl.isEmpty()){ if(!spl.startsWith("http")) spl=CONFIG_URL.substring(0,CONFIG_URL.lastIndexOf("/")+1)+spl; splash.setVisibility(View.VISIBLE); Glide.with(MainActivity.this).load(spl).into(splash); new android.os.Handler().postDelayed(()->splash.setVisibility(View.GONE),3000); }
+                currentRow = null;
                 container.removeAllViews(); JSONArray m=j.getJSONArray("modules");
                 for(int i=0;i<m.length();i++) { JSONObject o=m.getJSONObject(i); addBtn(o.getString("title"), o.getString("type"), o.optString("url"), o.optString("content"), o.optString("ua"), o.optString("ref"), o.optString("org")); }
                 AdsManager.init(MainActivity.this, j.optJSONObject("ads_config"));
@@ -246,6 +264,24 @@ public class ChannelListActivity extends Activity {
                             String u=o.optString("media_url",o.optString("url")); if(u.isEmpty())continue;
                             JSONObject head=new JSONObject();
                             for(int k=1;k<=5;k++) { String kn=o.optString("h"+k+"Key"), kv=o.optString("h"+k+"Val"); if(!kn.isEmpty() && !kn.equals("0")) head.put(kn,kv); }
+
+                            // REF/ORIGIN AUTO-FIX for JSON items
+                            try{
+                                String rf = head.optString("Referer", head.optString("referer",""));
+                                String og = head.optString("Origin", head.optString("origin",""));
+                                if(!rf.isEmpty() && og.isEmpty()){
+                                    android.net.Uri ru = android.net.Uri.parse(rf);
+                                    if(ru.getScheme()!=null && ru.getHost()!=null){
+                                        og = ru.getScheme() + "://" + ru.getHost();
+                                        if(ru.getPort() > 0) og += ":" + ru.getPort();
+                                        head.put("Origin", og);
+                                    }
+                                }
+                                if(!og.isEmpty() && rf.isEmpty()){
+                                    head.put("Referer", og.endsWith("/") ? og : (og + "/"));
+                                }
+                            }catch(Exception e){}
+
                             groups.get(flatGroup).add(new Item(o.optString("title"), u, o.optString("thumb_square"), head.toString()));
                         }
                     }catch(Exception e){}
@@ -304,6 +340,25 @@ public class ChannelListActivity extends Activity {
             l.setLayoutParams(params);
 
             ImageView img=v.findViewById(1); TextView txt=v.findViewById(2);
+
+            // TEXT COLOR (Kaybolma gibi görünmesin)
+            try { txt.setTextColor(Color.parseColor(tC)); } catch(Exception e){ txt.setTextColor(Color.WHITE); }
+            txt.setTextSize(16);
+            txt.setSingleLine(true);
+            txt.setEllipsize(android.text.TextUtils.TruncateAt.END);
+
+            // Layout weight (Text daralıp kaybolmasın)
+            if(txt.getLayoutParams() == null || !(txt.getLayoutParams() instanceof LinearLayout.LayoutParams)){
+                txt.setLayoutParams(new LinearLayout.LayoutParams(0, -2, 1.0f));
+            } else {
+                LinearLayout.LayoutParams tp = (LinearLayout.LayoutParams) txt.getLayoutParams();
+                tp.width = 0; tp.weight = 1.0f;
+                txt.setLayoutParams(tp);
+            }
+
+            // Glide recycle fix
+            try { Glide.with(ChannelListActivity.this).clear(img); } catch(Exception e){}
+
             img.setLayoutParams(new LinearLayout.LayoutParams(120,120)); ((LinearLayout.LayoutParams)img.getLayoutParams()).setMargins(0,0,30,0);
             RequestOptions opts = new RequestOptions(); if(lIcon.equals("CIRCLE")) opts = opts.circleCrop();
 
