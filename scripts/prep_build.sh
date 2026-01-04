@@ -1,6 +1,8 @@
 #!/bin/bash
 set -e
-# ULTRA APP V70 - PLATINUM PARSER (JSON HEADERS + M3U EXTVLCOPT + DEEP RESOLVER)
+# ULTRA APP V71 - REPO FIX (403 FORBIDDEN RESOLVED)
+# Bu sürüm Gradle repository ayarlarını düzelterek 403 hatalarını çözer.
+
 PACKAGE_NAME=$1
 APP_NAME=$2
 CONFIG_URL=$3
@@ -9,7 +11,7 @@ VERSION_CODE=$5
 VERSION_NAME=$6
 
 echo "=========================================="
-echo "   ULTRA APP V70 - FULL PARSE & PLAY"
+echo "   ULTRA APP V71 - REPO FIX"
 echo "=========================================="
 
 # --- 0. SİSTEM HAZIRLIĞI ---
@@ -24,10 +26,13 @@ TARGET_DIR="app/src/main/java/com/base/app"
 mkdir -p "$TARGET_DIR"
 mkdir -p app/src/main/res/mipmap-xxxhdpi
 
-# --- 2. İKON İŞLEME (CONVERT) ---
+# --- 2. İKON İŞLEME ---
 ICON_TARGET="app/src/main/res/mipmap-xxxhdpi/ic_launcher.png"
 TEMP_FILE="downloaded_icon_raw"
-curl -s -L -k -A "Mozilla/5.0" -o "$TEMP_FILE" "$ICON_URL" || true
+
+echo "📥 İkon indiriliyor..."
+curl -s -L -k -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" -o "$TEMP_FILE" "$ICON_URL" || true
+
 if [ -s "$TEMP_FILE" ] && [ $(stat -c%s "$TEMP_FILE") -gt 500 ]; then
     convert "$TEMP_FILE" -resize 512x512! -background none -flatten "$ICON_TARGET" || cp "$TEMP_FILE" "$ICON_TARGET"
 else
@@ -35,9 +40,22 @@ else
 fi
 if [ ! -s "$ICON_TARGET" ]; then convert -size 512x512 xc:blue "$ICON_TARGET"; fi
 
-# --- 3. BUILD.GRADLE ---
+# --- 3. ROOT BUILD.GRADLE (REPO FIX BURADA) ---
+# Projenin ana build.gradle dosyasını (varsa) güncellemek veya 
+# app/build.gradle içine repository bloğunu eklemek gerekir.
+# Biz garanti olsun diye app/build.gradle içine ekliyoruz.
+
 cat > app/build.gradle <<EOF
-plugins { id 'com.android.application' }
+plugins { 
+    id 'com.android.application' 
+}
+
+repositories {
+    google()
+    mavenCentral()
+    maven { url 'https://jitpack.io' }
+}
+
 android {
     namespace 'com.base.app'
     compileSdk 34
@@ -48,8 +66,25 @@ android {
         versionCode $VERSION_CODE
         versionName "$VERSION_NAME"
     }
-    buildTypes { release { signingConfig signingConfigs.debug; minifyEnabled true; proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro' } }
+    signingConfigs {
+        release {
+            storeFile file("keystore.jks")
+            storePassword System.getenv("SIGNING_STORE_PASSWORD")
+            keyAlias System.getenv("SIGNING_KEY_ALIAS")
+            keyPassword System.getenv("SIGNING_KEY_PASSWORD")
+        }
+    }
+    buildTypes {
+        release {
+            signingConfig signingConfigs.release
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+    compileOptions { sourceCompatibility 1.8; targetCompatibility 1.8; }
 }
+
 dependencies {
     implementation 'androidx.appcompat:appcompat:1.6.1'
     implementation 'com.google.android.material:material:1.11.0'
@@ -71,10 +106,14 @@ cat > app/src/main/AndroidManifest.xml <<EOF
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <application android:allowBackup="true" android:label="$APP_NAME" android:icon="@mipmap/ic_launcher"
         android:usesCleartextTraffic="true" android:theme="@android:style/Theme.DeviceDefault.Light.NoActionBar">
-        <activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity>
+        <activity android:name=".MainActivity" android:exported="true">
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+        </activity>
         <activity android:name=".WebViewActivity" />
         <activity android:name=".ChannelListActivity" />
-        <activity android:name=".PlayerActivity" android:configChanges="orientation|screenSize|keyboardHidden|smallestScreenSize|screenLayout" android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen" />
+        <activity android:name=".PlayerActivity" 
+            android:configChanges="orientation|screenSize|keyboardHidden|smallestScreenSize|screenLayout" 
+            android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen" />
     </application>
 </manifest>
 EOF
@@ -87,34 +126,47 @@ import android.view.ViewGroup;
 import com.unity3d.ads.*;
 import com.unity3d.services.banners.*;
 import org.json.JSONObject;
+
 public class AdsManager {
-    public static int G=0; private static int F=3; private static boolean EN=false, B=false; private static String GID="", BID="", IID="";
+    public static int G=0; private static int F=3; 
+    private static boolean EN=false, B=false; private static String GID="", BID="", IID="";
+
     public static void init(Activity a, JSONObject j){
-        try{ if(j==null)return; EN=j.optBoolean("enabled"); GID=j.optString("game_id");
-        B=j.optBoolean("banner_active"); BID=j.optString("banner_id");
-        IID=j.optString("inter_id"); F=j.optInt("inter_freq",3);
-        if(EN && !GID.isEmpty()) UnityAds.initialize(a.getApplicationContext(), GID, false, null); }catch(Exception e){}
+        try{
+            if(j==null)return;
+            EN=j.optBoolean("enabled",false); GID=j.optString("game_id");
+            B=j.optBoolean("banner_active"); BID=j.optString("banner_id");
+            IID=j.optString("inter_id"); F=j.optInt("inter_freq", 3);
+            if(EN && !GID.isEmpty()) UnityAds.initialize(a.getApplicationContext(), GID, false, null);
+        }catch(Exception e){}
     }
+
     public static void showBanner(Activity a, ViewGroup c){
-        if(!EN || !B)return; BannerView b=new BannerView(a, BID, new UnityBannerSize(320,50)); b.load(); c.removeAllViews(); c.addView(b);
+        if(!EN || !B)return;
+        BannerView b = new BannerView(a, BID, new UnityBannerSize(320, 50));
+        b.load(); c.removeAllViews(); c.addView(b);
     }
-    public static void checkInter(Activity a, Runnable r){
-        if(!EN){r.run();return;} G++;
-        if(G>=F){
-            UnityAds.load(IID, new IUnityAdsLoadListener(){
-                public void onUnityAdsAdLoaded(String p){ UnityAds.show(a, p, new IUnityAdsShowListener(){
-                    public void onUnityAdsShowComplete(String p, UnityAds.UnityAdsShowCompletionState s){G=0;r.run();}
-                    public void onUnityAdsShowFailure(String p, UnityAds.UnityAdsShowError e, String m){r.run();}
-                    public void onUnityAdsShowStart(String p){} public void onUnityAdsShowClick(String p){}
-                }); }
-                public void onUnityAdsFailedToLoad(String p, UnityAds.UnityAdsLoadError e, String m){r.run();}
+
+    public static void checkInter(Activity a, Runnable r) {
+        if(!EN) { r.run(); return; }
+        G++;
+        if(G >= F) {
+            UnityAds.load(IID, new IUnityAdsLoadListener() {
+                public void onUnityAdsAdLoaded(String p) {
+                    UnityAds.show(a, p, new IUnityAdsShowListener(){
+                        public void onUnityAdsShowComplete(String p, UnityAds.UnityAdsShowCompletionState s){ G=0; r.run(); }
+                        public void onUnityAdsShowFailure(String p, UnityAds.UnityAdsShowError e, String m){ r.run(); }
+                        public void onUnityAdsShowStart(String p){} public void onUnityAdsShowClick(String p){}
+                    });
+                }
+                public void onUnityAdsFailedToLoad(String p, UnityAds.UnityAdsLoadError e, String m) { r.run(); }
             });
-        }else{r.run();}
+        } else { r.run(); }
     }
 }
 EOF
 
-# --- 6. MAIN ACTIVITY (HEADER BUTTONS LOGIC) ---
+# --- 6. MAIN ACTIVITY ---
 cat > "$TARGET_DIR/MainActivity.java" <<EOF
 package com.base.app;
 import android.app.Activity;
@@ -276,7 +328,7 @@ public class MainActivity extends Activity {
 }
 EOF
 
-# --- 7. CHANNEL LIST (V70 ROBUST PARSER) ---
+# --- 7. CHANNEL LIST ---
 cat > "$TARGET_DIR/ChannelListActivity.java" <<EOF
 package com.base.app;
 import android.app.Activity;
@@ -344,7 +396,6 @@ public class ChannelListActivity extends Activity {
             if(r==null)return;
             try {
                 groups.clear(); gNames.clear();
-                // JSON Parsing (Header Destekli)
                 if("JSON_LIST".equals(t) || r.trim().startsWith("{")) {
                     try {
                         JSONObject root=new JSONObject(r); JSONArray arr=root.getJSONObject("list").getJSONArray("item");
@@ -362,7 +413,6 @@ public class ChannelListActivity extends Activity {
                         }
                     }catch(Exception e){}
                 }
-                // M3U Parsing (#EXTVLCOPT Destekli)
                 if(groups.isEmpty()) {
                     String[] lines=r.split("\n"); String curT="Kanal", curI="", curG="Genel"; JSONObject curH=new JSONObject();
                     Pattern pG=Pattern.compile("group-title=\"([^\"]*)\""), pL=Pattern.compile("tvg-logo=\"([^\"]*)\"");
@@ -413,7 +463,7 @@ public class ChannelListActivity extends Activity {
 }
 EOF
 
-# --- 8. PLAYER (DEEP RESOLVER + WATERMARK + HEADERS) ---
+# --- 8. PLAYER ---
 cat > "$TARGET_DIR/PlayerActivity.java" <<EOF
 package com.base.app;
 import android.app.Activity;
@@ -457,7 +507,7 @@ public class PlayerActivity extends Activity {
         lp.gravity = Gravity.CENTER;
         root.addView(loadingSpinner, lp);
 
-        // Watermark Logic
+        // Watermark
         String configStr = getIntent().getStringExtra("PLAYER_CONFIG");
         if(configStr != null) {
             try {
@@ -496,18 +546,13 @@ public class PlayerActivity extends Activity {
                     URL url = new URL(currentUrl);
                     HttpURLConnection con = (HttpURLConnection) url.openConnection();
                     con.setInstanceFollowRedirects(false);
-                    // Headerları yönlendirmelerde de kullan
                     if(headersJson != null) {
                         JSONObject h = new JSONObject(headersJson);
                         Iterator<String> keys = h.keys();
-                        while(keys.hasNext()) {
-                            String key = keys.next();
-                            con.setRequestProperty(key, h.getString(key));
-                        }
+                        while(keys.hasNext()) { String key = keys.next(); con.setRequestProperty(key, h.getString(key)); }
                     } else {
                         con.setRequestProperty("User-Agent", "Mozilla/5.0");
                     }
-                    
                     con.setConnectTimeout(8000); con.connect();
                     int code = con.getResponseCode();
                     if (code >= 300 && code < 400) {
@@ -525,20 +570,11 @@ public class PlayerActivity extends Activity {
 
     private void initializePlayer(UrlInfo info) {
         if (player != null) return;
-        
         String userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64)";
         Map<String, String> requestProps = new HashMap<>();
-        
         if(headersJson != null){ 
-            try{ 
-                JSONObject h=new JSONObject(headersJson); 
-                Iterator<String> k=h.keys(); 
-                while(k.hasNext()){ 
-                    String key=k.next(); 
-                    String val = h.getString(key);
-                    if(key.equalsIgnoreCase("User-Agent")) userAgent = val;
-                    else requestProps.put(key, val); 
-                } 
+            try{ JSONObject h=new JSONObject(headersJson); Iterator<String> k=h.keys(); 
+            while(k.hasNext()){ String key=k.next(); String val = h.getString(key); if(key.equalsIgnoreCase("User-Agent")) userAgent = val; else requestProps.put(key, val); } 
             }catch(Exception e){} 
         }
 
@@ -547,7 +583,6 @@ public class PlayerActivity extends Activity {
             .setAllowCrossProtocolRedirects(true)
             .setDefaultRequestProperties(requestProps);
 
-        // Vol 27 Akıcılık Ayarları (50sn Buffer)
         DefaultLoadControl lc = new DefaultLoadControl.Builder()
             .setAllocator(new DefaultAllocator(true, 16 * 1024))
             .setBufferDurationsMs(50000, 50000, 2500, 5000)
@@ -608,4 +643,4 @@ public class WebViewActivity extends Activity {
 }
 EOF
 
-echo "✅ ULTRA APP V70 - PLATINUM EDITION DEPLOYED!"
+echo "✅ ULTRA APP V71 - REPO FIX DEPLOYED"
