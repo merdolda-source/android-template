@@ -1,10 +1,6 @@
 #!/bin/bash
 set -e
-# ULTRA APP V108 - CLICK FIX & JSON FLAT LIST
-# 1. FIXED: ListView onClick issue (Removed conflicting clickable attributes)
-# 2. FIXED: JSON now ignores groups and always shows flat list.
-# 3. FIXED: Header/Origin parsing maintained.
-
+# ULTRA APP V109 - DEEP STREAMER & PARSER
 PACKAGE_NAME=$1
 APP_NAME=$2
 CONFIG_URL=$3
@@ -13,7 +9,7 @@ VERSION_CODE=$5
 VERSION_NAME=$6
 
 echo "=========================================="
-echo "   ULTRA APP V108 - FIXING CLICKS..."
+echo "   ULTRA APP V109 - DEEP STREAMER"
 echo "=========================================="
 
 # 0. SİSTEM
@@ -170,7 +166,7 @@ public class MainActivity extends Activity {
 }
 EOF
 
-# 8. CHANNEL LIST (FIXED CLICKS + FLAT JSON)
+# 8. CHANNEL LIST (SMART PARSER + CLICK FIX)
 cat > "$TARGET_DIR/ChannelListActivity.java" <<EOF
 package com.base.app;
 import android.app.Activity; import android.content.Intent; import android.os.AsyncTask; import android.os.Bundle; import android.widget.*; import android.view.*; import android.graphics.drawable.*; import android.graphics.Color; import org.json.*; import java.io.*; import java.net.*; import java.util.*; import java.util.regex.*; import com.bumptech.glide.Glide; import com.bumptech.glide.request.RequestOptions;
@@ -197,7 +193,6 @@ public class ChannelListActivity extends Activity {
         h.addView(title); r.addView(h);
         
         lv=new ListView(this); lv.setDivider(null); lv.setPadding(20,20,20,20); lv.setClipToPadding(false); 
-        // FIX CLICK ISSUE: Allow listview to handle clicks
         lv.setFocusable(true); 
         r.addView(lv); setContentView(r);
         
@@ -232,26 +227,21 @@ public class ChannelListActivity extends Activity {
             if(r==null)return;
             try {
                 groups.clear(); gNames.clear();
-                
-                // 1. JSON LOGIC: ALWAYS FLAT LIST (NO GROUPS)
+                // JSON: FLAT LIST
                 if("JSON_LIST".equals(t) || r.trim().startsWith("{")) {
                     try {
                         JSONObject root=new JSONObject(r); JSONArray arr=root.getJSONObject("list").getJSONArray("item");
-                        String flatGroup = "Liste"; // Zorunlu tek grup
-                        groups.put(flatGroup, new ArrayList<>()); gNames.add(flatGroup);
-                        
+                        String flatGroup = "Liste"; groups.put(flatGroup, new ArrayList<>()); gNames.add(flatGroup);
                         for(int i=0;i<arr.length();i++){
                             JSONObject o=arr.getJSONObject(i);
                             String u=o.optString("media_url",o.optString("url")); if(u.isEmpty())continue;
                             JSONObject head=new JSONObject();
                             for(int k=1;k<=5;k++) { String kn=o.optString("h"+k+"Key"), kv=o.optString("h"+k+"Val"); if(!kn.isEmpty() && !kn.equals("0")) head.put(kn,kv); }
-                            // Add all to single group
                             groups.get(flatGroup).add(new Item(o.optString("title"), u, o.optString("thumb_square"), head.toString()));
                         }
                     }catch(Exception e){}
                 }
-                
-                // 2. M3U LOGIC: RESPECT GROUPS
+                // M3U: GROUP SUPPORT
                 if(groups.isEmpty()) {
                     String[] lines=r.split("\n"); String curT="Kanal", curI="", curG="Genel"; JSONObject curH=new JSONObject();
                     Pattern pG=Pattern.compile("group-title=\"([^\"]*)\""), pL=Pattern.compile("tvg-logo=\"([^\"]*)\"");
@@ -273,11 +263,7 @@ public class ChannelListActivity extends Activity {
                         }
                     }
                 }
-                
-                // DISPLAY LOGIC
-                if(gNames.size() > 1) showGr(); 
-                else if(gNames.size() == 1) showCh(gNames.get(0));
-                
+                if(gNames.size()>1) showGr(); else if(gNames.size()==1) showCh(gNames.get(0));
             }catch(Exception e){}
         }
     }
@@ -296,33 +282,24 @@ public class ChannelListActivity extends Activity {
             GradientDrawable foc = new GradientDrawable(); foc.setColor(Color.parseColor(fC)); foc.setCornerRadius(lRad); foc.setStroke(3, Color.WHITE);
             StateListDrawable sld = new StateListDrawable();
             sld.addState(new int[]{android.R.attr.state_focused}, foc); sld.addState(new int[]{android.R.attr.state_pressed}, foc); sld.addState(new int[]{}, norm);
-            
-            // IMPORTANT: Let ListView handle clicks!
             l.setBackground(sld); 
-            // Removed l.setClickable(true) -> This was blocking ListView Item Click!
-            
             LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1,-2);
             if(lType.equals("CARD")) { params.setMargins(0,0,0,25); l.setPadding(30,30,30,30); l.setElevation(5f); }
             else if(lType.equals("MODERN")) { params.setMargins(0,0,0,15); l.setPadding(20,50,20,50); }
             else { params.setMargins(0,0,0,5); l.setPadding(20,20,20,20); }
             l.setLayoutParams(params);
-
             ImageView img=v.findViewById(1); TextView txt=v.findViewById(2);
             img.setLayoutParams(new LinearLayout.LayoutParams(120,120)); ((LinearLayout.LayoutParams)img.getLayoutParams()).setMargins(0,0,30,0);
             RequestOptions opts = new RequestOptions(); if(lIcon.equals("CIRCLE")) opts = opts.circleCrop();
-
             if(isG) { txt.setText(d.get(p).toString()); img.setImageResource(android.R.drawable.ic_menu_sort_by_size); img.setColorFilter(Color.parseColor(hC)); }
-            else { 
-                Item i=(Item)d.get(p); txt.setText(i.n); 
-                if(!i.i.isEmpty()) Glide.with(ChannelListActivity.this).load(i.i).apply(opts).into(img); else img.setImageResource(android.R.drawable.ic_menu_slideshow); img.clearColorFilter();
-            }
+            else { Item i=(Item)d.get(p); txt.setText(i.n); if(!i.i.isEmpty()) Glide.with(ChannelListActivity.this).load(i.i).apply(opts).into(img); else img.setImageResource(android.R.drawable.ic_menu_slideshow); img.clearColorFilter(); }
             return v;
         }
     }
 }
 EOF
 
-# 9. PLAYER (HEADER ENGINE + FULLSCREEN)
+# 9. PLAYER (DEEP LINK RESOLVER + HEADERS)
 cat > "$TARGET_DIR/PlayerActivity.java" <<EOF
 package com.base.app;
 import android.app.Activity;
@@ -355,7 +332,6 @@ public class PlayerActivity extends Activity {
         super.onCreate(s);
         requestWindowFeature(Window.FEATURE_NO_TITLE);
         getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
-        // HIDE SYSTEM UI (FULL SCREEN)
         getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
         
         FrameLayout root = new FrameLayout(this); root.setBackgroundColor(Color.BLACK);
@@ -406,7 +382,6 @@ public class PlayerActivity extends Activity {
                     URL url = new URL(currentUrl);
                     HttpURLConnection con = (HttpURLConnection) url.openConnection();
                     con.setInstanceFollowRedirects(false);
-                    // Headers in redirects
                     if(headersJson != null) {
                         JSONObject h = new JSONObject(headersJson);
                         Iterator<String> keys = h.keys();
@@ -476,4 +451,4 @@ package com.base.app; import android.app.Activity; import android.os.Bundle; imp
 public class WebViewActivity extends Activity { protected void onCreate(Bundle s) { super.onCreate(s); WebView w=new WebView(this); setContentView(w); w.getSettings().setJavaScriptEnabled(true); String u=getIntent().getStringExtra("WEB_URL"); String h=getIntent().getStringExtra("HTML_DATA"); if(h!=null&&!h.isEmpty())w.loadData(Base64.encodeToString(h.getBytes(),0),"text/html","base64"); else w.loadUrl(u); } }
 EOF
 
-echo "✅ ULTRA APP V108 - CLICK FIX & FLAT JSON"
+echo "✅ ULTRA APP V109 - DEEP STREAMER DEPLOYED"
