@@ -2,13 +2,13 @@
 set -e
 
 # ==============================================================================
-# ULTRA APP V1000 - TITAN OMEGA EDITION (MAXIMUM CAPACITY)
+# ULTRA APP V2000 - TITAN OMEGA FIX (COMPILATION ERROR RESOLVED)
 # ==============================================================================
-# 1. FULL JAVA SOURCE CODE GENERATION (NO SHORTCUTS)
-# 2. ADVANCED UI ENGINE (Programmatic Drawables, Borders, Shadows)
-# 3. INTELLIGENT PARSER (M3U8/JSON/DeepLinks)
-# 4. PLAYER PRO (ExoPlayer V3, Custom Controls, Aspect Ratio, Sensor Rotation)
-# 5. SYSTEM FIXES (Layout Weights, Memory Leaks, Context Handling)
+# 1. FIXED: MainActivity variable name mismatch (s -> savedInstanceState)
+# 2. FULL JAVA SOURCE CODE (No missing lines)
+# 3. ADVANCED UI ENGINE (Programmatic Drawables, Borders, Shadows)
+# 4. INTELLIGENT PARSER (M3U8/JSON/DeepLinks)
+# 5. PLAYER PRO (ExoPlayer V3, Fullscreen, Sensor Rotation)
 # ==============================================================================
 
 PACKAGE_NAME=$1
@@ -19,18 +19,18 @@ VERSION_CODE=$5
 VERSION_NAME=$6
 
 echo "=================================================="
-echo "   🚀 TITAN OMEGA V1000 - SYSTEM DEPLOYING..."
+echo "   🚀 TITAN OMEGA V2000 - DEPLOYING..."
 echo "=================================================="
 
 # --------------------------------------------------------
-# 0. SYSTEM PREPARATION
+# 0. SİSTEM HAZIRLIĞI
 # --------------------------------------------------------
 echo "⚙️ [1/10] Sistem araçları ve kütüphaneler hazırlanıyor..."
 sudo apt-get update >/dev/null 2>&1
 sudo apt-get install -y imagemagick curl unzip >/dev/null 2>&1 || true
 
 # --------------------------------------------------------
-# 1. DEEP CLEAN & STRUCTURE
+# 1. TEMİZLİK & YAPI
 # --------------------------------------------------------
 echo "🧹 [2/10] Proje temizleniyor ve dizinler oluşturuluyor..."
 rm -rf app/src/main/res/drawable*
@@ -42,13 +42,13 @@ mkdir -p app/src/main/res/mipmap-xxxhdpi
 mkdir -p app/src/main/res/values
 
 # --------------------------------------------------------
-# 2. ICON PROCESSING ENGINE
+# 2. İKON İŞLEME MOTORU
 # --------------------------------------------------------
 echo "🖼️ [3/10] İkon işleme motoru çalışıyor..."
 ICON_TARGET="app/src/main/res/mipmap-xxxhdpi/ic_launcher.png"
 TEMP_FILE="downloaded_icon_raw"
 
-# User-Agent spoofing ile indirme (Güvenlik duvarlarını aşmak için)
+# User-Agent spoofing ile indirme
 curl -s -L -k -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" -o "$TEMP_FILE" "$ICON_URL" || true
 
 if [ -s "$TEMP_FILE" ] && [ $(stat -c%s "$TEMP_FILE") -gt 500 ]; then
@@ -60,7 +60,7 @@ else
 fi
 
 # --------------------------------------------------------
-# 3. GRADLE CONFIGURATION (REPO FIX)
+# 3. GRADLE CONFIGURATION
 # --------------------------------------------------------
 echo "📦 [4/10] Gradle yapılandırması yazılıyor..."
 cat > settings.gradle <<EOF
@@ -84,7 +84,7 @@ include ':app'
 EOF
 
 # --------------------------------------------------------
-# 4. APP BUILD.GRADLE (DEPENDENCIES)
+# 4. APP BUILD.GRADLE
 # --------------------------------------------------------
 cat > app/build.gradle <<EOF
 plugins {
@@ -136,7 +136,7 @@ dependencies {
 EOF
 
 # --------------------------------------------------------
-# 5. ANDROID MANIFEST (FULLSCREEN & PERMISSIONS)
+# 5. ANDROID MANIFEST
 # --------------------------------------------------------
 echo "📜 [5/10] Manifest (İzinler ve TV Ayarları) yazılıyor..."
 cat > app/src/main/AndroidManifest.xml <<EOF
@@ -179,7 +179,7 @@ cat > app/src/main/AndroidManifest.xml <<EOF
 EOF
 
 # --------------------------------------------------------
-# 6. ADS MANAGER (MONETIZATION)
+# 6. ADS MANAGER
 # --------------------------------------------------------
 echo "💰 [6/10] AdsManager derleniyor..."
 cat > "$TARGET_DIR/AdsManager.java" <<EOF
@@ -277,9 +277,9 @@ public class AdsManager {
 EOF
 
 # --------------------------------------------------------
-# 7. MAIN ACTIVITY (CORE LOGIC)
+# 7. MAIN ACTIVITY (BUG FIX APPLIED HERE)
 # --------------------------------------------------------
-echo "📱 [7/10] MainActivity (Ana Menü) yazılıyor..."
+echo "📱 [7/10] MainActivity (Düzeltilmiş) yazılıyor..."
 cat > "$TARGET_DIR/MainActivity.java" <<EOF
 package com.base.app;
 
@@ -320,7 +320,7 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(s);
+        super.onCreate(savedInstanceState); // **FIXED: Correct variable name**
         
         // Root Layout
         RelativeLayout root = new RelativeLayout(this);
@@ -551,7 +551,6 @@ public class MainActivity extends Activity {
                 refreshBtn.setVisibility(ui.optBoolean("show_refresh",true)?View.VISIBLE:View.GONE); 
                 shareBtn.setVisibility(ui.optBoolean("show_share",true)?View.VISIBLE:View.GONE);
                 
-                // Splash Logic
                 String spl = ui.optString("splash_image"); 
                 if(!spl.isEmpty()){ 
                     if(!spl.startsWith("http")) spl=CONFIG_URL.substring(0,CONFIG_URL.lastIndexOf("/")+1)+spl; 
@@ -620,8 +619,9 @@ public class ChannelListActivity extends Activity {
     
     class Item { String n,u,i,h; Item(String name,String url,String img,String head){n=name;u=url;i=img;h=head;} }
     
-    protected void onCreate(Bundle s) {
-        super.onCreate(s);
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
         
         // Receive Design Configs
         hC=getIntent().getStringExtra("HEADER_COLOR"); 
@@ -854,8 +854,8 @@ public class PlayerActivity extends Activity {
     private String videoUrl, headersJson;
     
     @Override
-    protected void onCreate(Bundle s) {
-        super.onCreate(s); 
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState); 
         
         // FULL SCREEN CONFIG
         requestWindowFeature(Window.FEATURE_NO_TITLE); 
@@ -1002,13 +1002,11 @@ public class PlayerActivity extends Activity {
 }
 EOF
 
-# --------------------------------------------------------
-# 10. WEBVIEW ACTIVITY
-# --------------------------------------------------------
+# --- 10. WEBVIEW ACTIVITY ---
 echo "🌐 [10/10] WebView ayarlanıyor..."
 cat > "$TARGET_DIR/WebViewActivity.java" <<EOF
 package com.base.app; import android.app.Activity; import android.os.Bundle; import android.webkit.*; import android.util.Base64;
 public class WebViewActivity extends Activity { protected void onCreate(Bundle s) { super.onCreate(s); WebView w=new WebView(this); setContentView(w); w.getSettings().setJavaScriptEnabled(true); String u=getIntent().getStringExtra("WEB_URL"); String h=getIntent().getStringExtra("HTML_DATA"); if(h!=null && !h.isEmpty()) w.loadData(Base64.encodeToString(h.getBytes(), Base64.NO_PADDING), "text/html", "base64"); else w.loadUrl(u); } }
 EOF
 
-echo "✅ ULTRA APP V1000 - SYSTEM DEPLOYED SUCCESSFULLY"
+echo "✅ ULTRA APP V2000 - SYSTEM DEPLOYED SUCCESSFULLY"
