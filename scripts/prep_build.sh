@@ -1,6 +1,13 @@
 #!/bin/bash
 set -e
-# ULTRA APP V109 - DEEP STREAMER & PARSER
+# ULTRA APP V110 - THE COMPLETE SYSTEM (UNABRIDGED)
+# 1. JSON Flat List Strategy
+# 2. M3U Grouping Strategy
+# 3. Manual Header Injection Engine
+# 4. Deep Link Resolver
+# 5. Full Screen Player
+# 6. Android TV Design Engine
+
 PACKAGE_NAME=$1
 APP_NAME=$2
 CONFIG_URL=$3
@@ -9,7 +16,7 @@ VERSION_CODE=$5
 VERSION_NAME=$6
 
 echo "=========================================="
-echo "   ULTRA APP V109 - DEEP STREAMER"
+echo "   ULTRA APP V110 - SYSTEM DEPLOY"
 echo "=========================================="
 
 # 0. SİSTEM
@@ -227,11 +234,13 @@ public class ChannelListActivity extends Activity {
             if(r==null)return;
             try {
                 groups.clear(); gNames.clear();
-                // JSON: FLAT LIST
+                
+                // 1. JSON LOGIC: ALWAYS FLAT LIST (NO GROUPS)
                 if("JSON_LIST".equals(t) || r.trim().startsWith("{")) {
                     try {
                         JSONObject root=new JSONObject(r); JSONArray arr=root.getJSONObject("list").getJSONArray("item");
                         String flatGroup = "Liste"; groups.put(flatGroup, new ArrayList<>()); gNames.add(flatGroup);
+                        
                         for(int i=0;i<arr.length();i++){
                             JSONObject o=arr.getJSONObject(i);
                             String u=o.optString("media_url",o.optString("url")); if(u.isEmpty())continue;
@@ -241,7 +250,8 @@ public class ChannelListActivity extends Activity {
                         }
                     }catch(Exception e){}
                 }
-                // M3U: GROUP SUPPORT
+                
+                // 2. M3U LOGIC: RESPECT GROUPS
                 if(groups.isEmpty()) {
                     String[] lines=r.split("\n"); String curT="Kanal", curI="", curG="Genel"; JSONObject curH=new JSONObject();
                     Pattern pG=Pattern.compile("group-title=\"([^\"]*)\""), pL=Pattern.compile("tvg-logo=\"([^\"]*)\"");
@@ -263,7 +273,10 @@ public class ChannelListActivity extends Activity {
                         }
                     }
                 }
-                if(gNames.size()>1) showGr(); else if(gNames.size()==1) showCh(gNames.get(0));
+                
+                if(gNames.size()>1) showGr(); 
+                else if(gNames.size()==1) showCh(gNames.get(0));
+                
             }catch(Exception e){}
         }
     }
@@ -283,23 +296,29 @@ public class ChannelListActivity extends Activity {
             StateListDrawable sld = new StateListDrawable();
             sld.addState(new int[]{android.R.attr.state_focused}, foc); sld.addState(new int[]{android.R.attr.state_pressed}, foc); sld.addState(new int[]{}, norm);
             l.setBackground(sld); 
+            
             LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1,-2);
             if(lType.equals("CARD")) { params.setMargins(0,0,0,25); l.setPadding(30,30,30,30); l.setElevation(5f); }
             else if(lType.equals("MODERN")) { params.setMargins(0,0,0,15); l.setPadding(20,50,20,50); }
             else { params.setMargins(0,0,0,5); l.setPadding(20,20,20,20); }
             l.setLayoutParams(params);
+
             ImageView img=v.findViewById(1); TextView txt=v.findViewById(2);
             img.setLayoutParams(new LinearLayout.LayoutParams(120,120)); ((LinearLayout.LayoutParams)img.getLayoutParams()).setMargins(0,0,30,0);
             RequestOptions opts = new RequestOptions(); if(lIcon.equals("CIRCLE")) opts = opts.circleCrop();
+
             if(isG) { txt.setText(d.get(p).toString()); img.setImageResource(android.R.drawable.ic_menu_sort_by_size); img.setColorFilter(Color.parseColor(hC)); }
-            else { Item i=(Item)d.get(p); txt.setText(i.n); if(!i.i.isEmpty()) Glide.with(ChannelListActivity.this).load(i.i).apply(opts).into(img); else img.setImageResource(android.R.drawable.ic_menu_slideshow); img.clearColorFilter(); }
+            else { 
+                Item i=(Item)d.get(p); txt.setText(i.n); 
+                if(!i.i.isEmpty()) Glide.with(ChannelListActivity.this).load(i.i).apply(opts).into(img); else img.setImageResource(android.R.drawable.ic_menu_slideshow); img.clearColorFilter();
+            }
             return v;
         }
     }
 }
 EOF
 
-# 9. PLAYER (DEEP LINK RESOLVER + HEADERS)
+# 9. PLAYER (HEADER INJECTION + FULLSCREEN + DEEP LINK RESOLVER)
 cat > "$TARGET_DIR/PlayerActivity.java" <<EOF
 package com.base.app;
 import android.app.Activity;
@@ -332,6 +351,7 @@ public class PlayerActivity extends Activity {
         super.onCreate(s);
         requestWindowFeature(Window.FEATURE_NO_TITLE);
         getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
+        // HIDE SYSTEM UI (FULL SCREEN)
         getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
         
         FrameLayout root = new FrameLayout(this); root.setBackgroundColor(Color.BLACK);
@@ -451,4 +471,4 @@ package com.base.app; import android.app.Activity; import android.os.Bundle; imp
 public class WebViewActivity extends Activity { protected void onCreate(Bundle s) { super.onCreate(s); WebView w=new WebView(this); setContentView(w); w.getSettings().setJavaScriptEnabled(true); String u=getIntent().getStringExtra("WEB_URL"); String h=getIntent().getStringExtra("HTML_DATA"); if(h!=null&&!h.isEmpty())w.loadData(Base64.encodeToString(h.getBytes(),0),"text/html","base64"); else w.loadUrl(u); } }
 EOF
 
-echo "✅ ULTRA APP V109 - DEEP STREAMER DEPLOYED"
+echo "✅ ULTRA APP V110 - SYSTEM DEPLOYED"
