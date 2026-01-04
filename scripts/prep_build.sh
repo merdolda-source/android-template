@@ -191,10 +191,10 @@ public class MainActivity extends Activity {
 }
 EOF
 
-# 8. CHANNEL LIST (SMART PARSER + CLICK FIX)
+# 8. CHANNEL LIST (SMART PARSER + CLICK FIX + SMOOTH SCROLL)
 cat > "$TARGET_DIR/ChannelListActivity.java" <<EOF
 package com.base.app;
-import android.app.Activity; import android.content.Intent; import android.os.AsyncTask; import android.os.Bundle; import android.widget.*; import android.view.*; import android.graphics.drawable.*; import android.graphics.Color; import org.json.*; import java.io.*; import java.net.*; import java.util.*; import java.util.regex.*; import com.bumptech.glide.Glide; import com.bumptech.glide.request.RequestOptions;
+import android.app.Activity; import android.content.Intent; import android.os.AsyncTask; import android.os.Bundle; import android.widget.*; import android.view.*; import android.graphics.drawable.*; import android.graphics.Color; import org.json.*; import java.io.*; import java.net.*; import java.util.*; import java.util.regex.*; import com.bumptech.glide.Glide; import com.bumptech.glide.request.RequestOptions; import com.bumptech.glide.load.engine.DiskCacheStrategy;
 
 public class ChannelListActivity extends Activity {
     private ListView lv;
@@ -209,20 +209,36 @@ public class ChannelListActivity extends Activity {
 
     protected void onCreate(Bundle s) {
         super.onCreate(s);
+
+        // ✅ EKRAN KİLİDİNİ ENGELLE (liste gezerken de kapanmasın)
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+
         hC=getIntent().getStringExtra("HEADER_COLOR"); bC=getIntent().getStringExtra("BG_COLOR"); tC=getIntent().getStringExtra("TEXT_COLOR"); pCfg=getIntent().getStringExtra("PLAYER_CONFIG"); fC=getIntent().getStringExtra("FOCUS_COLOR");
         lType=getIntent().getStringExtra("L_TYPE"); lBg=getIntent().getStringExtra("L_BG"); lRad=getIntent().getIntExtra("L_RAD",0); lIcon=getIntent().getStringExtra("L_ICON");
-        
+
         LinearLayout r=new LinearLayout(this); r.setOrientation(1); r.setBackgroundColor(Color.parseColor(bC));
         LinearLayout h=new LinearLayout(this); h.setBackgroundColor(Color.parseColor(hC)); h.setPadding(30,30,30,30);
         title=new TextView(this); title.setText("Yükleniyor..."); title.setTextColor(Color.parseColor(tC)); title.setTextSize(18);
         h.addView(title); r.addView(h);
-        
-        lv=new ListView(this); lv.setDivider(null); lv.setPadding(20,20,20,20); lv.setClipToPadding(false); 
-        lv.setFocusable(true); 
+
+        lv=new ListView(this);
+        lv.setDivider(null);
+        lv.setDividerHeight(0);
+        lv.setPadding(20,20,20,20);
+        lv.setClipToPadding(false);
+        lv.setFocusable(true);
+        lv.setSmoothScrollbarEnabled(true);
+
+        // ✅ Kaydırma akıcılığı için küçük ama etkili ayarlar
+        lv.setScrollingCacheEnabled(false);
+        lv.setCacheColorHint(Color.TRANSPARENT);
+        lv.setDrawSelectorOnTop(true);
+        lv.setFadingEdgeLength(0);
+
         r.addView(lv); setContentView(r);
-        
+
         new Load(getIntent().getStringExtra("TYPE"), getIntent().getStringExtra("LIST_CONTENT")).execute(getIntent().getStringExtra("LIST_URL"));
-        
+
         lv.setOnItemClickListener((p,v,pos,id)->{
             if(isGroup) {
                 showCh(gNames.get(pos));
@@ -238,6 +254,12 @@ public class ChannelListActivity extends Activity {
         });
     }
 
+    protected void onStop() {
+        super.onStop();
+        // opsiyonel: stop olunca flag’i temizlemek istersen
+        // getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+    }
+
     public void onBackPressed(){ if(!isGroup && gNames.size()>1) showGr(); else super.onBackPressed(); }
     private void showGr(){ isGroup=true; title.setText("Kategoriler"); lv.setAdapter(new Adp(gNames, true)); }
     private void showCh(String g){ isGroup=false; title.setText(g); curList=groups.get(g); lv.setAdapter(new Adp(curList, false)); }
@@ -246,51 +268,53 @@ public class ChannelListActivity extends Activity {
         String t,c; Load(String ty,String co){t=ty;c=co;}
         protected String doInBackground(String... u) {
             if("MANUAL_M3U".equals(t) && c!=null && !c.isEmpty()) return c;
-            try{ URL url=new URL(u[0]); HttpURLConnection cn=(HttpURLConnection)url.openConnection(); cn.setRequestProperty("User-Agent","Mozilla/5.0"); BufferedReader r=new BufferedReader(new InputStreamReader(cn.getInputStream())); StringBuilder s=new StringBuilder(); String l; while((l=r.readLine())!=null)s.append(l).append("\n"); return s.toString(); }catch(Exception e){return null;}
+            try{
+                URL url=new URL(u[0]);
+                HttpURLConnection cn=(HttpURLConnection)url.openConnection();
+                cn.setRequestProperty("User-Agent","Mozilla/5.0");
+                cn.setConnectTimeout(10000);
+                cn.setReadTimeout(15000);
+                BufferedReader r=new BufferedReader(new InputStreamReader(cn.getInputStream()));
+                StringBuilder s=new StringBuilder();
+                String l;
+                while((l=r.readLine())!=null) s.append(l).append("\\n");
+                return s.toString();
+            }catch(Exception e){return null;}
         }
         protected void onPostExecute(String r) {
             if(r==null)return;
             try {
                 groups.clear(); gNames.clear();
-                
+
                 // 1. JSON LOGIC: ALWAYS FLAT LIST (NO GROUPS)
                 if("JSON_LIST".equals(t) || r.trim().startsWith("{")) {
                     try {
-                        JSONObject root=new JSONObject(r); JSONArray arr=root.getJSONObject("list").getJSONArray("item");
-                        String flatGroup = "Liste"; groups.put(flatGroup, new ArrayList<>()); gNames.add(flatGroup);
-                        
+                        JSONObject root=new JSONObject(r);
+                        JSONArray arr=root.getJSONObject("list").getJSONArray("item");
+                        String flatGroup = "Liste";
+                        groups.put(flatGroup, new ArrayList<>());
+                        gNames.add(flatGroup);
+
                         for(int i=0;i<arr.length();i++){
                             JSONObject o=arr.getJSONObject(i);
-                            String u=o.optString("media_url",o.optString("url")); if(u.isEmpty())continue;
+                            String u=o.optString("media_url",o.optString("url"));
+                            if(u.isEmpty())continue;
                             JSONObject head=new JSONObject();
-                            for(int k=1;k<=5;k++) { String kn=o.optString("h"+k+"Key"), kv=o.optString("h"+k+"Val"); if(!kn.isEmpty() && !kn.equals("0")) head.put(kn,kv); }
-
-                            // REF/ORIGIN AUTO-FIX for JSON items
-                            try{
-                                String rf = head.optString("Referer", head.optString("referer",""));
-                                String og = head.optString("Origin", head.optString("origin",""));
-                                if(!rf.isEmpty() && og.isEmpty()){
-                                    android.net.Uri ru = android.net.Uri.parse(rf);
-                                    if(ru.getScheme()!=null && ru.getHost()!=null){
-                                        og = ru.getScheme() + "://" + ru.getHost();
-                                        if(ru.getPort() > 0) og += ":" + ru.getPort();
-                                        head.put("Origin", og);
-                                    }
-                                }
-                                if(!og.isEmpty() && rf.isEmpty()){
-                                    head.put("Referer", og.endsWith("/") ? og : (og + "/"));
-                                }
-                            }catch(Exception e){}
-
+                            for(int k=1;k<=5;k++) {
+                                String kn=o.optString("h"+k+"Key"), kv=o.optString("h"+k+"Val");
+                                if(!kn.isEmpty() && !kn.equals("0")) head.put(kn,kv);
+                            }
                             groups.get(flatGroup).add(new Item(o.optString("title"), u, o.optString("thumb_square"), head.toString()));
                         }
                     }catch(Exception e){}
                 }
-                
+
                 // 2. M3U LOGIC: RESPECT GROUPS
                 if(groups.isEmpty()) {
-                    String[] lines=r.split("\n"); String curT="Kanal", curI="", curG="Genel"; JSONObject curH=new JSONObject();
-                    Pattern pG=Pattern.compile("group-title=\"([^\"]*)\""), pL=Pattern.compile("tvg-logo=\"([^\"]*)\"");
+                    String[] lines=r.split("\\n");
+                    String curT="Kanal", curI="", curG="Genel";
+                    JSONObject curH=new JSONObject();
+                    Pattern pG=Pattern.compile("group-title=\\"([^\\"]*)\\""), pL=Pattern.compile("tvg-logo=\\"([^\\"]*)\\"");
                     for(String l:lines) {
                         l=l.trim(); if(l.isEmpty())continue;
                         if(l.startsWith("#EXTINF")) {
@@ -309,71 +333,111 @@ public class ChannelListActivity extends Activity {
                         }
                     }
                 }
-                
-                if(gNames.size()>1) showGr(); 
+
+                if(gNames.size()>1) showGr();
                 else if(gNames.size()==1) showCh(gNames.get(0));
-                
+
             }catch(Exception e){}
         }
     }
 
+    static class VH {
+        LinearLayout row;
+        ImageView img;
+        TextView txt;
+    }
+
     class Adp extends BaseAdapter {
-        List<?> d; boolean isG; Adp(List<?> l, boolean g){d=l;isG=g;}
-        public int getCount(){return d.size();} public Object getItem(int p){return d.get(p);} public long getItemId(int p){return p;}
+        List<?> d; boolean isG; RequestOptions ro;
+        Adp(List<?> l, boolean g){
+            d=l; isG=g;
+            ro = new RequestOptions()
+                    .diskCacheStrategy(DiskCacheStrategy.AUTOMATIC);
+            if("CIRCLE".equals(lIcon)) ro = ro.circleCrop();
+        }
+        public int getCount(){return d.size();}
+        public Object getItem(int p){return d.get(p);}
+        public long getItemId(int p){return p;}
+
         public View getView(int p, View v, ViewGroup gr) {
+            VH h;
             if(v==null){
-                LinearLayout l=new LinearLayout(ChannelListActivity.this); l.setOrientation(0); l.setGravity(Gravity.CENTER_VERTICAL);
-                ImageView i=new ImageView(ChannelListActivity.this); i.setId(1); l.addView(i);
-                TextView t=new TextView(ChannelListActivity.this); t.setId(2); t.setTextColor(Color.BLACK); l.addView(t); v=l;
+                h=new VH();
+                LinearLayout l=new LinearLayout(ChannelListActivity.this);
+                l.setOrientation(0);
+                l.setGravity(Gravity.CENTER_VERTICAL);
+
+                ImageView i=new ImageView(ChannelListActivity.this);
+                TextView t=new TextView(ChannelListActivity.this);
+
+                h.row=l; h.img=i; h.txt=t;
+
+                l.addView(i);
+                l.addView(t);
+
+                // Text görünümü ayarları (1 kere)
+                t.setTextColor(Color.BLACK);
+                t.setTextSize(15);
+                t.setSingleLine(true);
+                t.setEllipsize(android.text.TextUtils.TruncateAt.END);
+
+                // ikon ölçüsü (1 kere)
+                LinearLayout.LayoutParams ip = new LinearLayout.LayoutParams(120,120);
+                ip.setMargins(0,0,30,0);
+                i.setLayoutParams(ip);
+
+                v=l;
+                v.setTag(h);
+            } else {
+                h = (VH) v.getTag();
             }
-            LinearLayout l = (LinearLayout)v;
+
+            // background states her item için
             GradientDrawable norm = new GradientDrawable(); norm.setColor(Color.parseColor(lBg)); norm.setCornerRadius(lRad);
             GradientDrawable foc = new GradientDrawable(); foc.setColor(Color.parseColor(fC)); foc.setCornerRadius(lRad); foc.setStroke(3, Color.WHITE);
             StateListDrawable sld = new StateListDrawable();
-            sld.addState(new int[]{android.R.attr.state_focused}, foc); sld.addState(new int[]{android.R.attr.state_pressed}, foc); sld.addState(new int[]{}, norm);
-            l.setBackground(sld); 
-            
+            sld.addState(new int[]{android.R.attr.state_focused}, foc);
+            sld.addState(new int[]{android.R.attr.state_pressed}, foc);
+            sld.addState(new int[]{}, norm);
+            h.row.setBackground(sld);
+            h.row.setFocusable(true);
+            h.row.setClickable(true);
+
             LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1,-2);
-            if(lType.equals("CARD")) { params.setMargins(0,0,0,25); l.setPadding(30,30,30,30); l.setElevation(5f); }
-            else if(lType.equals("MODERN")) { params.setMargins(0,0,0,15); l.setPadding(20,50,20,50); }
-            else { params.setMargins(0,0,0,5); l.setPadding(20,20,20,20); }
-            l.setLayoutParams(params);
+            if("CARD".equals(lType)) { params.setMargins(0,0,0,25); h.row.setPadding(30,30,30,30); h.row.setElevation(5f); }
+            else if("MODERN".equals(lType)) { params.setMargins(0,0,0,15); h.row.setPadding(20,50,20,50); }
+            else { params.setMargins(0,0,0,5); h.row.setPadding(20,20,20,20); }
+            h.row.setLayoutParams(params);
 
-            ImageView img=v.findViewById(1); TextView txt=v.findViewById(2);
-
-            // TEXT COLOR (Kaybolma gibi görünmesin)
-            try { txt.setTextColor(Color.parseColor(tC)); } catch(Exception e){ txt.setTextColor(Color.WHITE); }
-            txt.setTextSize(16);
-            txt.setSingleLine(true);
-            txt.setEllipsize(android.text.TextUtils.TruncateAt.END);
-
-            // Layout weight (Text daralıp kaybolmasın)
-            if(txt.getLayoutParams() == null || !(txt.getLayoutParams() instanceof LinearLayout.LayoutParams)){
-                txt.setLayoutParams(new LinearLayout.LayoutParams(0, -2, 1.0f));
+            if(isG) {
+                h.txt.setText(d.get(p).toString());
+                h.img.setImageResource(android.R.drawable.ic_menu_sort_by_size);
+                h.img.setColorFilter(Color.parseColor(hC));
             } else {
-                LinearLayout.LayoutParams tp = (LinearLayout.LayoutParams) txt.getLayoutParams();
-                tp.width = 0; tp.weight = 1.0f;
-                txt.setLayoutParams(tp);
+                Item it=(Item)d.get(p);
+                h.txt.setText(it.n);
+
+                h.img.clearColorFilter();
+                if(it.i!=null && !it.i.isEmpty()) {
+                    Glide.with(ChannelListActivity.this)
+                        .load(it.i)
+                        .apply(ro)
+                        .placeholder(android.R.drawable.ic_menu_slideshow)
+                        .error(android.R.drawable.ic_menu_slideshow)
+                        .into(h.img);
+                } else {
+                    h.img.setImageResource(android.R.drawable.ic_menu_slideshow);
+                }
             }
 
-            // Glide recycle fix
-            try { Glide.with(ChannelListActivity.this).clear(img); } catch(Exception e){}
-
-            img.setLayoutParams(new LinearLayout.LayoutParams(120,120)); ((LinearLayout.LayoutParams)img.getLayoutParams()).setMargins(0,0,30,0);
-            RequestOptions opts = new RequestOptions(); if(lIcon.equals("CIRCLE")) opts = opts.circleCrop();
-
-            if(isG) { txt.setText(d.get(p).toString()); img.setImageResource(android.R.drawable.ic_menu_sort_by_size); img.setColorFilter(Color.parseColor(hC)); }
-            else { 
-                Item i=(Item)d.get(p); txt.setText(i.n); 
-                if(!i.i.isEmpty()) Glide.with(ChannelListActivity.this).load(i.i).apply(opts).into(img); else img.setImageResource(android.R.drawable.ic_menu_slideshow); img.clearColorFilter();
-            }
             return v;
         }
     }
 }
 EOF
 
-# 9. PLAYER (HEADER INJECTION + FULLSCREEN + DEEP LINK RESOLVER)
+
+# 9. PLAYER (HEADER INJECTION + FULLSCREEN + DEEP LINK RESOLVER + KEEP SCREEN ON)
 cat > "$TARGET_DIR/PlayerActivity.java" <<EOF
 package com.base.app;
 import android.app.Activity;
@@ -404,13 +468,22 @@ public class PlayerActivity extends Activity {
     @Override
     protected void onCreate(Bundle s) {
         super.onCreate(s);
+
+        // ✅ EKRAN KİLİDİNİ ENGELLE (dokunulmasa da kapanmasın)
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+
         requestWindowFeature(Window.FEATURE_NO_TITLE);
         getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
+
         // HIDE SYSTEM UI (FULL SCREEN)
-        getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
-        
+        getWindow().getDecorView().setSystemUiVisibility(
+            View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+            | View.SYSTEM_UI_FLAG_FULLSCREEN
+            | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+        );
+
         FrameLayout root = new FrameLayout(this); root.setBackgroundColor(Color.BLACK);
-        playerView = new PlayerView(this); 
+        playerView = new PlayerView(this);
         playerView.setShowNextButton(false); playerView.setShowPreviousButton(false);
         root.addView(playerView);
 
@@ -441,7 +514,7 @@ public class PlayerActivity extends Activity {
         setContentView(root);
         videoUrl = getIntent().getStringExtra("VIDEO_URL");
         headersJson = getIntent().getStringExtra("HEADERS_JSON");
-        
+
         if(videoUrl != null && !videoUrl.isEmpty()) new ResolveUrlTask().execute(videoUrl.trim());
     }
 
@@ -462,10 +535,17 @@ public class PlayerActivity extends Activity {
                         Iterator<String> keys = h.keys();
                         while(keys.hasNext()) { String key = keys.next(); con.setRequestProperty(key, h.getString(key)); }
                     } else { con.setRequestProperty("User-Agent", "Mozilla/5.0"); }
-                    con.setConnectTimeout(8000); con.connect();
+                    con.setConnectTimeout(8000);
+                    con.setReadTimeout(12000);
+                    con.connect();
                     int code = con.getResponseCode();
-                    if (code >= 300 && code < 400) { String next = con.getHeaderField("Location"); if (next != null) { currentUrl = next; continue; } }
-                    detectedMime = con.getContentType(); con.disconnect(); break;
+                    if (code >= 300 && code < 400) {
+                        String next = con.getHeaderField("Location");
+                        if (next != null) { currentUrl = next; continue; }
+                    }
+                    detectedMime = con.getContentType();
+                    con.disconnect();
+                    break;
                 }
             } catch (Exception e) {}
             return new UrlInfo(currentUrl, detectedMime);
@@ -475,12 +555,20 @@ public class PlayerActivity extends Activity {
 
     private void initializePlayer(UrlInfo info) {
         if (player != null) return;
+
         String userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64)";
         Map<String, String> requestProps = new HashMap<>();
-        if(headersJson != null){ 
-            try{ JSONObject h=new JSONObject(headersJson); Iterator<String> k=h.keys(); 
-            while(k.hasNext()){ String key=k.next(); String val = h.getString(key); if(key.equalsIgnoreCase("User-Agent")) userAgent = val; else requestProps.put(key, val); } 
-            }catch(Exception e){} 
+        if(headersJson != null){
+            try{
+                JSONObject h=new JSONObject(headersJson);
+                Iterator<String> k=h.keys();
+                while(k.hasNext()){
+                    String key=k.next();
+                    String val = h.getString(key);
+                    if(key.equalsIgnoreCase("User-Agent")) userAgent = val;
+                    else requestProps.put(key, val);
+                }
+            }catch(Exception e){}
         }
 
         DefaultHttpDataSource.Factory httpFactory = new DefaultHttpDataSource.Factory()
@@ -497,13 +585,19 @@ public class PlayerActivity extends Activity {
             .setLoadControl(lc)
             .setMediaSourceFactory(new DefaultMediaSourceFactory(this).setDataSourceFactory(httpFactory))
             .build();
-            
+
         playerView.setPlayer(player);
         player.setPlayWhenReady(true);
-        
+
         player.addListener(new Player.Listener() {
-            public void onPlaybackStateChanged(int state) { if (state == Player.STATE_BUFFERING) loadingSpinner.setVisibility(View.VISIBLE); else loadingSpinner.setVisibility(View.GONE); }
-            public void onPlayerError(PlaybackException e) { loadingSpinner.setVisibility(View.GONE); Toast.makeText(PlayerActivity.this, "Hata: " + e.getMessage(), Toast.LENGTH_LONG).show(); }
+            public void onPlaybackStateChanged(int state) {
+                if (state == Player.STATE_BUFFERING) loadingSpinner.setVisibility(View.VISIBLE);
+                else loadingSpinner.setVisibility(View.GONE);
+            }
+            public void onPlayerError(PlaybackException e) {
+                loadingSpinner.setVisibility(View.GONE);
+                Toast.makeText(PlayerActivity.this, "Hata: " + e.getMessage(), Toast.LENGTH_LONG).show();
+            }
         });
 
         try {
@@ -514,9 +608,17 @@ public class PlayerActivity extends Activity {
             }
             player.setMediaItem(item.build());
             player.prepare();
-        } catch(Exception e){ Toast.makeText(this, "Başlatma Hatası", Toast.LENGTH_LONG).show(); }
+        } catch(Exception e){
+            Toast.makeText(this, "Başlatma Hatası", Toast.LENGTH_LONG).show();
+        }
     }
-    protected void onStop(){ super.onStop(); if(player!=null){player.release(); player=null;} }
+
+    protected void onStop(){
+        super.onStop();
+        if(player!=null){player.release(); player=null;}
+        // opsiyonel: activity kapanınca flag’i temizle
+        // getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+    }
 }
 EOF
 
