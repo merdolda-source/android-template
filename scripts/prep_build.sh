@@ -2,12 +2,10 @@
 set -e
 
 # ==============================================================================
-# ULTRA APP V3200 - TITAN APEX (GRADLE 8.13 FIX & AUTO-PATCHER)
+# TITAN APEX - GRADLE 8.13 STRICT FIX
 # ==============================================================================
-# 1. JSON AUTO-PATCH: google-services.json paket adını zorla değiştirir.
-# 2. GRADLE 8.13 COMPATIBILITY: AGP 8.2.0 sürümüne yükseltildi.
-# 3. LINT BYPASS: Hataları görmezden gelip APK'yı zorla çıkarır.
-# 4. NAMESPACE FIX: Android 14 (API 34) standartlarına tam uyum.
+# DÜZELTME: Repository Conflict hatası giderildi.
+# DÜZELTME: build.gradle ve settings.gradle uyumsuzluğu çözüldü.
 # ==============================================================================
 
 PACKAGE_NAME=$1
@@ -17,59 +15,24 @@ ICON_URL=$4
 VERSION_CODE=$5
 VERSION_NAME=$6
 
-echo "=================================================="
-echo "   🚀 TITAN APEX V3200 - GRADLE 8.13 FIX ENGINE"
-echo "   📦 HEDEF PAKET: $PACKAGE_NAME"
-echo "=================================================="
+echo ">> SISTEM BASLATILIYOR: $PACKAGE_NAME"
 
-# --------------------------------------------------------
-# 0. SİSTEM HAZIRLIĞI
-# --------------------------------------------------------
-echo "⚙️ [1/15] Sistem güncelleniyor..."
-sudo apt-get update >/dev/null 2>&1
-sudo apt-get install -y imagemagick curl unzip openjdk-17-jdk >/dev/null 2>&1 || true
+# 1. ORTAM HAZIRLIĞI
+rm -rf app/src/main/res/drawable* app/src/main/res/mipmap* app/src/main/res/values* app/src/main/java/com/base/app/*
+rm -rf .gradle app/build build
+mkdir -p "app/src/main/java/com/base/app" "app/src/main/res/mipmap-xxxhdpi" "app/src/main/res/values" "app/src/main/res/xml"
 
-# --------------------------------------------------------
-# 1. TEMİZLİK
-# --------------------------------------------------------
-echo "🧹 [2/15] Proje alanı temizleniyor..."
-rm -rf app/src/main/res/drawable*
-rm -rf app/src/main/res/mipmap*
-rm -rf app/src/main/res/values*
-rm -rf app/src/main/java/com/base/app/*
-# Gradle cache temizliği (Hata riskini azaltır)
-rm -rf .gradle
-rm -rf app/build
-rm -rf build
-
-TARGET_DIR="app/src/main/java/com/base/app"
-RES_DIR="app/src/main/res"
-
-mkdir -p "$TARGET_DIR"
-mkdir -p "$RES_DIR/mipmap-xxxhdpi"
-mkdir -p "$RES_DIR/values"
-mkdir -p "$RES_DIR/xml"
-
-# --------------------------------------------------------
 # 2. İKON İŞLEME
-# --------------------------------------------------------
-echo "🖼️ [3/15] İkon hazırlanıyor..."
-ICON_TARGET="$RES_DIR/mipmap-xxxhdpi/ic_launcher.png"
-TEMP_FILE="icon_download.tmp"
-
-curl -s -L -k -A "Mozilla/5.0" -o "$TEMP_FILE" "$ICON_URL" || true
-
-if [ -s "$TEMP_FILE" ]; then
-    convert "$TEMP_FILE" -resize 512x512! -background none -flatten "$ICON_TARGET" || cp "$TEMP_FILE" "$ICON_TARGET"
+curl -s -L -k -A "Mozilla/5.0" -o "icon.tmp" "$ICON_URL" || true
+if [ -s "icon.tmp" ]; then
+    convert "icon.tmp" -resize 512x512! -background none -flatten "app/src/main/res/mipmap-xxxhdpi/ic_launcher.png"
 else
-    # İkon inmezse dummy ikon oluştur (Build patlamasın)
-    convert -size 512x512 xc:#2563eb -fill white -gravity center -pointsize 120 -annotate 0 "TV" "$ICON_TARGET"
+    convert -size 512x512 xc:#000000 -fill white -gravity center -pointsize 120 -annotate 0 "TV" "app/src/main/res/mipmap-xxxhdpi/ic_launcher.png"
 fi
-rm -f "$TEMP_FILE"
+rm -f "icon.tmp"
 
-# --------------------------------------------------------
-# 3. ROOT SETTINGS.GRADLE
-# --------------------------------------------------------
+# 3. SETTINGS.GRADLE (TÜM REPOLAR BURADA TANIMLANACAK)
+# Hata burada çözülüyor: Tek kaynak kuralı.
 cat > settings.gradle <<EOF
 pluginManagement {
     repositories {
@@ -90,10 +53,8 @@ rootProject.name = "TitanApp"
 include ':app'
 EOF
 
-# --------------------------------------------------------
-# 4. ROOT BUILD.GRADLE (AGP 8.2.1 GÜNCELLEMESİ)
-# --------------------------------------------------------
-echo "📦 [4/15] Gradle 8.13 uyumlu Pluginler yükleniyor..."
+# 4. ROOT BUILD.GRADLE
+# Hata burada çözülüyor: 'allprojects' bloğu kaldırıldı.
 cat > build.gradle <<EOF
 buildscript {
     repositories {
@@ -101,15 +62,8 @@ buildscript {
         mavenCentral()
     }
     dependencies {
-        // Gradle 8.13 için daha kararlı sürümler
         classpath 'com.android.tools.build:gradle:8.2.1'
         classpath 'com.google.gms:google-services:4.4.1'
-    }
-}
-allprojects {
-    repositories {
-        google()
-        mavenCentral()
     }
 }
 task clean(type: Delete) {
@@ -117,50 +71,16 @@ task clean(type: Delete) {
 }
 EOF
 
-# --------------------------------------------------------
-# 5. GOOGLE SERVICES JSON TAMİR MOTORU (HAYAT KURTARICI)
-# --------------------------------------------------------
-echo "🔧 [5/15] google-services.json inceleniyor ve düzeltiliyor..."
-
+# 5. JSON PATCH (Google Services Fix)
 JSON_FILE="app/google-services.json"
-
 if [ -f "$JSON_FILE" ]; then
-    echo "✅ Dosya bulundu. Paket adı: $PACKAGE_NAME olarak değiştiriliyor..."
-    # SED komutu ile dosyanın içindeki package_name değerini zorla değiştiriyoruz
-    # Bu sayede Firebase konsolundan indirdiğin dosya farklı olsa bile build hata vermez.
     sed -i 's/"package_name": *"[^"]*"/"package_name": "'"$PACKAGE_NAME"'"/g' "$JSON_FILE"
-    
-    # Client ID uyuşmazlığını önlemek için (Opsiyonel ama güvenli)
-    # Eğer oauth_client kısımları varsa bazen çakışır, bu script basit replace yapar.
 else
-    echo "⚠️ UYARI: google-services.json BULUNAMADI!"
-    echo "⚠️ Fake bir JSON oluşturuluyor (Build hata vermesin diye, ama Push çalışmaz)."
-    cat > "$JSON_FILE" <<EOF
-{
-  "project_info": {
-    "project_number": "000000000000",
-    "project_id": "dummy-project",
-    "storage_bucket": "dummy-project.appspot.com"
-  },
-  "client": [
-    {
-      "client_info": {
-        "mobilesdk_app_id": "1:000000000000:android:0000000000000000",
-        "android_client_info": {
-          "package_name": "$PACKAGE_NAME"
-        }
-      },
-      "api_key": [ { "current_key": "dummy_key" } ]
-    }
-  ]
-}
-EOF
+    # Dosya yoksa build patlamasın diye dummy oluşturuluyor (Push çalışmaz)
+    echo '{ "project_info": { "project_number": "0", "project_id": "none" }, "client": [{ "client_info": { "mobilesdk_app_id": "1:0:android:0", "android_client_info": { "package_name": "'"$PACKAGE_NAME"'" } }, "api_key": [{ "current_key": "dummy" }] }] }' > "$JSON_FILE"
 fi
 
-# --------------------------------------------------------
-# 6. APP BUILD.GRADLE (LINT BYPASS)
-# --------------------------------------------------------
-echo "📚 [6/15] App Gradle yapılandırılıyor (Lint Bypass Aktif)..."
+# 6. APP BUILD.GRADLE
 cat > app/build.gradle <<EOF
 plugins {
     id 'com.android.application'
@@ -168,11 +88,11 @@ plugins {
 }
 
 android {
-    namespace 'com.base.app' // Kod namespace'i sabit kalmalı
+    namespace 'com.base.app'
     compileSdkVersion 34
 
     defaultConfig {
-        applicationId "$PACKAGE_NAME" // APK Paket adı buradan gelir
+        applicationId "$PACKAGE_NAME"
         minSdkVersion 24
         targetSdkVersion 34
         versionCode $VERSION_CODE
@@ -187,13 +107,10 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
-    
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_8
         targetCompatibility JavaVersion.VERSION_1_8
     }
-
-    // BU KISIM ÇOK ÖNEMLİ: Hataları Görmezden Gelir
     lint {
         abortOnError false
         checkReleaseBuilds false
@@ -204,218 +121,77 @@ dependencies {
     implementation 'androidx.appcompat:appcompat:1.6.1'
     implementation 'com.google.android.material:material:1.11.0'
     implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
-    
-    // Firebase
     implementation(platform('com.google.firebase:firebase-bom:32.7.0'))
     implementation 'com.google.firebase:firebase-messaging'
     implementation 'com.google.firebase:firebase-analytics'
-
-    // Media
     implementation 'androidx.media3:media3-exoplayer:1.2.0'
     implementation 'androidx.media3:media3-exoplayer-hls:1.2.0'
     implementation 'androidx.media3:media3-ui:1.2.0'
-    
-    // Glide
     implementation 'com.github.bumptech.glide:glide:4.16.0'
-    
-    // Ads
     implementation 'com.unity3d.ads:unity-ads:4.9.2'
     implementation 'com.google.android.gms:play-services-ads:22.6.0'
 }
 EOF
 
-# --------------------------------------------------------
-# 7. NETWORK SECURITY
-# --------------------------------------------------------
-cat > "$RES_DIR/xml/network_security_config.xml" <<EOF
+# 7. MANIFEST & RESOURCES
+cat > app/src/main/res/xml/network_security_config.xml <<EOF
 <?xml version="1.0" encoding="utf-8"?>
-<network-security-config>
-    <base-config cleartextTrafficPermitted="true">
-        <trust-anchors>
-            <certificates src="system" />
-        </trust-anchors>
-    </base-config>
-</network-security-config>
+<network-security-config><base-config cleartextTrafficPermitted="true"><trust-anchors><certificates src="system"/></trust-anchors></base-config></network-security-config>
 EOF
 
-# --------------------------------------------------------
-# 8. ANDROID MANIFEST
-# --------------------------------------------------------
-echo "📜 [7/15] Manifest yazılıyor..."
+cat > app/src/main/res/values/styles.xml <<EOF
+<resources>
+    <style name="AppTheme" parent="Theme.AppCompat.Light.NoActionBar"><item name="android:windowNoTitle">true</item><item name="android:windowActionBar">false</item></style>
+    <style name="PlayerTheme" parent="Theme.AppCompat.NoActionBar"><item name="android:windowFullscreen">true</item></style>
+</resources>
+EOF
+
 cat > app/src/main/AndroidManifest.xml <<EOF
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools">
-
-    <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-    <uses-permission android:name="android.permission.WAKE_LOCK" />
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
+    <uses-permission android:name="android.permission.WAKE_LOCK"/>
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <uses-permission android:name="com.google.android.gms.permission.AD_ID"/>
-
-    <application
-        android:allowBackup="true"
-        android:label="$APP_NAME"
-        android:icon="@mipmap/ic_launcher"
-        android:networkSecurityConfig="@xml/network_security_config"
-        android:usesCleartextTraffic="true"
-        android:theme="@style/AppTheme">
-        
-        <meta-data
-            android:name="com.google.android.gms.ads.APPLICATION_ID"
-            android:value="ca-app-pub-3940256099942544~3347511713"/>
-
+    <application android:allowBackup="true" android:label="$APP_NAME" android:icon="@mipmap/ic_launcher" android:networkSecurityConfig="@xml/network_security_config" android:usesCleartextTraffic="true" android:theme="@style/AppTheme">
+        <meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="ca-app-pub-3940256099942544~3347511713"/>
         <activity android:name=".MainActivity" android:exported="true" android:screenOrientation="portrait">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
+            <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter>
         </activity>
-        
         <activity android:name=".WebViewActivity" android:configChanges="orientation|screenSize|keyboardHidden"/>
-        <activity android:name=".ChannelListActivity" />
-        <activity android:name=".PlayerActivity"
-            android:configChanges="orientation|screenSize|keyboardHidden|smallestScreenSize|screenLayout"
-            android:screenOrientation="sensor"
-            android:theme="@style/PlayerTheme" />
-            
-        <service
-            android:name=".MyFirebaseMessagingService"
-            android:exported="false">
-            <intent-filter>
-                <action android:name="com.google.firebase.MESSAGING_EVENT" />
-            </intent-filter>
+        <activity android:name=".ChannelListActivity"/>
+        <activity android:name=".PlayerActivity" android:configChanges="orientation|screenSize|keyboardHidden|smallestScreenSize|screenLayout" android:screenOrientation="sensor" android:theme="@style/PlayerTheme"/>
+        <service android:name=".MyFirebaseMessagingService" android:exported="false">
+            <intent-filter><action android:name="com.google.firebase.MESSAGING_EVENT"/></intent-filter>
         </service>
-
     </application>
 </manifest>
 EOF
 
-# --------------------------------------------------------
-# 9. STYLES
-# --------------------------------------------------------
-cat > "$RES_DIR/values/styles.xml" <<EOF
-<resources>
-    <style name="AppTheme" parent="Theme.AppCompat.Light.NoActionBar">
-        <item name="android:windowNoTitle">true</item>
-        <item name="android:windowActionBar">false</item>
-    </style>
-    <style name="PlayerTheme" parent="Theme.AppCompat.NoActionBar">
-        <item name="android:windowFullscreen">true</item>
-        <item name="android:windowContentOverlay">@null</item>
-    </style>
-</resources>
-EOF
-
-# --------------------------------------------------------
-# 10. JAVA: ADS MANAGER
-# --------------------------------------------------------
-echo "☕ [8/15] Java: AdsManager..."
-cat > "$TARGET_DIR/AdsManager.java" <<EOF
+# 8. JAVA KODLARI (Sıkıştırılmış)
+cat > "app/src/main/java/com/base/app/AdsManager.java" <<EOF
 package com.base.app;
-import android.app.Activity; import android.view.ViewGroup; import org.json.JSONObject;
-import com.unity3d.ads.*; import com.unity3d.services.banners.*;
-import com.google.android.gms.ads.*; import com.google.android.gms.ads.interstitial.*;
-import androidx.annotation.NonNull;
-
-public class AdsManager {
-    public static int counter=0; private static int frequency=3;
-    private static boolean isEnabled=false, bannerActive=false, interActive=false;
-    private static String provider="UNITY", unityGameId="", unityBannerId="", unityInterId="", admobBannerId="", admobInterId="";
-    private static InterstitialAd mAdMobInter;
-
-    public static void init(Activity act, JSONObject cfg) {
-        try {
-            if(cfg==null)return;
-            isEnabled=cfg.optBoolean("enabled", false); provider=cfg.optString("provider","UNITY");
-            bannerActive=cfg.optBoolean("banner_active"); interActive=cfg.optBoolean("inter_active");
-            frequency=cfg.optInt("inter_freq",3);
-            if(!isEnabled)return;
-            
-            if(provider.equals("UNITY")||provider.equals("BOTH")){
-                unityGameId=cfg.optString("unity_game_id"); unityBannerId=cfg.optString("unity_banner_id"); unityInterId=cfg.optString("unity_inter_id");
-                if(!unityGameId.isEmpty()) UnityAds.initialize(act.getApplicationContext(), unityGameId, false, null);
-            }
-            if(provider.equals("ADMOB")||provider.equals("BOTH")){
-                admobBannerId=cfg.optString("admob_banner_id"); admobInterId=cfg.optString("admob_inter_id");
-                MobileAds.initialize(act, s->{}); loadAdMobInter(act);
-            }
-        }catch(Exception e){}
-    }
-    private static void loadAdMobInter(Activity act){
-        if(!interActive||admobInterId.isEmpty())return;
-        AdRequest r=new AdRequest.Builder().build();
-        InterstitialAd.load(act, admobInterId, r, new InterstitialAdLoadCallback(){
-            public void onAdLoaded(@NonNull InterstitialAd ad){mAdMobInter=ad;}
-        });
-    }
-    public static void showBanner(Activity act, ViewGroup con){
-        if(!isEnabled||!bannerActive)return;
-        con.removeAllViews();
-        if((provider.equals("ADMOB")||provider.equals("BOTH"))&&!admobBannerId.isEmpty()){
-            AdView v=new AdView(act); v.setAdSize(AdSize.BANNER); v.setAdUnitId(admobBannerId);
-            con.addView(v); v.loadAd(new AdRequest.Builder().build());
-        } else if((provider.equals("UNITY")||provider.equals("BOTH"))&&!unityBannerId.isEmpty()){
-            BannerView b=new BannerView(act, unityBannerId, new UnityBannerSize(320,50));
-            b.load(); con.addView(b);
-        }
-    }
-    public static void checkInter(Activity act, Runnable run){
-        if(!isEnabled||!interActive){run.run();return;}
-        counter++;
-        if(counter>=frequency){
-            counter=0;
-            if((provider.equals("ADMOB")||provider.equals("BOTH"))&&mAdMobInter!=null){
-                mAdMobInter.show(act); mAdMobInter=null; loadAdMobInter(act); run.run(); return;
-            }
-            if((provider.equals("UNITY")||provider.equals("BOTH"))&&!unityInterId.isEmpty()){
-                UnityAds.load(unityInterId, new IUnityAdsLoadListener(){
-                    public void onUnityAdsAdLoaded(String p){
-                        UnityAds.show(act, p, new IUnityAdsShowListener(){
-                            public void onUnityAdsShowComplete(String p, UnityAds.UnityAdsShowCompletionState s){run.run();}
-                            public void onUnityAdsShowFailure(String p, UnityAds.UnityAdsShowError e, String m){run.run();}
-                        });
-                    }
-                    public void onUnityAdsFailedToLoad(String p, UnityAds.UnityAdsLoadError e, String m){run.run();}
-                }); return;
-            }
-            run.run();
-        } else run.run();
-    }
-}
+import android.app.Activity; import android.view.ViewGroup; import org.json.JSONObject; import com.unity3d.ads.*; import com.unity3d.services.banners.*; import com.google.android.gms.ads.*; import com.google.android.gms.ads.interstitial.*; import androidx.annotation.NonNull;
+public class AdsManager { public static int counter=0; private static int frequency=3; private static boolean isEnabled=false, bannerActive=false, interActive=false; private static String provider="UNITY", unityGameId="", unityBannerId="", unityInterId="", admobBannerId="", admobInterId=""; private static InterstitialAd mAdMobInter;
+    public static void init(Activity act, JSONObject cfg) { try { if(cfg==null)return; isEnabled=cfg.optBoolean("enabled", false); provider=cfg.optString("provider","UNITY"); bannerActive=cfg.optBoolean("banner_active"); interActive=cfg.optBoolean("inter_active"); frequency=cfg.optInt("inter_freq",3); if(!isEnabled)return;
+            if(provider.equals("UNITY")||provider.equals("BOTH")){ unityGameId=cfg.optString("unity_game_id"); unityBannerId=cfg.optString("unity_banner_id"); unityInterId=cfg.optString("unity_inter_id"); if(!unityGameId.isEmpty()) UnityAds.initialize(act.getApplicationContext(), unityGameId, false, null); }
+            if(provider.equals("ADMOB")||provider.equals("BOTH")){ admobBannerId=cfg.optString("admob_banner_id"); admobInterId=cfg.optString("admob_inter_id"); MobileAds.initialize(act, s->{}); loadAdMobInter(act); } }catch(Exception e){} }
+    private static void loadAdMobInter(Activity act){ if(!interActive||admobInterId.isEmpty())return; AdRequest r=new AdRequest.Builder().build(); InterstitialAd.load(act, admobInterId, r, new InterstitialAdLoadCallback(){ public void onAdLoaded(@NonNull InterstitialAd ad){mAdMobInter=ad;} }); }
+    public static void showBanner(Activity act, ViewGroup con){ if(!isEnabled||!bannerActive)return; con.removeAllViews(); if((provider.equals("ADMOB")||provider.equals("BOTH"))&&!admobBannerId.isEmpty()){ AdView v=new AdView(act); v.setAdSize(AdSize.BANNER); v.setAdUnitId(admobBannerId); con.addView(v); v.loadAd(new AdRequest.Builder().build()); } else if((provider.equals("UNITY")||provider.equals("BOTH"))&&!unityBannerId.isEmpty()){ BannerView b=new BannerView(act, unityBannerId, new UnityBannerSize(320,50)); b.load(); con.addView(b); } }
+    public static void checkInter(Activity act, Runnable run){ if(!isEnabled||!interActive){run.run();return;} counter++; if(counter>=frequency){ counter=0; if((provider.equals("ADMOB")||provider.equals("BOTH"))&&mAdMobInter!=null){ mAdMobInter.show(act); mAdMobInter=null; loadAdMobInter(act); run.run(); return; } if((provider.equals("UNITY")||provider.equals("BOTH"))&&!unityInterId.isEmpty()){ UnityAds.load(unityInterId, new IUnityAdsLoadListener(){ public void onUnityAdsAdLoaded(String p){ UnityAds.show(act, p, new IUnityAdsShowListener(){ public void onUnityAdsShowComplete(String p, UnityAds.UnityAdsShowCompletionState s){run.run();} public void onUnityAdsShowFailure(String p, UnityAds.UnityAdsShowError e, String m){run.run();} }); } public void onUnityAdsFailedToLoad(String p, UnityAds.UnityAdsLoadError e, String m){run.run();} }); return; } run.run(); } else run.run(); } }
 EOF
 
-# --------------------------------------------------------
-# 11. JAVA: FIREBASE SERVICE
-# --------------------------------------------------------
-echo "☕ [9/15] Java: FCM Service..."
-cat > "$TARGET_DIR/MyFirebaseMessagingService.java" <<EOF
+cat > "app/src/main/java/com/base/app/MyFirebaseMessagingService.java" <<EOF
 package com.base.app;
 import android.app.NotificationChannel; import android.app.NotificationManager; import android.app.PendingIntent; import android.content.Context; import android.content.Intent; import android.media.RingtoneManager; import android.os.Build; androidx.core.app.NotificationCompat; com.google.firebase.messaging.FirebaseMessagingService; com.google.firebase.messaging.RemoteMessage;
 public class MyFirebaseMessagingService extends FirebaseMessagingService {
-    public void onMessageReceived(RemoteMessage m) {
-        if (m.getNotification() != null) sn(m.getNotification().getTitle(), m.getNotification().getBody());
-        else if (m.getData().size() > 0) sn(m.getData().get("title"), m.getData().get("body"));
-    }
+    public void onMessageReceived(RemoteMessage m) { if (m.getNotification() != null) sn(m.getNotification().getTitle(), m.getNotification().getBody()); else if (m.getData().size() > 0) sn(m.getData().get("title"), m.getData().get("body")); }
     public void onNewToken(String t) { getSharedPreferences("TITAN_PREFS", MODE_PRIVATE).edit().putString("fcm_token", t).apply(); }
-    private void sn(String t, String b) {
-        if(t==null || b==null) return;
-        Intent i = new Intent(this, MainActivity.class); i.addFlags(67108864);
-        PendingIntent pi = PendingIntent.getActivity(this, 0, i, PendingIntent.FLAG_ONE_SHOT | PendingIntent.FLAG_IMMUTABLE);
-        String cid = "TitanCh";
-        NotificationCompat.Builder nb = new NotificationCompat.Builder(this, cid).setSmallIcon(android.R.drawable.ic_dialog_info).setContentTitle(t).setContentText(b).setAutoCancel(true).setSound(RingtoneManager.getDefaultUri(2)).setContentIntent(pi);
-        NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-        if (Build.VERSION.SDK_INT >= 26) { NotificationChannel c = new NotificationChannel(cid, "Bildirim", 3); nm.createNotificationChannel(c); }
-        nm.notify(0, nb.build());
-    }
-}
+    private void sn(String t, String b) { if(t==null || b==null) return; Intent i = new Intent(this, MainActivity.class); i.addFlags(67108864); PendingIntent pi = PendingIntent.getActivity(this, 0, i, PendingIntent.FLAG_ONE_SHOT | PendingIntent.FLAG_IMMUTABLE); String cid = "TitanCh"; NotificationCompat.Builder nb = new NotificationCompat.Builder(this, cid).setSmallIcon(android.R.drawable.ic_dialog_info).setContentTitle(t).setContentText(b).setAutoCancel(true).setSound(RingtoneManager.getDefaultUri(2)).setContentIntent(pi); NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE); if (Build.VERSION.SDK_INT >= 26) { NotificationChannel c = new NotificationChannel(cid, "Bildirim", 3); nm.createNotificationChannel(c); } nm.notify(0, nb.build()); } }
 EOF
 
-# --------------------------------------------------------
-# 12. JAVA: MAIN ACTIVITY
-# --------------------------------------------------------
-echo "☕ [10/15] Java: MainActivity..."
-cat > "$TARGET_DIR/MainActivity.java" <<EOF
+cat > "app/src/main/java/com/base/app/MainActivity.java" <<EOF
 package com.base.app;
 import android.app.Activity; import android.content.Intent; import android.os.AsyncTask; import android.os.Bundle; import android.view.*; import android.widget.*; import android.graphics.*; import android.graphics.drawable.*; org.json.*; java.io.*; java.net.*; com.bumptech.glide.Glide; com.google.firebase.messaging.FirebaseMessaging;
 public class MainActivity extends Activity {
@@ -469,11 +245,7 @@ public class MainActivity extends Activity {
 }
 EOF
 
-# --------------------------------------------------------
-# 13. JAVA: WEBVIEW ACTIVITY
-# --------------------------------------------------------
-echo "🌐 [11/15] Java: WebViewActivity..."
-cat > "$TARGET_DIR/WebViewActivity.java" <<EOF
+cat > "app/src/main/java/com/base/app/WebViewActivity.java" <<EOF
 package com.base.app;
 import android.app.Activity; import android.os.Bundle; import android.webkit.*; import android.util.Base64; import android.content.Intent; import android.net.Uri; import android.view.KeyEvent;
 public class WebViewActivity extends Activity {
@@ -493,11 +265,7 @@ public class WebViewActivity extends Activity {
 }
 EOF
 
-# --------------------------------------------------------
-# 14. JAVA: CHANNEL & PLAYER
-# --------------------------------------------------------
-echo "📋 [12/15] Java: ChannelList & Player..."
-cat > "$TARGET_DIR/ChannelListActivity.java" <<EOF
+cat > "app/src/main/java/com/base/app/ChannelListActivity.java" <<EOF
 package com.base.app;
 import android.app.Activity; import android.content.Intent; import android.os.AsyncTask; import android.os.Bundle; import android.view.*; import android.widget.*; import android.graphics.drawable.*; import android.graphics.Color; org.json.*; import java.io.*; import java.net.*; import java.util.*; import java.util.regex.*; import com.bumptech.glide.Glide; import com.bumptech.glide.request.RequestOptions;
 public class ChannelListActivity extends Activity {
@@ -532,7 +300,7 @@ public class ChannelListActivity extends Activity {
             if(g){ tx.setText(d.get(p).toString()); im.setImageResource(android.R.drawable.ic_menu_sort_by_size); im.setColorFilter(Color.parseColor(hC)); } else { Item i=(Item)d.get(p); tx.setText(i.n); if(!i.i.isEmpty()) Glide.with(ChannelListActivity.this).load(i.i).apply(op).into(im); else im.setImageResource(android.R.drawable.ic_menu_slideshow); im.clearColorFilter(); } return v; } } }
 EOF
 
-cat > "$TARGET_DIR/PlayerActivity.java" <<EOF
+cat > "app/src/main/java/com/base/app/PlayerActivity.java" <<EOF
 package com.base.app;
 import android.app.Activity; import android.net.Uri; import android.os.AsyncTask; import android.os.Bundle; import android.view.*; import android.widget.*; import android.graphics.Color; import androidx.media3.common.*; import androidx.media3.datasource.DefaultHttpDataSource; import androidx.media3.exoplayer.ExoPlayer; import androidx.media3.exoplayer.source.DefaultMediaSourceFactory; import androidx.media3.ui.PlayerView; import androidx.media3.ui.AspectRatioFrameLayout; import androidx.media3.exoplayer.DefaultLoadControl; import androidx.media3.exoplayer.upstream.DefaultAllocator; org.json.JSONObject; import java.net.HttpURLConnection; import java.net.URL; import java.util.*;
 public class PlayerActivity extends Activity {
@@ -551,11 +319,6 @@ public class PlayerActivity extends Activity {
     protected void onStop(){ super.onStop(); if(pl!=null){pl.release();pl=null;} } }
 EOF
 
-# --------------------------------------------------------
-# 15. BUILD & EXPORT
-# --------------------------------------------------------
-echo "🚀 [14/15] APK İnşa ediliyor (Bu işlem 2-3 dakika sürebilir)..."
+# 9. BUILD
 chmod +x gradlew
 ./gradlew assembleRelease --stacktrace
-
-echo "✅ [15/15] Build Tamamlandı! Lütfen Artifacts kısmını kontrol edin."
