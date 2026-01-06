@@ -2,14 +2,17 @@
 set -e
 
 # ==============================================================================
-# TITAN APEX V3500 - GOD MODE (FULL SOURCE EDITION)
+# TITAN APEX V4000 - ULTIMATE UNCOMPRESSED EDITION (FULL SOURCE)
 # ==============================================================================
-# 1. NO COMPRESSION: Java dosyaları okunabilir, tam profesyonel formatta.
-# 2. ROBUST BUILD: Gradle 8.13 ve AGP 8.2+ tam uyumluluk modu.
-# 3. SIGNING READY: YAML Secret'larını okuyacak imzalama sistemi aktif.
-# 4. JSON AUTO-HEAL: google-services.json paket adı otomatik onarılır.
+# BU SCRIPT AŞAĞIDAKİ ÖZELLİKLERİ İÇERİR:
+# 1. TAM KAYNAK KODU: Java dosyaları sıkıştırılmadan, profesyonel formatta oluşturulur.
+# 2. GRADLE 8.13 FIX: Repository çakışmaları ve sürüm uyumsuzlukları giderilmiştir.
+# 3. MULTI-TENANT PUSH: Her uygulama kendi paket adıyla token kaydı yapar.
+# 4. HYBRID ADS: Unity ve AdMob reklamları arasında otomatik geçiş yapar.
+# 5. AUTO-HEAL: google-services.json ve ikon hatalarını otomatik onarır.
 # ==============================================================================
 
+# Parametreleri Al
 PACKAGE_NAME=$1
 APP_NAME=$2
 CONFIG_URL=$3
@@ -18,34 +21,36 @@ VERSION_CODE=$5
 VERSION_NAME=$6
 
 echo "=================================================="
-echo "   🚀 TITAN APEX V3500 - SYSTEM INITIATED"
-echo "   📦 TARGET PACKAGE: $PACKAGE_NAME"
-echo "   📱 APP NAME: $APP_NAME"
+echo "   🚀 TITAN APEX V4000 - SYSTEM INITIATED"
+echo "   📦 PAKET: $PACKAGE_NAME"
+echo "   📱 İSİM : $APP_NAME"
 echo "=================================================="
 
 # --------------------------------------------------------
-# 0. SİSTEM VE KÜTÜPHANE KONTROLÜ
+# 1. SİSTEM VE KÜTÜPHANE KONTROLÜ
 # --------------------------------------------------------
-echo "⚙️ [1/16] Sistem ve bağımlılıklar kontrol ediliyor..."
+echo "⚙️ [1/16] Sistem kontrolleri yapılıyor..."
 
-# Convert (ImageMagick) kontrolü ve fallback mekanizması
+# Convert (ImageMagick) kontrolü
 if ! command -v convert &> /dev/null; then
-    echo "⚠️ 'convert' bulunamadı. Yükleniyor..."
+    echo "⚠️ 'convert' komutu bulunamadı. Yüklenmeye çalışılıyor..."
     sudo apt-get update >/dev/null 2>&1 || true
     sudo apt-get install -y imagemagick >/dev/null 2>&1 || true
 fi
 
 # --------------------------------------------------------
-# 1. DERİN TEMİZLİK VE KLASÖR YAPISI
+# 2. DERİN TEMİZLİK
 # --------------------------------------------------------
-echo "🧹 [2/16] Proje sahası temizleniyor..."
+echo "🧹 [2/16] Proje alanı temizleniyor..."
 rm -rf app/src/main/res/drawable*
 rm -rf app/src/main/res/mipmap*
 rm -rf app/src/main/res/values*
 rm -rf app/src/main/java/com/base/app/*
-rm -rf .gradle app/build build
+rm -rf .gradle 
+rm -rf app/build 
+rm -rf build
 
-# Yeni dizin yapısı (Eksiksiz)
+# Yeni Dizin Yapısı
 mkdir -p "app/src/main/java/com/base/app"
 mkdir -p "app/src/main/res/mipmap-xxxhdpi"
 mkdir -p "app/src/main/res/values"
@@ -53,25 +58,25 @@ mkdir -p "app/src/main/res/xml"
 mkdir -p "app/src/main/res/layout"
 
 # --------------------------------------------------------
-# 2. GELİŞMİŞ İKON MOTORU
+# 3. İKON MOTORU (FALLBACK DESTEKLİ)
 # --------------------------------------------------------
 echo "🖼️ [3/16] Uygulama ikonu işleniyor..."
 ICON_TARGET="app/src/main/res/mipmap-xxxhdpi/ic_launcher.png"
-TEMP_ICON="icon_temp_download.png"
+TEMP_ICON="icon_temp.png"
 
-# User-Agent ile indir (Bazı sunucular botları engeller)
-curl -s -L -k -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" -o "$TEMP_ICON" "$ICON_URL" || true
+# İndirmeyi dene
+curl -s -L -k -A "Mozilla/5.0" -o "$TEMP_ICON" "$ICON_URL" || true
 
 if [ -s "$TEMP_ICON" ]; then
     if command -v convert &> /dev/null; then
-        # ImageMagick varsa resize ve flatten yap (Şeffaflığı beyaza çevirmez, korur veya doldurur)
+        # ImageMagick varsa boyutlandır
         convert "$TEMP_ICON" -resize 512x512! -background none -flatten "$ICON_TARGET"
     else
-        # Yoksa direkt kopyala
+        # Yoksa olduğu gibi kopyala
         cp "$TEMP_ICON" "$ICON_TARGET"
     fi
 else
-    echo "⚠️ İkon indirilemedi. Yedek (Dummy) ikon oluşturuluyor..."
+    echo "⚠️ İkon indirilemedi. Varsayılan (Dummy) ikon oluşturuluyor..."
     if command -v convert &> /dev/null; then
         convert -size 512x512 xc:#1e293b -fill white -gravity center -pointsize 150 -annotate 0 "TV" "$ICON_TARGET"
     fi
@@ -79,10 +84,9 @@ fi
 rm -f "$TEMP_ICON"
 
 # --------------------------------------------------------
-# 3. SETTINGS.GRADLE (TEK GERÇEK KAYNAK)
+# 4. SETTINGS.GRADLE (GRADLE 8.13 FIX)
 # --------------------------------------------------------
-echo "📦 [4/16] Depo ayarları (Settings) yazılıyor..."
-# Gradle 8.x için burası çok kritiktir. Çakışmayı önler.
+echo "📦 [4/16] Settings.gradle yapılandırılıyor..."
 cat > settings.gradle <<EOF
 pluginManagement {
     repositories {
@@ -104,9 +108,9 @@ include ':app'
 EOF
 
 # --------------------------------------------------------
-# 4. ROOT BUILD.GRADLE
+# 5. ROOT BUILD.GRADLE
 # --------------------------------------------------------
-echo "📦 [5/16] Ana proje yapılandırması yazılıyor..."
+echo "📦 [5/16] Root Build.gradle yapılandırılıyor..."
 cat > build.gradle <<EOF
 buildscript {
     repositories {
@@ -114,9 +118,7 @@ buildscript {
         mavenCentral()
     }
     dependencies {
-        // En kararlı Android Gradle Plugin
         classpath 'com.android.tools.build:gradle:8.2.1'
-        // Google Services Plugin
         classpath 'com.google.gms:google-services:4.4.1'
     }
 }
@@ -126,33 +128,31 @@ task clean(type: Delete) {
 EOF
 
 # --------------------------------------------------------
-# 5. GOOGLE SERVICES JSON TAMİR MOTORU
+# 6. GOOGLE SERVICES JSON TAMİRİ
 # --------------------------------------------------------
-echo "🔧 [6/16] Firebase ayar dosyası (JSON) onarılıyor..."
+echo "🔧 [6/16] google-services.json onarılıyor..."
 JSON_FILE="app/google-services.json"
 
 if [ -f "$JSON_FILE" ]; then
-    echo "✅ JSON bulundu. Paket adı senkronize ediliyor..."
-    # Dosya içindeki paket adını, GitHub'dan gelen ile değiştir
+    echo "✅ JSON bulundu. Paket adı: $PACKAGE_NAME olarak ayarlanıyor."
     sed -i 's/"package_name": *"[^"]*"/"package_name": "'"$PACKAGE_NAME"'"/g' "$JSON_FILE"
 else
-    echo "⚠️ JSON dosyası EKSİK! Dummy (Sahte) JSON oluşturuluyor..."
-    # Build patlamasın diye sahte dosya oluşturulur. Bildirim çalışmaz ama APK çıkar.
+    echo "⚠️ JSON Dosyası Yok! Dummy JSON oluşturuluyor..."
     cat > "$JSON_FILE" <<EOF
 {
-  "project_info": { "project_number": "000000", "project_id": "dummy-project", "storage_bucket": "none" },
+  "project_info": { "project_number": "000", "project_id": "none", "storage_bucket": "none" },
   "client": [{
     "client_info": { "mobilesdk_app_id": "1:0:android:0", "android_client_info": { "package_name": "$PACKAGE_NAME" } },
-    "api_key": [{ "current_key": "dummy_key" }]
+    "api_key": [{ "current_key": "dummy" }]
   }]
 }
 EOF
 fi
 
 # --------------------------------------------------------
-# 6. APP BUILD.GRADLE (İMZALAMA & BAĞIMLILIKLAR)
+# 7. APP BUILD.GRADLE (MODULE LEVEL)
 # --------------------------------------------------------
-echo "📚 [7/16] Uygulama modülü yapılandırılıyor..."
+echo "📚 [7/16] App Modülü yapılandırılıyor..."
 cat > app/build.gradle <<EOF
 plugins {
     id 'com.android.application'
@@ -172,7 +172,7 @@ android {
         multiDexEnabled true
     }
 
-    // İMZALAMA KONFIGURASYONU (YAML Secretlarını Okur)
+    // İMZALAMA (YAML SECRETLARI OKUR)
     signingConfigs {
         release {
             storeFile file("keystore.jks")
@@ -187,7 +187,7 @@ android {
             minifyEnabled true
             shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-            signingConfig signingConfigs.release // İmzalamayı aktif et
+            signingConfig signingConfigs.release
         }
     }
     
@@ -196,7 +196,7 @@ android {
         targetCompatibility JavaVersion.VERSION_1_8
     }
     
-    // Hataları görmezden gel ve devam et (Kritik)
+    // Hataları Yoksay (Build Başarısı İçin)
     lint {
         abortOnError false
         checkReleaseBuilds false
@@ -204,37 +204,35 @@ android {
 }
 
 dependencies {
-    // Temel Android Kütüphaneleri
     implementation 'androidx.appcompat:appcompat:1.6.1'
     implementation 'com.google.android.material:material:1.11.0'
     implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
     
-    // Firebase (Core + Messaging + Analytics)
+    // Firebase Core
     implementation(platform('com.google.firebase:firebase-bom:32.7.0'))
     implementation 'com.google.firebase:firebase-messaging'
     implementation 'com.google.firebase:firebase-analytics'
 
-    // Titan Player (ExoPlayer Media3)
+    // Media Player
     implementation 'androidx.media3:media3-exoplayer:1.2.0'
     implementation 'androidx.media3:media3-exoplayer-hls:1.2.0'
     implementation 'androidx.media3:media3-ui:1.2.0'
-    implementation 'androidx.media3:media3-datasource-okhttp:1.2.0'
     
-    // Görsel Yükleyici
+    // Image Loader
     implementation 'com.github.bumptech.glide:glide:4.16.0'
     
-    // Reklam Ağları
+    // Ads
     implementation 'com.unity3d.ads:unity-ads:4.9.2'
     implementation 'com.google.android.gms:play-services-ads:22.6.0'
 }
 EOF
 
 # --------------------------------------------------------
-# 7. MANIFEST & XML KAYNAKLARI
+# 8. MANIFEST & RESOURCES
 # --------------------------------------------------------
-echo "📜 [8/16] Manifest ve XML dosyaları oluşturuluyor..."
+echo "📜 [8/16] Kaynak dosyaları (XML) oluşturuluyor..."
 
-# Network Security Config (HTTP Linkleri Açmak İçin)
+# Network Security
 cat > app/src/main/res/xml/network_security_config.xml <<EOF
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
@@ -246,7 +244,7 @@ cat > app/src/main/res/xml/network_security_config.xml <<EOF
 </network-security-config>
 EOF
 
-# Styles (Temalar)
+# Styles
 cat > app/src/main/res/values/styles.xml <<EOF
 <resources>
     <style name="AppTheme" parent="Theme.AppCompat.Light.NoActionBar">
@@ -260,7 +258,7 @@ cat > app/src/main/res/values/styles.xml <<EOF
 </resources>
 EOF
 
-# AndroidManifest.xml (Tüm izinler ve Activityler)
+# AndroidManifest.xml
 cat > app/src/main/AndroidManifest.xml <<EOF
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
@@ -316,9 +314,9 @@ cat > app/src/main/AndroidManifest.xml <<EOF
 EOF
 
 # --------------------------------------------------------
-# 8. JAVA: ADS MANAGER (FULL)
+# 9. JAVA: ADS MANAGER (UNCOMPRESSED)
 # --------------------------------------------------------
-echo "☕ [9/16] Java: AdsManager (Hibrit Reklam Motoru)..."
+echo "☕ [9/16] Java: AdsManager oluşturuluyor..."
 cat > "app/src/main/java/com/base/app/AdsManager.java" <<EOF
 package com.base.app;
 
@@ -343,6 +341,7 @@ public class AdsManager {
     private static boolean interActive = false;
     private static String provider = "UNITY"; 
     
+    // IDs
     private static String unityGameId = "";
     private static String unityBannerId = "";
     private static String unityInterId = "";
@@ -405,6 +404,7 @@ public class AdsManager {
         
         container.removeAllViews();
 
+        // AdMob Banner
         if ((provider.equals("ADMOB") || provider.equals("BOTH")) && !admobBannerId.isEmpty()) {
             AdView adView = new AdView(activity);
             adView.setAdSize(AdSize.BANNER);
@@ -412,6 +412,7 @@ public class AdsManager {
             container.addView(adView);
             adView.loadAd(new AdRequest.Builder().build());
         } 
+        // Unity Banner
         else if ((provider.equals("UNITY") || provider.equals("BOTH")) && !unityBannerId.isEmpty()) {
             BannerView bannerView = new BannerView(activity, unityBannerId, new UnityBannerSize(320, 50));
             bannerView.load();
@@ -429,6 +430,7 @@ public class AdsManager {
         if (counter >= frequency) {
             counter = 0;
 
+            // AdMob Inter
             if ((provider.equals("ADMOB") || provider.equals("BOTH")) && mAdMobInter != null) {
                 mAdMobInter.show(activity);
                 mAdMobInter = null;
@@ -437,6 +439,7 @@ public class AdsManager {
                 return;
             }
 
+            // Unity Inter
             if ((provider.equals("UNITY") || provider.equals("BOTH")) && !unityInterId.isEmpty()) {
                 if (UnityAds.isInitialized()) {
                     UnityAds.load(unityInterId, new IUnityAdsLoadListener() {
@@ -470,9 +473,9 @@ public class AdsManager {
 EOF
 
 # --------------------------------------------------------
-# 9. JAVA: FIREBASE MESSAGING (FULL)
+# 10. JAVA: FIREBASE SERVICE (UNCOMPRESSED)
 # --------------------------------------------------------
-echo "🔥 [10/16] Java: Firebase Service..."
+echo "🔥 [10/16] Java: FirebaseService oluşturuluyor..."
 cat > "app/src/main/java/com/base/app/MyFirebaseMessagingService.java" <<EOF
 package com.base.app;
 
@@ -505,7 +508,7 @@ public class MyFirebaseMessagingService extends FirebaseMessagingService {
 
     @Override
     public void onNewToken(String token) {
-        // Tokeni yerel hafızaya at, uygulama açılınca PHP'ye gidecek
+        // Yeni token geldiğinde kaydet
         getSharedPreferences("TITAN_PREFS", MODE_PRIVATE)
             .edit()
             .putString("fcm_token", token)
@@ -546,9 +549,9 @@ public class MyFirebaseMessagingService extends FirebaseMessagingService {
 EOF
 
 # --------------------------------------------------------
-# 10. JAVA: MAIN ACTIVITY (FULL)
+# 11. JAVA: MAIN ACTIVITY (TOKEN + PACKAGE NAME LOGIC)
 # --------------------------------------------------------
-echo "📱 [11/16] Java: MainActivity..."
+echo "📱 [11/16] Java: MainActivity (Token Sync Logic) oluşturuluyor..."
 cat > "app/src/main/java/com/base/app/MainActivity.java" <<EOF
 package com.base.app;
 
@@ -583,19 +586,48 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         
-        // Firebase Token Sync (İlk açılışta)
+        // --- MULTI-TENANT TOKEN SYNC (PAKET ADI GÖNDERİMİ) ---
         FirebaseMessaging.getInstance().getToken().addOnCompleteListener(task -> {
             if (task.isSuccessful() && task.getResult() != null) {
                 String token = task.getResult();
-                getSharedPreferences("TITAN_PREFS", MODE_PRIVATE)
-                    .edit()
-                    .putString("fcm_token", token)
-                    .apply();
+                getSharedPreferences("TITAN_PREFS", MODE_PRIVATE).edit().putString("fcm_token", token).apply();
+                
+                // Tokeni sunucuya arkada fırlat (Paket Adıyla Beraber)
+                new Thread(() -> {
+                    try {
+                        // API.PHP adresinden base URL'i çıkar (Örn: site.com/api.php -> site.com/)
+                        String baseUrl = "";
+                        if(CONFIG_URL.contains("api.php")) {
+                            baseUrl = CONFIG_URL.substring(0, CONFIG_URL.indexOf("api.php"));
+                        } else {
+                            // Config URL json dosyası ise, bir üst dizini al
+                            baseUrl = CONFIG_URL.substring(0, CONFIG_URL.lastIndexOf("/") + 1);
+                        }
+                        
+                        String postUrl = baseUrl + "update_token.php";
+                        
+                        URL url = new URL(postUrl);
+                        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                        conn.setRequestMethod("POST");
+                        conn.setDoOutput(true);
+                        conn.setConnectTimeout(5000);
+                        
+                        String postData = "fcm_token=" + URLEncoder.encode(token, "UTF-8") 
+                                        + "&package_name=" + URLEncoder.encode(getPackageName(), "UTF-8");
+                        
+                        OutputStream os = conn.getOutputStream();
+                        os.write(postData.getBytes());
+                        os.flush();
+                        os.close();
+                        conn.getResponseCode(); // İsteği ateşle
+                        conn.disconnect();
+                    } catch (Exception e) {}
+                }).start();
             }
         });
 
+        // UI OLUŞTURMA
         RelativeLayout root = new RelativeLayout(this);
-        
         splash = new ImageView(this);
         splash.setScaleType(ImageView.ScaleType.CENTER_CROP);
         root.addView(splash, new RelativeLayout.LayoutParams(-1,-1));
@@ -839,9 +871,9 @@ public class MainActivity extends Activity {
 EOF
 
 # --------------------------------------------------------
-# 11. JAVA: WEBVIEW ACTIVITY (FULL)
+# 12. JAVA: WEBVIEW ACTIVITY (UNCOMPRESSED)
 # --------------------------------------------------------
-echo "🌐 [12/16] Java: WebViewActivity..."
+echo "🌐 [12/16] Java: WebViewActivity oluşturuluyor..."
 cat > "app/src/main/java/com/base/app/WebViewActivity.java" <<EOF
 package com.base.app;
 
@@ -868,7 +900,7 @@ public class WebViewActivity extends Activity {
         ws.setAllowFileAccess(true);
         ws.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
         
-        // JS Köprüsü (PHP ile konuşur)
+        // JS Bridge
         w.addJavascriptInterface(new WebAppInterface(this), "Android");
         
         w.setWebViewClient(new WebViewClient() {
@@ -876,7 +908,6 @@ public class WebViewActivity extends Activity {
             public void onPageFinished(WebView view, String url) {
                 super.onPageFinished(view, url);
                 
-                // Token'i PHP'ye geri gönder
                 String token = getSharedPreferences("TITAN_PREFS", MODE_PRIVATE).getString("fcm_token", "");
                 if(!token.isEmpty()) {
                     w.loadUrl("javascript:if(typeof onTokenReceived === 'function'){ onTokenReceived('" + token + "'); }");
@@ -885,7 +916,7 @@ public class WebViewActivity extends Activity {
 
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, String url) {
-                if (url.startsWith("http")) return false; // Sitede kal
+                if (url.startsWith("http")) return false; 
                 try {
                     Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
                     startActivity(intent);
@@ -929,9 +960,9 @@ public class WebViewActivity extends Activity {
 EOF
 
 # --------------------------------------------------------
-# 12. JAVA: CHANNEL LIST ACTIVITY (FULL)
+# 13. JAVA: CHANNEL LIST ACTIVITY (UNCOMPRESSED)
 # --------------------------------------------------------
-echo "📋 [13/16] Java: ChannelListActivity..."
+echo "📋 [13/16] Java: ChannelListActivity oluşturuluyor..."
 cat > "app/src/main/java/com/base/app/ChannelListActivity.java" <<EOF
 package com.base.app;
 
@@ -1175,9 +1206,9 @@ public class ChannelListActivity extends Activity {
 EOF
 
 # --------------------------------------------------------
-# 13. JAVA: PLAYER ACTIVITY (FULL)
+# 14. JAVA: PLAYER ACTIVITY (UNCOMPRESSED)
 # --------------------------------------------------------
-echo "🎥 [14/16] Java: PlayerActivity..."
+echo "🎥 [14/16] Java: PlayerActivity oluşturuluyor..."
 cat > "app/src/main/java/com/base/app/PlayerActivity.java" <<EOF
 package com.base.app;
 
@@ -1210,12 +1241,10 @@ public class PlayerActivity extends Activity {
     protected void onCreate(Bundle s) {
         super.onCreate(s);
         
-        // Full Screen Flags
         requestWindowFeature(Window.FEATURE_NO_TITLE);
         getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         
-        // Immersive Sticky Mode
         getWindow().getDecorView().setSystemUiVisibility(
             View.SYSTEM_UI_FLAG_HIDE_NAVIGATION | 
             View.SYSTEM_UI_FLAG_FULLSCREEN | 
@@ -1365,8 +1394,7 @@ public class PlayerActivity extends Activity {
 EOF
 
 # --------------------------------------------------------
-# 14. SON KONTROL VE TAMAMLAMA
+# 15. SON KONTROL
 # --------------------------------------------------------
-echo "✅ [15/16] Tüm kaynak kodları başarıyla oluşturuldu."
-echo "✅ [16/16] TITAN APEX V3500 Kurulumu Tamamlandı."
-echo "🚀 Sıradaki işlem: 'Build Signed Release' (YAML üzerinden)"
+echo "✅ [15/16] Kaynak kodları oluşturuldu."
+echo "✅ [16/16] TITAN APEX V4000 Kurulumu Tamam."
