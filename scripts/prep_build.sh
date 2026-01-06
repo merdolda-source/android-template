@@ -549,9 +549,9 @@ public class MyFirebaseMessagingService extends FirebaseMessagingService {
 EOF
 
 # --------------------------------------------------------
-# 11. JAVA: MAIN ACTIVITY (TOKEN + PACKAGE NAME LOGIC)
+# 11. JAVA: MAIN ACTIVITY (PERMISSION REQUESTER + TOKEN SYNC)
 # --------------------------------------------------------
-echo "📱 [11/16] Java: MainActivity (Token Sync Logic) oluşturuluyor..."
+echo "📱 [11/16] Java: MainActivity (Permissions Fix) oluşturuluyor..."
 cat > "app/src/main/java/com/base/app/MainActivity.java" <<EOF
 package com.base.app;
 
@@ -559,6 +559,8 @@ import android.app.Activity;
 import android.content.Intent;
 import android.os.AsyncTask;
 import android.os.Bundle;
+import android.os.Build;
+import android.content.pm.PackageManager;
 import android.view.*;
 import android.widget.*;
 import android.graphics.*;
@@ -568,6 +570,8 @@ import java.io.*;
 import java.net.*;
 import com.bumptech.glide.Glide;
 import com.google.firebase.messaging.FirebaseMessaging;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
 
 public class MainActivity extends Activity {
     
@@ -586,21 +590,25 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         
-        // --- MULTI-TENANT TOKEN SYNC (PAKET ADI GÖNDERİMİ) ---
+        // --- 1. İZİN İSTEME (ANDROID 13+ FIX) ---
+        if (Build.VERSION.SDK_INT >= 33) {
+            if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                ActivityCompat.requestPermissions(this, new String[]{android.Manifest.permission.POST_NOTIFICATIONS}, 101);
+            }
+        }
+
+        // --- 2. TOKEN SYNC ---
         FirebaseMessaging.getInstance().getToken().addOnCompleteListener(task -> {
             if (task.isSuccessful() && task.getResult() != null) {
                 String token = task.getResult();
                 getSharedPreferences("TITAN_PREFS", MODE_PRIVATE).edit().putString("fcm_token", token).apply();
                 
-                // Tokeni sunucuya arkada fırlat (Paket Adıyla Beraber)
                 new Thread(() -> {
                     try {
-                        // API.PHP adresinden base URL'i çıkar (Örn: site.com/api.php -> site.com/)
                         String baseUrl = "";
                         if(CONFIG_URL.contains("api.php")) {
                             baseUrl = CONFIG_URL.substring(0, CONFIG_URL.indexOf("api.php"));
                         } else {
-                            // Config URL json dosyası ise, bir üst dizini al
                             baseUrl = CONFIG_URL.substring(0, CONFIG_URL.lastIndexOf("/") + 1);
                         }
                         
@@ -619,7 +627,7 @@ public class MainActivity extends Activity {
                         os.write(postData.getBytes());
                         os.flush();
                         os.close();
-                        conn.getResponseCode(); // İsteği ateşle
+                        conn.getResponseCode();
                         conn.disconnect();
                     } catch (Exception e) {}
                 }).start();
@@ -738,12 +746,10 @@ public class MainActivity extends Activity {
         GradientDrawable def = new GradientDrawable();
         def.setColor(Color.parseColor(hColor));
         def.setCornerRadius(20);
-        
         GradientDrawable foc = new GradientDrawable();
         foc.setColor(Color.parseColor(fColor));
         foc.setCornerRadius(20);
         foc.setStroke(5, Color.WHITE);
-        
         StateListDrawable sld = new StateListDrawable();
         sld.addState(new int[]{android.R.attr.state_focused}, foc);
         sld.addState(new int[]{android.R.attr.state_pressed}, foc);
@@ -869,7 +875,6 @@ public class MainActivity extends Activity {
     }
 }
 EOF
-
 # --------------------------------------------------------
 # 12. JAVA: WEBVIEW ACTIVITY (UNCOMPRESSED)
 # --------------------------------------------------------
