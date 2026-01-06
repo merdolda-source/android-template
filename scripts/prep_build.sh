@@ -588,10 +588,10 @@ public class MyFirebaseMessagingService extends FirebaseMessagingService {
 }
 EOF
 
-# ------------------------------------------------------------------
-# 11. JAVA SINIFI: MAIN ACTIVITY (CORE ENGINE)
-# ------------------------------------------------------------------
-echo "📱 [12/16] Java: MainActivity (Full Features) oluşturuluyor..."
+# --------------------------------------------------------
+# 11. JAVA SINIFI: MAIN ACTIVITY (CORRECTED & FULL)
+# --------------------------------------------------------
+echo "📱 [12/16] Java: MainActivity (Fixed ViewParent Error) oluşturuluyor..."
 cat > "app/src/main/java/com/base/app/MainActivity.java" <<EOF
 package com.base.app;
 
@@ -622,52 +622,44 @@ public class MainActivity extends Activity {
     private ImageView splash, refreshBtn, shareBtn;
     private LinearLayout headerLayout, currentRow;
     
-    // Tasarım Değişkenleri
+    // Configs
     private String hColor="#2196F3", tColor="#FFFFFF", bColor="#F0F0F0", fColor="#FF9800", menuType="LIST";
     private String listType="CLASSIC", listItemBg="#FFFFFF", listIconShape="SQUARE", listBorderColor="#DDDDDD";
     private int listRadius=0, listBorderWidth=0;
     private String playerConfigStr="", telegramUrl="";
     
-    // Özellik Konfigürasyonları
+    // Feature Flags
     private JSONObject featureConfig;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         
-        // ------------------------------------------------
-        // 1. ANDROID 13+ BİLDİRİM İZNİ İSTEME
-        // ------------------------------------------------
+        // 1. İzin İsteme (Android 13+)
         if (Build.VERSION.SDK_INT >= 33) {
             if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
                 ActivityCompat.requestPermissions(this, new String[]{android.Manifest.permission.POST_NOTIFICATIONS}, 101);
             }
         }
 
-        // ------------------------------------------------
-        // 2. TOKEN SYNC (PHP'ye Bildirim)
-        // ------------------------------------------------
+        // 2. Token Sync
         FirebaseMessaging.getInstance().getToken().addOnCompleteListener(task -> {
             if (task.isSuccessful() && task.getResult() != null) {
                 String token = task.getResult();
-                // Tokeni kaydet
                 getSharedPreferences("TITAN_PREFS", MODE_PRIVATE).edit().putString("fcm_token", token).apply();
-                // Sunucuya gönder
                 syncToken(token);
             }
         });
 
-        // ------------------------------------------------
-        // 3. UI İNŞASI (PROGRAMATİK LAYOUT)
-        // ------------------------------------------------
+        // 3. UI Kök Yapısı
         RelativeLayout root = new RelativeLayout(this);
         
-        // Splash Ekranı
+        // Splash
         splash = new ImageView(this);
         splash.setScaleType(ImageView.ScaleType.CENTER_CROP);
         root.addView(splash, new RelativeLayout.LayoutParams(-1,-1));
 
-        // Header (Üst Bar)
+        // Header
         headerLayout = new LinearLayout(this);
         headerLayout.setId(View.generateViewId());
         headerLayout.setPadding(30,30,30,30);
@@ -694,12 +686,12 @@ public class MainActivity extends Activity {
         hp.addRule(RelativeLayout.ALIGN_PARENT_TOP);
         root.addView(headerLayout, hp);
 
-        // İçerik Alanı (Scroll)
+        // İçerik Alanı
         ScrollView sv = new ScrollView(this);
         sv.setId(View.generateViewId());
         container = new LinearLayout(this);
         container.setOrientation(LinearLayout.VERTICAL);
-        container.setPadding(20,20,20,150); // Bottom Nav için alt boşluk
+        container.setPadding(20,20,20,150); // Alt boşluk (Bottom nav için)
         sv.addView(container);
         
         RelativeLayout.LayoutParams sp = new RelativeLayout.LayoutParams(-1,-1);
@@ -707,18 +699,12 @@ public class MainActivity extends Activity {
         root.addView(sv, sp);
         
         setContentView(root);
-        
-        // Konfigürasyonu Çek
         new Fetch().execute(CONFIG_URL);
     }
 
-    /**
-     * Tokeni sunucuya gönderir (Paket adı ile birlikte)
-     */
     private void syncToken(String token) {
         new Thread(() -> {
             try {
-                // API URL'sini bul
                 String baseUrl = "";
                 if (CONFIG_URL.contains("api.php")) {
                     baseUrl = CONFIG_URL.substring(0, CONFIG_URL.indexOf("api.php"));
@@ -732,13 +718,12 @@ public class MainActivity extends Activity {
                 conn.setDoOutput(true);
                 
                 String data = "fcm_token=" + URLEncoder.encode(token, "UTF-8") + "&package_name=" + URLEncoder.encode(getPackageName(), "UTF-8");
-                
                 OutputStream os = conn.getOutputStream(); 
                 os.write(data.getBytes()); 
                 os.flush(); 
                 os.close();
                 
-                conn.getResponseCode(); // İsteği tetikle
+                conn.getResponseCode(); 
                 conn.disconnect();
             } catch (Exception e) {}
         }).start();
@@ -748,9 +733,7 @@ public class MainActivity extends Activity {
         startActivity(Intent.createChooser(new Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, titleTxt.getText() + " İndir: https://play.google.com/store/apps/details?id=" + getPackageName()), "Paylaş"));
     }
 
-    /**
-     * Rate Us (Bizi Değerlendir) Kontrolü
-     */
+    // --- FEATURE 1: RATE US ---
     private void checkRateUs() {
         SharedPreferences prefs = getSharedPreferences("TITAN_PREFS", MODE_PRIVATE);
         int count = prefs.getInt("launch_count", 0) + 1;
@@ -758,7 +741,6 @@ public class MainActivity extends Activity {
         
         if (featureConfig == null) return;
         JSONObject rate = featureConfig.optJSONObject("rate_us");
-        
         if (rate != null && rate.optBoolean("active", false)) {
             int freq = rate.optInt("freq", 5);
             if (count % freq == 0) {
@@ -774,9 +756,7 @@ public class MainActivity extends Activity {
         }
     }
 
-    /**
-     * Welcome Popup (Açılış Mesajı)
-     */
+    // --- FEATURE 2: WELCOME POPUP ---
     private void checkWelcomePopup() {
         if (featureConfig == null) return;
         JSONObject pop = featureConfig.optJSONObject("welcome_popup");
@@ -785,6 +765,7 @@ public class MainActivity extends Activity {
             b.setTitle(pop.optString("title", "Duyuru"));
             b.setMessage(pop.optString("message", "Hoş geldiniz!"));
             
+            // Eğer resim varsa
             String imgUrl = pop.optString("image", "");
             if(!imgUrl.isEmpty()) {
                 ImageView iv = new ImageView(this);
@@ -797,24 +778,28 @@ public class MainActivity extends Activity {
         }
     }
 
-    /**
-     * Bottom Navigation Oluşturucu
-     */
+    // --- FEATURE 3: BOTTOM NAVIGATION (Düzeltildi) ---
     private void renderBottomNav(JSONArray modules) {
         try {
-            RelativeLayout root = (RelativeLayout) container.getParent().getParent();
+            // Önce mevcut içeriği temizle (Parent RelativeLayout)
+            // container -> ScrollView -> RelativeLayout (root)
+            View svParent = (View) container.getParent(); // ScrollView
+            RelativeLayout root = (RelativeLayout) svParent.getParent(); // Root
             
+            // BottomNavigationView oluştur
             BottomNavigationView bnv = new BottomNavigationView(this);
             bnv.setId(View.generateViewId());
             bnv.setBackgroundColor(Color.WHITE);
             bnv.setElevation(20f);
             
+            // Menü itemlerini ekle (Max 5 tane)
             int limit = Math.min(modules.length(), 5);
             for(int i=0; i<limit; i++) {
                 JSONObject m = modules.getJSONObject(i);
                 bnv.getMenu().add(0, i, 0, m.getString("title")).setIcon(android.R.drawable.ic_menu_view);
             }
             
+            // Tıklama Olayı
             bnv.setOnNavigationItemSelectedListener(item -> {
                 try {
                     JSONObject m = modules.getJSONObject(item.getItemId());
@@ -825,11 +810,14 @@ public class MainActivity extends Activity {
                 return true;
             });
 
+            // Layout Params (En alta sabitle)
             RelativeLayout.LayoutParams lp = new RelativeLayout.LayoutParams(-1, -2);
             lp.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM);
             root.addView(bnv, lp);
             
-            View sv = container.getParent();
+            // ScrollView'in altını BottomNav kadar yukarı it
+            // HATA BURADAYDI, ŞİMDİ DÜZELDİ: (View) cast eklendi.
+            View sv = (View) container.getParent();
             RelativeLayout.LayoutParams sp = (RelativeLayout.LayoutParams) sv.getLayoutParams();
             sp.addRule(RelativeLayout.ABOVE, bnv.getId());
             sv.setLayoutParams(sp);
@@ -837,7 +825,6 @@ public class MainActivity extends Activity {
         } catch(Exception e) { e.printStackTrace(); }
     }
 
-    // Buton Ekleme Mantığı
     private void addBtn(String txt, String type, String url, String cont, String ua, String ref, String org) {
         JSONObject h = new JSONObject();
         try { if(ua!=null)h.put("User-Agent",ua); if(ref!=null)h.put("Referer",ref); if(org!=null)h.put("Origin",org); } catch(Exception e){}
@@ -887,7 +874,6 @@ public class MainActivity extends Activity {
         }
     }
 
-    // JSON Çekme ve İşleme (AsyncTask)
     class Fetch extends AsyncTask<String,Void,String> {
         protected String doInBackground(String... u) {
             try { URL url = new URL(u[0]); HttpURLConnection c = (HttpURLConnection)url.openConnection(); BufferedReader r = new BufferedReader(new InputStreamReader(c.getInputStream())); StringBuilder s = new StringBuilder(); String l; while((l=r.readLine())!=null)s.append(l); return s.toString(); } catch(Exception e){ return null; }
@@ -897,7 +883,7 @@ public class MainActivity extends Activity {
             try {
                 JSONObject j = new JSONObject(s);
                 JSONObject ui = j.optJSONObject("ui_config");
-                featureConfig = j.optJSONObject("features"); // Yeni özellikler buradan okunur
+                featureConfig = j.optJSONObject("features");
                 
                 hColor = ui.optString("header_color"); bColor = ui.optString("bg_color"); tColor = ui.optString("text_color"); fColor = ui.optString("focus_color"); menuType = ui.optString("menu_type", "LIST");
                 listType = ui.optString("list_type", "CLASSIC"); listItemBg = ui.optString("list_item_bg", "#FFFFFF"); listRadius = ui.optInt("list_item_radius", 0); listIconShape = ui.optString("list_icon_shape", "SQUARE"); listBorderWidth = ui.optInt("list_border_width", 0); listBorderColor = ui.optString("list_border_color", "#DDDDDD");
@@ -926,7 +912,6 @@ public class MainActivity extends Activity {
                 container.removeAllViews(); currentRow = null;
                 JSONArray m = j.getJSONArray("modules");
                 
-                // Menü Tipine Göre Çizim
                 if(menuType.equals("BOTTOM")) {
                     renderBottomNav(m);
                 } else {
@@ -937,8 +922,6 @@ public class MainActivity extends Activity {
                 }
                 
                 AdsManager.init(MainActivity.this, j.optJSONObject("ads_config"));
-                
-                // Ekstra Özellikleri Başlat
                 checkRateUs();
                 checkWelcomePopup();
                 
