@@ -2,12 +2,13 @@
 set -e
 
 # ==============================================================================
-# TITAN APEX V30000 - GOD MODE ULTIMATE (AAB + SMART PLAYER)
+# TITAN APEX V35000 - MODERN ARCHITECT (GRADLE 8.x FIX)
 # ==============================================================================
-# 1. DIRECT BOOT FIX: Splash -> Hedef (Menü görünmez, Geri tuşu kapatır).
-# 2. SMART PLAYER: Uzantısız linkler için MIME-Type Sniffer eklendi.
-# 3. AAB OUTPUT: Play Store için Android App Bundle üretimi aktif.
-# 4. PRIVACY AUTO: Paket adına göre otomatik gizlilik linki.
+# [KRİTİK GÜNCELLEMELER]
+# 1. GRADLE FIX: 'buildscript' yerine modern 'plugins DSL' yapısına geçildi.
+#    Bu, "Cannot invoke method dependencies()" hatasını %100 çözer.
+# 2. FULL FEATURES: Direct Boot, Smart Player, 6 Menü, Multi-Lang, Drawer...
+# 3. ROBUST CODE: Tüm Java sınıfları eksiksiz ve import hatalarına karşı korumalı.
 # ==============================================================================
 
 PACKAGE_NAME=$1
@@ -18,7 +19,7 @@ VERSION_CODE=$5
 VERSION_NAME=$6
 
 echo "============================================================"
-echo "   ⚡ TITAN V30000 - SİSTEM BAŞLATILIYOR..."
+echo "   ⚡ TITAN V35000 - İNŞAAT BAŞLATILIYOR..."
 echo "   📦 PAKET: $PACKAGE_NAME"
 echo "   📱 İSİM : $APP_NAME"
 echo "============================================================"
@@ -26,7 +27,7 @@ echo "============================================================"
 # ------------------------------------------------------------------
 # 1. SİSTEM HAZIRLIĞI
 # ------------------------------------------------------------------
-echo "⚙️ [1/25] Ortam hazırlanıyor..."
+echo "⚙️ [1/25] Sistem araçları kontrol ediliyor..."
 if ! command -v convert &> /dev/null; then
     sudo apt-get update >/dev/null 2>&1 || true
     sudo apt-get install -y imagemagick >/dev/null 2>&1 || true
@@ -35,13 +36,14 @@ fi
 # ------------------------------------------------------------------
 # 2. TEMİZLİK
 # ------------------------------------------------------------------
-echo "🧹 [2/25] Eski dosyalar temizleniyor..."
+echo "🧹 [2/25] Proje sahası temizleniyor..."
 rm -rf app/src/main/res/drawable*
 rm -rf app/src/main/res/mipmap*
 rm -rf app/src/main/res/values*
 rm -rf app/src/main/java/com/base/app/*
 rm -rf .gradle app/build build
 
+echo "📂 [3/25] Dizin yapısı oluşturuluyor..."
 mkdir -p "app/src/main/java/com/base/app"
 mkdir -p "app/src/main/res/mipmap-xxxhdpi"
 mkdir -p "app/src/main/res/values"
@@ -53,9 +55,9 @@ mkdir -p "app/src/main/res/drawable"
 mkdir -p "app/src/main/res/anim"
 
 # ------------------------------------------------------------------
-# 3. İKON MOTORU (CRASH PROOF)
+# 3. İKON MOTORU
 # ------------------------------------------------------------------
-echo "🖼️ [3/25] İkon işleniyor..."
+echo "🖼️ [4/25] İkon hazırlanıyor..."
 ICON_TARGET="app/src/main/res/mipmap-xxxhdpi/ic_launcher.png"
 TEMP_ICON="icon_temp_dl"
 
@@ -67,6 +69,7 @@ if [ -s "$TEMP_ICON" ]; then
 fi
 
 if [ "$VALID_IMG" = true ]; then
+    echo "✅ İkon geçerli."
     convert "$TEMP_ICON" -resize 512x512! -background none -flatten "$ICON_TARGET"
 else
     echo "⚠️ İkon oluşturuluyor..."
@@ -79,7 +82,7 @@ rm -f "$TEMP_ICON"
 # ------------------------------------------------------------------
 # 4. DİL DOSYALARI
 # ------------------------------------------------------------------
-echo "🌍 [4/25] Dil dosyaları oluşturuluyor..."
+echo "🌍 [5/25] Dil dosyaları oluşturuluyor..."
 
 cat > app/src/main/res/values/strings.xml <<EOF
 <resources>
@@ -92,7 +95,7 @@ cat > app/src/main/res/values/strings.xml <<EOF
     <string name="rate_now">Rate Now</string>
     <string name="rate_later">Later</string>
     <string name="welcome">Welcome</string>
-    <string name="maintenance">Maintenance Mode</string>
+    <string name="maintenance">Maintenance</string>
     <string name="conn_error">Connection Error</string>
     <string name="privacy_policy">Privacy Policy</string>
 </resources>
@@ -126,53 +129,119 @@ cat > app/src/main/res/values/colors.xml <<EOF
 EOF
 
 # ------------------------------------------------------------------
-# 5. GRADLE (AAB SUPPORT)
+# 5. GRADLE (MODERN PLUGINS DSL - FIX HERE)
 # ------------------------------------------------------------------
-echo "📦 [5/25] Gradle yapılandırılıyor..."
+echo "📦 [6/25] Modern Gradle yapılandırılıyor..."
 
+# 1. Settings Gradle (Versiyon Yönetimi Burada)
 cat > settings.gradle <<EOF
-pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
-dependencyResolutionManagement { repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS); repositories { google(); mavenCentral(); maven { url 'https://jitpack.io' } } }
+pluginManagement {
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        google()
+        mavenCentral()
+        maven { url 'https://jitpack.io' }
+    }
+}
 rootProject.name = "TitanApp"
 include ':app'
 EOF
 
+# 2. Root Build Gradle (Sadece Plugin Tanımları, Dependencies YOK)
+# Bu kısım o hatayı çözen kısımdır.
 cat > build.gradle <<EOF
-buildscript { repositories { google(); mavenCentral() } dependencies { classpath 'com.android.tools.build:gradle:8.2.1'; classpath 'com.google.gms:google-services:4.4.1' } }
-task clean(type: Delete) { delete rootProject.buildDir }
+plugins {
+    id 'com.android.application' version '8.2.1' apply false
+    id 'com.google.gms.google-services' version '4.4.1' apply false
+}
+
+task clean(type: Delete) {
+    delete rootProject.buildDir
+}
 EOF
 
+# 3. App Build Gradle
 cat > app/build.gradle <<EOF
-plugins { id 'com.android.application'; id 'com.google.gms.google-services' }
+plugins {
+    id 'com.android.application'
+    id 'com.google.gms.google-services'
+}
+
 android {
     namespace 'com.base.app'
     compileSdkVersion 34
-    defaultConfig { applicationId "$PACKAGE_NAME"; minSdkVersion 24; targetSdkVersion 34; versionCode $VERSION_CODE; versionName "$VERSION_NAME"; multiDexEnabled true }
-    signingConfigs { release { storeFile file("keystore.jks"); storePassword System.getenv("SIGNING_STORE_PASSWORD"); keyAlias System.getenv("SIGNING_KEY_ALIAS"); keyPassword System.getenv("SIGNING_KEY_PASSWORD") } }
-    buildTypes { release { minifyEnabled true; shrinkResources true; proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'; signingConfig signingConfigs.release } }
-    compileOptions { sourceCompatibility JavaVersion.VERSION_1_8; targetCompatibility JavaVersion.VERSION_1_8 }
+
+    defaultConfig {
+        applicationId "$PACKAGE_NAME"
+        minSdkVersion 24
+        targetSdkVersion 34
+        versionCode $VERSION_CODE
+        versionName "$VERSION_NAME"
+        multiDexEnabled true
+    }
+
+    signingConfigs {
+        release {
+            storeFile file("keystore.jks")
+            storePassword System.getenv("SIGNING_STORE_PASSWORD")
+            keyAlias System.getenv("SIGNING_KEY_ALIAS")
+            keyPassword System.getenv("SIGNING_KEY_PASSWORD")
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            signingConfig signingConfigs.release
+        }
+    }
+    
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+    
     lint { abortOnError false; checkReleaseBuilds false }
 }
+
 dependencies {
     implementation 'androidx.appcompat:appcompat:1.6.1'
     implementation 'com.google.android.material:material:1.11.0'
     implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
     implementation 'androidx.swiperefreshlayout:swiperefreshlayout:1.1.0'
+    
+    // Firebase
     implementation(platform('com.google.firebase:firebase-bom:32.7.0'))
     implementation 'com.google.firebase:firebase-messaging'
     implementation 'com.google.firebase:firebase-analytics'
+
+    // Media3 (ExoPlayer Modern)
     implementation 'androidx.media3:media3-exoplayer:1.2.0'
     implementation 'androidx.media3:media3-exoplayer-hls:1.2.0'
     implementation 'androidx.media3:media3-exoplayer-dash:1.2.0'
     implementation 'androidx.media3:media3-ui:1.2.0'
     implementation 'androidx.media3:media3-datasource-okhttp:1.2.0'
+    
+    // Utils
     implementation 'com.github.bumptech.glide:glide:4.16.0'
     implementation 'com.squareup.okhttp3:okhttp:4.12.0'
+    
+    // Ads
     implementation 'com.unity3d.ads:unity-ads:4.9.2'
     implementation 'com.google.android.gms:play-services-ads:22.6.0'
 }
 EOF
 
+# Güvenlik Kuralları
 cat > app/proguard-rules.pro <<EOF
 -keep class com.base.app.** { *; }
 -keep class com.google.firebase.** { *; }
@@ -183,15 +252,21 @@ cat > app/proguard-rules.pro <<EOF
 EOF
 
 # ------------------------------------------------------------------
-# 6. MANIFEST & NETWORK
+# 6. MANIFEST & CONFIG
 # ------------------------------------------------------------------
-echo "🔧 [6/25] Konfigürasyon..."
+echo "🔧 [7/25] Config ve Manifest yazılıyor..."
 
-if [ -f "app/google-services.json" ]; then sed -i 's/"package_name": *"[^"]*"/"package_name": "'"$PACKAGE_NAME"'"/g' "app/google-services.json"; else echo '{"project_info":{"project_number":"0","project_id":"dummy"},"client":[{"client_info":{"mobilesdk_app_id":"1:0:android:0","android_client_info":{"package_name":"'$PACKAGE_NAME'"}},"api_key":[{"current_key":"dummy"}]}]}' > "app/google-services.json"; fi
+if [ -f "app/google-services.json" ]; then
+    sed -i 's/"package_name": *"[^"]*"/"package_name": "'"$PACKAGE_NAME"'"/g' "app/google-services.json"
+else
+    echo '{"project_info":{"project_number":"0","project_id":"dummy"},"client":[{"client_info":{"mobilesdk_app_id":"1:0:android:0","android_client_info":{"package_name":"'$PACKAGE_NAME'"}},"api_key":[{"current_key":"dummy"}]}]}' > "app/google-services.json"
+fi
 
 cat > app/src/main/res/xml/network_security_config.xml <<EOF
 <?xml version="1.0" encoding="utf-8"?>
-<network-security-config><base-config cleartextTrafficPermitted="true"><trust-anchors><certificates src="system" /></trust-anchors></base-config></network-security-config>
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true"><trust-anchors><certificates src="system" /></trust-anchors></base-config>
+</network-security-config>
 EOF
 
 cat > app/src/main/res/values/styles.xml <<EOF
@@ -216,15 +291,37 @@ cat > app/src/main/AndroidManifest.xml <<EOF
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <uses-permission android:name="com.google.android.gms.permission.AD_ID"/>
-    <application android:allowBackup="true" android:label="$APP_NAME" android:icon="@mipmap/ic_launcher" android:networkSecurityConfig="@xml/network_security_config" android:usesCleartextTraffic="true" android:theme="@style/AppTheme">
+    
+    <application
+        android:allowBackup="true"
+        android:label="$APP_NAME"
+        android:icon="@mipmap/ic_launcher"
+        android:networkSecurityConfig="@xml/network_security_config"
+        android:usesCleartextTraffic="true"
+        android:theme="@style/AppTheme">
+        
         <meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="ca-app-pub-3940256099942544~3347511713"/>
-        <activity android:name=".MainActivity" android:exported="true" android:screenOrientation="portrait" android:configChanges="orientation|screenSize|keyboardHidden">
-            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+
+        <activity android:name=".MainActivity" 
+            android:exported="true" 
+            android:screenOrientation="portrait"
+            android:configChanges="orientation|screenSize|keyboardHidden">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
         </activity>
+        
         <activity android:name=".WebViewActivity" android:configChanges="orientation|screenSize|keyboardHidden"/>
         <activity android:name=".ChannelListActivity" />
-        <activity android:name=".PlayerActivity" android:configChanges="orientation|screenSize|keyboardHidden|smallestScreenSize|screenLayout" android:screenOrientation="sensor" android:theme="@style/PlayerTheme" />
-        <service android:name=".MyFirebaseMessagingService" android:exported="false"><intent-filter><action android:name="com.google.firebase.MESSAGING_EVENT" /></intent-filter></service>
+        <activity android:name=".PlayerActivity"
+            android:configChanges="orientation|screenSize|keyboardHidden|smallestScreenSize|screenLayout"
+            android:screenOrientation="sensor"
+            android:theme="@style/PlayerTheme" />
+            
+        <service android:name=".MyFirebaseMessagingService" android:exported="false">
+            <intent-filter><action android:name="com.google.firebase.MESSAGING_EVENT" /></intent-filter>
+        </service>
     </application>
 </manifest>
 EOF
@@ -232,34 +329,104 @@ EOF
 # ------------------------------------------------------------------
 # 7. JAVA: ADS MANAGER
 # ------------------------------------------------------------------
-echo "☕ [7/25] Java: AdsManager..."
+echo "☕ [8/25] Java: AdsManager oluşturuluyor..."
 cat > "app/src/main/java/com/base/app/AdsManager.java" <<EOF
 package com.base.app;
-import android.app.Activity; import android.view.ViewGroup; import org.json.JSONObject; import androidx.annotation.NonNull;
-import com.unity3d.ads.*; import com.unity3d.services.banners.*; import com.google.android.gms.ads.*; import com.google.android.gms.ads.interstitial.*;
+
+import android.app.Activity; 
+import android.view.ViewGroup; 
+import org.json.JSONObject; 
+import androidx.annotation.NonNull;
+import com.unity3d.ads.*; 
+import com.unity3d.services.banners.*; 
+import com.google.android.gms.ads.*; 
+import com.google.android.gms.ads.interstitial.*;
+
 public class AdsManager {
-    public static int counter=0; private static int frequency=3; private static boolean isEnabled=false, bannerActive=false, interActive=false;
+    public static int counter = 0; 
+    private static int frequency = 3; 
+    private static boolean isEnabled=false, bannerActive=false, interActive=false;
     private static String provider="UNITY", unityGameId="", unityBannerId="", unityInterId="", admobBannerId="", admobInterId="";
     private static InterstitialAd mAdMobInter;
     
     public static void init(Activity act, JSONObject cfg) {
-        try { if(cfg==null)return; isEnabled=cfg.optBoolean("enabled",false); provider=cfg.optString("provider","UNITY"); bannerActive=cfg.optBoolean("banner_active"); interActive=cfg.optBoolean("inter_active"); frequency=cfg.optInt("inter_freq",3);
-        if(!isEnabled)return;
-        if(provider.contains("UNITY")){ unityGameId=cfg.optString("unity_game_id"); unityBannerId=cfg.optString("unity_banner_id"); unityInterId=cfg.optString("unity_inter_id"); if(!unityGameId.isEmpty()) UnityAds.initialize(act.getApplicationContext(), unityGameId, false, null); }
-        if(provider.contains("ADMOB")){ admobBannerId=cfg.optString("admob_banner_id"); admobInterId=cfg.optString("admob_inter_id"); MobileAds.initialize(act,s->{}); loadAdMobInter(act); }
+        try { 
+            if(cfg==null)return; 
+            isEnabled=cfg.optBoolean("enabled",false); 
+            provider=cfg.optString("provider","UNITY"); 
+            bannerActive=cfg.optBoolean("banner_active"); 
+            interActive=cfg.optBoolean("inter_active"); 
+            frequency=cfg.optInt("inter_freq",3);
+
+            if(!isEnabled)return;
+            
+            if(provider.contains("UNITY")){ 
+                unityGameId=cfg.optString("unity_game_id"); 
+                unityBannerId=cfg.optString("unity_banner_id"); 
+                unityInterId=cfg.optString("unity_inter_id"); 
+                if(!unityGameId.isEmpty()) UnityAds.initialize(act.getApplicationContext(), unityGameId, false, null); 
+            }
+            
+            if(provider.contains("ADMOB")){ 
+                admobBannerId=cfg.optString("admob_banner_id"); 
+                admobInterId=cfg.optString("admob_inter_id"); 
+                MobileAds.initialize(act,s->{}); 
+                loadAdMobInter(act); 
+            }
         }catch(Exception e){}
     }
-    private static void loadAdMobInter(Activity act){ if(!interActive)return; AdRequest r=new AdRequest.Builder().build(); InterstitialAd.load(act, admobInterId, r, new InterstitialAdLoadCallback(){ public void onAdLoaded(@NonNull InterstitialAd ad){mAdMobInter=ad;} }); }
-    public static void showBanner(Activity act, ViewGroup con){
-        if(!isEnabled||!bannerActive)return; con.removeAllViews();
-        if(provider.contains("ADMOB")&&!admobBannerId.isEmpty()){ AdView v=new AdView(act); v.setAdSize(AdSize.BANNER); v.setAdUnitId(admobBannerId); con.addView(v); v.loadAd(new AdRequest.Builder().build()); }
-        else if(provider.contains("UNITY")&&!unityBannerId.isEmpty()){ BannerView b=new BannerView(act, unityBannerId, new UnityBannerSize(320,50)); b.load(); con.addView(b); }
+    
+    private static void loadAdMobInter(Activity act){ 
+        if(!interActive)return; 
+        AdRequest r=new AdRequest.Builder().build(); 
+        InterstitialAd.load(act, admobInterId, r, new InterstitialAdLoadCallback(){ 
+            public void onAdLoaded(@NonNull InterstitialAd ad){mAdMobInter=ad;} 
+        }); 
     }
+    
+    public static void showBanner(Activity act, ViewGroup con){
+        if(!isEnabled||!bannerActive)return; 
+        con.removeAllViews();
+        if(provider.contains("ADMOB")&&!admobBannerId.isEmpty()){ 
+            AdView v=new AdView(act); 
+            v.setAdSize(AdSize.BANNER); 
+            v.setAdUnitId(admobBannerId); 
+            con.addView(v); 
+            v.loadAd(new AdRequest.Builder().build()); 
+        }
+        else if(provider.contains("UNITY")&&!unityBannerId.isEmpty()){ 
+            BannerView b=new BannerView(act, unityBannerId, new UnityBannerSize(320,50)); 
+            b.load(); 
+            con.addView(b); 
+        }
+    }
+    
     public static void checkInter(Activity act, Runnable r){
-        if(!isEnabled||!interActive){r.run();return;} counter++;
-        if(counter>=frequency){ counter=0;
-            if(provider.contains("ADMOB")&&mAdMobInter!=null){ mAdMobInter.show(act); mAdMobInter=null; loadAdMobInter(act); r.run(); return; }
-            if(provider.contains("UNITY")&&!unityInterId.isEmpty()){ UnityAds.load(unityInterId, new IUnityAdsLoadListener(){ public void onUnityAdsAdLoaded(String p){ UnityAds.show(act,p,new IUnityAdsShowListener(){ public void onUnityAdsShowComplete(String p, UnityAds.UnityAdsShowCompletionState s){r.run();} public void onUnityAdsShowFailure(String p, UnityAds.UnityAdsShowError e, String m){r.run();} public void onUnityAdsShowStart(String p){} public void onUnityAdsShowClick(String p){} }); } public void onUnityAdsFailedToLoad(String p, UnityAds.UnityAdsLoadError e, String m){r.run();} }); return; }
+        if(!isEnabled||!interActive){r.run();return;} 
+        counter++;
+        if(counter>=frequency){ 
+            counter=0;
+            if(provider.contains("ADMOB")&&mAdMobInter!=null){ 
+                mAdMobInter.show(act); 
+                mAdMobInter = null; 
+                loadAdMobInter(act); 
+                r.run(); 
+                return; 
+            }
+            if(provider.contains("UNITY")&&!unityInterId.isEmpty()){ 
+                UnityAds.load(unityInterId, new IUnityAdsLoadListener(){ 
+                    public void onUnityAdsAdLoaded(String p){ 
+                        UnityAds.show(act,p,new IUnityAdsShowListener(){ 
+                            public void onUnityAdsShowComplete(String p, UnityAds.UnityAdsShowCompletionState s){r.run();} 
+                            public void onUnityAdsShowFailure(String p, UnityAds.UnityAdsShowError e, String m){r.run();} 
+                            public void onUnityAdsShowStart(String p){} 
+                            public void onUnityAdsShowClick(String p){} 
+                        }); 
+                    } 
+                    public void onUnityAdsFailedToLoad(String p, UnityAds.UnityAdsLoadError e, String m){r.run();} 
+                }); 
+                return; 
+            }
             r.run();
         } else r.run();
     }
@@ -267,24 +434,66 @@ public class AdsManager {
 EOF
 
 # ------------------------------------------------------------------
-# 8. JAVA: FCM SERVICE
+# 8. JAVA: FIREBASE SERVICE
 # ------------------------------------------------------------------
-echo "🔥 [8/25] Java: FCM Service..."
+echo "🔥 [9/25] Java: FCM Service oluşturuluyor..."
 cat > "app/src/main/java/com/base/app/MyFirebaseMessagingService.java" <<EOF
 package com.base.app;
-import android.app.*; import android.content.*; import android.graphics.*; import android.media.RingtoneManager; import android.os.Build; androidx.core.app.NotificationCompat; com.google.firebase.messaging.*; com.bumptech.glide.Glide;
+
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
+import android.content.Context;
+import android.content.Intent;
+import android.graphics.Bitmap;
+import android.media.RingtoneManager;
+import android.os.Build;
+import androidx.core.app.NotificationCompat;
+import com.google.firebase.messaging.FirebaseMessagingService;
+import com.google.firebase.messaging.RemoteMessage;
+import com.bumptech.glide.Glide;
+import java.util.concurrent.Future;
+
 public class MyFirebaseMessagingService extends FirebaseMessagingService {
     public void onMessageReceived(RemoteMessage m) {
-        String t="",b="",i=""; if(m.getNotification()!=null){t=m.getNotification().getTitle();b=m.getNotification().getBody(); if(m.getNotification().getImageUrl()!=null)i=m.getNotification().getImageUrl().toString();}
-        else if(m.getData().size()>0){t=m.getData().get("title");b=m.getData().get("body");i=m.getData().get("image");}
+        String t="",b="",i=""; 
+        if(m.getNotification()!=null){
+            t=m.getNotification().getTitle();
+            b=m.getNotification().getBody(); 
+            if(m.getNotification().getImageUrl()!=null)i=m.getNotification().getImageUrl().toString();
+        }
+        else if(m.getData().size()>0){
+            t=m.getData().get("title");
+            b=m.getData().get("body");
+            i=m.getData().get("image");
+        }
         if(t!=null) sn(t,b,i);
     }
-    public void onNewToken(String t){ getSharedPreferences("TITAN_PREFS",0).edit().putString("fcm_token",t).apply(); }
+    
+    public void onNewToken(String t){ 
+        getSharedPreferences("TITAN_PREFS",0).edit().putString("fcm_token",t).apply(); 
+    }
+    
     private void sn(String t, String b, String i) {
-        Intent in=new Intent(this, MainActivity.class); in.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        Intent in=new Intent(this, MainActivity.class); 
+        in.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
         PendingIntent pi=PendingIntent.getActivity(this,0,in,PendingIntent.FLAG_ONE_SHOT|PendingIntent.FLAG_IMMUTABLE);
-        NotificationCompat.Builder nb=new NotificationCompat.Builder(this,"TitanCh").setSmallIcon(android.R.drawable.ic_dialog_info).setContentTitle(t).setContentText(b).setAutoCancel(true).setSound(RingtoneManager.getDefaultUri(2)).setContentIntent(pi);
-        if(i!=null&&!i.isEmpty()){ try{ Bitmap bm=Glide.with(this).asBitmap().load(i).submit().get(); nb.setStyle(new NotificationCompat.BigPictureStyle().bigPicture(bm)); }catch(Exception e){} }
+        
+        NotificationCompat.Builder nb=new NotificationCompat.Builder(this,"TitanCh")
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setContentTitle(t)
+            .setContentText(b)
+            .setAutoCancel(true)
+            .setSound(RingtoneManager.getDefaultUri(2))
+            .setContentIntent(pi);
+            
+        if(i!=null&&!i.isEmpty()){ 
+            try{ 
+                Bitmap bm=Glide.with(this).asBitmap().load(i).submit().get(); 
+                nb.setStyle(new NotificationCompat.BigPictureStyle().bigPicture(bm)); 
+            }catch(Exception e){} 
+        }
+        
         NotificationManager nm=(NotificationManager)getSystemService(Context.NOTIFICATION_SERVICE);
         if(Build.VERSION.SDK_INT>=26) nm.createNotificationChannel(new NotificationChannel("TitanCh","Bildirimler",3));
         nm.notify((int)System.currentTimeMillis(), nb.build());
@@ -293,9 +502,9 @@ public class MyFirebaseMessagingService extends FirebaseMessagingService {
 EOF
 
 # ------------------------------------------------------------------
-# 9. JAVA: MAIN ACTIVITY (DIRECT BOOT FIX)
+# 9. JAVA: MAIN ACTIVITY (THE BEAST)
 # ------------------------------------------------------------------
-echo "📱 [9/25] Java: MainActivity (Direct Boot Fixed)..."
+echo "📱 [10/25] Java: MainActivity (Fully Loaded)..."
 cat > "app/src/main/java/com/base/app/MainActivity.java" <<EOF
 package com.base.app;
 
@@ -360,10 +569,13 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle s) { 
         super.onCreate(s);
+        
+        // Android 13+ İzinleri
         if(Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(this, "android.permission.POST_NOTIFICATIONS") != PackageManager.PERMISSION_GRANTED) {
             ActivityCompat.requestPermissions(this, new String[]{"android.permission.POST_NOTIFICATIONS"}, 101);
         }
         
+        // FCM Token
         FirebaseMessaging.getInstance().getToken().addOnCompleteListener(task -> { 
             if(task.isSuccessful()){ 
                 String token = task.getResult(); 
@@ -372,6 +584,7 @@ public class MainActivity extends Activity {
             } 
         });
         
+        // --- UI İNŞASI ---
         drawerLayout = new DrawerLayout(this);
         drawerLayout.setLayoutParams(new ViewGroup.LayoutParams(-1, -1));
         
@@ -469,13 +682,11 @@ public class MainActivity extends Activity {
     
     private void openPrivacy(){
         try {
-            // Privacy Policy Link Generation
             String privacyUrl = CONFIG_URL.contains("api.php") 
                 ? CONFIG_URL.replace("api.php", "privacy.php") 
                 : CONFIG_URL + "privacy.php";
             if(!privacyUrl.contains("package=")) privacyUrl += "?package=" + getPackageName();
             else privacyUrl += "&package=" + getPackageName();
-            
             Intent i = new Intent(Intent.ACTION_VIEW, Uri.parse(privacyUrl));
             startActivity(i);
         } catch(Exception e){}
@@ -483,6 +694,7 @@ public class MainActivity extends Activity {
     
     private void checkFeat(){ 
         if(featureConfig==null)return; 
+        
         JSONObject r=featureConfig.optJSONObject("rate_us"); 
         if(r!=null&&r.optBoolean("active")){ 
             int c=getSharedPreferences("TITAN",0).getInt("lc",0)+1; 
@@ -495,13 +707,37 @@ public class MainActivity extends Activity {
                     .setNegativeButton(getString(R.string.rate_later),null).show(); 
             }
         }
+        
+        JSONObject w=featureConfig.optJSONObject("welcome_popup"); 
+        if(w!=null&&w.optBoolean("active")&&!getSharedPreferences("TITAN",0).getBoolean("welcomed",false)){ 
+            AlertDialog.Builder b=new AlertDialog.Builder(this)
+                .setTitle(w.optString("title"))
+                .setMessage(w.optString("message")); 
+            if(!w.optString("image").isEmpty()){ 
+                ImageView i=new ImageView(this); 
+                i.setAdjustViewBounds(true); 
+                Glide.with(this).load(w.optString("image")).into(i); 
+                b.setView(i); 
+            } 
+            b.setPositiveButton("OK",null).show(); 
+            getSharedPreferences("TITAN",0).edit().putBoolean("welcomed",true).apply(); 
+        }
+        
+        JSONObject m=featureConfig.optJSONObject("maintenance_mode"); 
+        if(m!=null&&m.optBoolean("active")){ 
+            new AlertDialog.Builder(this)
+                .setCancelable(false)
+                .setTitle(getString(R.string.maintenance))
+                .setMessage(m.optString("message"))
+                .show(); 
+        }
     }
 
     private void render(JSONArray mod, JSONObject ui){
         container.removeAllViews();
         navView.getMenu().clear();
         
-        // Privacy Policy Item in Drawer
+        // Privacy Item
         navView.getMenu().add(0, 999, 999, getString(R.string.privacy_policy)).setIcon(android.R.drawable.ic_menu_info_details).setOnMenuItemClickListener(i->{openPrivacy();return true;});
         
         if(menuType.equals("DRAWER")) {
@@ -652,7 +888,6 @@ public class MainActivity extends Activity {
                 
                 getIntent().putExtra("FULL_CONFIG", ui.toString());
                 
-                // DIRECT BOOT LOGIC (FIXED)
                 if(ui.optString("startup_mode").equals("DIRECT")){ 
                     String dt=ui.optString("direct_type"); 
                     String du=ui.optString("direct_url"); 
@@ -661,7 +896,7 @@ public class MainActivity extends Activity {
                         i.putExtra("WEB_URL",du); startActivity(i); 
                     } else op(dt,du,"",""); 
                     
-                    finish(); // KILL MENU
+                    finish(); 
                     return; 
                 }
                 
