@@ -65,7 +65,7 @@ echo "📦 [3/20] Build.gradle (Patron Modu) yazılıyor..."
 cat > app/build.gradle <<EOF
 plugins {
     id 'com.android.application'
-    id 'com.google.gms.google-services'
+    id 'com.google.gms.google-services' version '4.4.1' // DÜZELTME: Versiyonu ekledik
 }
 
 android {
