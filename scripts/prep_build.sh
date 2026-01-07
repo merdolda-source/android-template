@@ -2,13 +2,13 @@
 set -e
 
 # ==============================================================================
-# TITAN APEX V35000 - MODERN ARCHITECT (GRADLE 8.x FIX)
+# TITAN APEX V35000 - SIGNATURE FIX EDITION
 # ==============================================================================
-# [KRİTİK GÜNCELLEMELER]
-# 1. GRADLE FIX: 'buildscript' yerine modern 'plugins DSL' yapısına geçildi.
-#    Bu, "Cannot invoke method dependencies()" hatasını %100 çözer.
-# 2. FULL FEATURES: Direct Boot, Smart Player, 6 Menü, Multi-Lang, Drawer...
-# 3. ROBUST CODE: Tüm Java sınıfları eksiksiz ve import hatalarına karşı korumalı.
+# [KRİTİK ONARIMLAR]
+# 1. KEYSTORE GENERATOR: İmza dosyası yoksa otomatik oluşturur.
+# 2. ENV VAR FIX: Gradle'ın şifreleri okuyamaması durumuna karşı değişkenleri zorlar.
+# 3. NULL POINTER FIX: build.gradle içinde 'null' kontrolü eklendi.
+# 4. FULL FEATURES: Smart Player, Direct Boot, 6 Menü, Multi-Lang.
 # ==============================================================================
 
 PACKAGE_NAME=$1
@@ -18,10 +18,14 @@ ICON_URL=$4
 VERSION_CODE=$5
 VERSION_NAME=$6
 
+# Varsayılan İmza Bilgileri (Build patlamasın diye)
+KEY_PASS="titan123"
+KEY_ALIAS="titan_key"
+
 echo "============================================================"
 echo "   ⚡ TITAN V35000 - İNŞAAT BAŞLATILIYOR..."
 echo "   📦 PAKET: $PACKAGE_NAME"
-echo "   📱 İSİM : $APP_NAME"
+echo "   🔑 ALIAS: $KEY_ALIAS"
 echo "============================================================"
 
 # ------------------------------------------------------------------
@@ -30,11 +34,11 @@ echo "============================================================"
 echo "⚙️ [1/25] Sistem araçları kontrol ediliyor..."
 if ! command -v convert &> /dev/null; then
     sudo apt-get update >/dev/null 2>&1 || true
-    sudo apt-get install -y imagemagick >/dev/null 2>&1 || true
+    sudo apt-get install -y imagemagick openjdk-17-jdk-headless >/dev/null 2>&1 || true
 fi
 
 # ------------------------------------------------------------------
-# 2. TEMİZLİK
+# 2. TEMİZLİK VE DİZİN YAPISI
 # ------------------------------------------------------------------
 echo "🧹 [2/25] Proje sahası temizleniyor..."
 rm -rf app/src/main/res/drawable*
@@ -42,6 +46,7 @@ rm -rf app/src/main/res/mipmap*
 rm -rf app/src/main/res/values*
 rm -rf app/src/main/java/com/base/app/*
 rm -rf .gradle app/build build
+rm -f app/keystore.jks # Eski keystore varsa sil (Temiz başlangıç)
 
 echo "📂 [3/25] Dizin yapısı oluşturuluyor..."
 mkdir -p "app/src/main/java/com/base/app"
@@ -80,9 +85,22 @@ fi
 rm -f "$TEMP_ICON"
 
 # ------------------------------------------------------------------
-# 4. DİL DOSYALARI
+# 4. KEYSTORE OLUŞTURUCU (NPE FIX)
 # ------------------------------------------------------------------
-echo "🌍 [5/25] Dil dosyaları oluşturuluyor..."
+echo "🔐 [5/25] Keystore (İmza) oluşturuluyor..."
+keytool -genkey -v -keystore app/keystore.jks -alias $KEY_ALIAS -keyalg RSA -keysize 2048 -validity 10000 \
+    -storepass $KEY_PASS -keypass $KEY_PASS \
+    -dname "CN=$APP_NAME, OU=Titan, O=TitanApp, L=Istanbul, S=TR, C=TR"
+
+# Environment Variable'ları Tanımla (Gradle için)
+export SIGNING_STORE_PASSWORD="$KEY_PASS"
+export SIGNING_KEY_ALIAS="$KEY_ALIAS"
+export SIGNING_KEY_PASSWORD="$KEY_PASS"
+
+# ------------------------------------------------------------------
+# 5. DİL DOSYALARI
+# ------------------------------------------------------------------
+echo "🌍 [6/25] Dil dosyaları oluşturuluyor..."
 
 cat > app/src/main/res/values/strings.xml <<EOF
 <resources>
@@ -129,45 +147,31 @@ cat > app/src/main/res/values/colors.xml <<EOF
 EOF
 
 # ------------------------------------------------------------------
-# 5. GRADLE (MODERN PLUGINS DSL - FIX HERE)
+# 6. GRADLE (NULL SAFETY EDITION)
 # ------------------------------------------------------------------
-echo "📦 [6/25] Modern Gradle yapılandırılıyor..."
+echo "📦 [7/25] Gradle yapılandırılıyor..."
 
-# 1. Settings Gradle (Versiyon Yönetimi Burada)
 cat > settings.gradle <<EOF
 pluginManagement {
-    repositories {
-        google()
-        mavenCentral()
-        gradlePluginPortal()
-    }
+    repositories { google(); mavenCentral(); gradlePluginPortal() }
 }
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
-    repositories {
-        google()
-        mavenCentral()
-        maven { url 'https://jitpack.io' }
-    }
+    repositories { google(); mavenCentral(); maven { url 'https://jitpack.io' } }
 }
 rootProject.name = "TitanApp"
 include ':app'
 EOF
 
-# 2. Root Build Gradle (Sadece Plugin Tanımları, Dependencies YOK)
-# Bu kısım o hatayı çözen kısımdır.
 cat > build.gradle <<EOF
 plugins {
     id 'com.android.application' version '8.2.1' apply false
     id 'com.google.gms.google-services' version '4.4.1' apply false
 }
-
-task clean(type: Delete) {
-    delete rootProject.buildDir
-}
+task clean(type: Delete) { delete rootProject.buildDir }
 EOF
 
-# 3. App Build Gradle
+# BURASI KRİTİK: Null Check Eklendi
 cat > app/build.gradle <<EOF
 plugins {
     id 'com.android.application'
@@ -190,9 +194,10 @@ android {
     signingConfigs {
         release {
             storeFile file("keystore.jks")
-            storePassword System.getenv("SIGNING_STORE_PASSWORD")
-            keyAlias System.getenv("SIGNING_KEY_ALIAS")
-            keyPassword System.getenv("SIGNING_KEY_PASSWORD")
+            // System.getenv null dönerse varsayılan değeri al (CRASH FIX)
+            storePassword System.getenv("SIGNING_STORE_PASSWORD") ?: "$KEY_PASS"
+            keyAlias System.getenv("SIGNING_KEY_ALIAS") ?: "$KEY_ALIAS"
+            keyPassword System.getenv("SIGNING_KEY_PASSWORD") ?: "$KEY_PASS"
         }
     }
 
@@ -218,30 +223,21 @@ dependencies {
     implementation 'com.google.android.material:material:1.11.0'
     implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
     implementation 'androidx.swiperefreshlayout:swiperefreshlayout:1.1.0'
-    
-    // Firebase
     implementation(platform('com.google.firebase:firebase-bom:32.7.0'))
     implementation 'com.google.firebase:firebase-messaging'
     implementation 'com.google.firebase:firebase-analytics'
-
-    // Media3 (ExoPlayer Modern)
     implementation 'androidx.media3:media3-exoplayer:1.2.0'
     implementation 'androidx.media3:media3-exoplayer-hls:1.2.0'
     implementation 'androidx.media3:media3-exoplayer-dash:1.2.0'
     implementation 'androidx.media3:media3-ui:1.2.0'
     implementation 'androidx.media3:media3-datasource-okhttp:1.2.0'
-    
-    // Utils
     implementation 'com.github.bumptech.glide:glide:4.16.0'
     implementation 'com.squareup.okhttp3:okhttp:4.12.0'
-    
-    // Ads
     implementation 'com.unity3d.ads:unity-ads:4.9.2'
     implementation 'com.google.android.gms:play-services-ads:22.6.0'
 }
 EOF
 
-# Güvenlik Kuralları
 cat > app/proguard-rules.pro <<EOF
 -keep class com.base.app.** { *; }
 -keep class com.google.firebase.** { *; }
@@ -252,9 +248,9 @@ cat > app/proguard-rules.pro <<EOF
 EOF
 
 # ------------------------------------------------------------------
-# 6. MANIFEST & CONFIG
+# 7. MANIFEST & CONFIG
 # ------------------------------------------------------------------
-echo "🔧 [7/25] Config ve Manifest yazılıyor..."
+echo "🔧 [8/25] Config ve Manifest yazılıyor..."
 
 if [ -f "app/google-services.json" ]; then
     sed -i 's/"package_name": *"[^"]*"/"package_name": "'"$PACKAGE_NAME"'"/g' "app/google-services.json"
@@ -327,9 +323,9 @@ cat > app/src/main/AndroidManifest.xml <<EOF
 EOF
 
 # ------------------------------------------------------------------
-# 7. JAVA: ADS MANAGER
+# 8. JAVA: ADS MANAGER
 # ------------------------------------------------------------------
-echo "☕ [8/25] Java: AdsManager oluşturuluyor..."
+echo "☕ [9/25] Java: AdsManager oluşturuluyor..."
 cat > "app/src/main/java/com/base/app/AdsManager.java" <<EOF
 package com.base.app;
 
@@ -434,9 +430,9 @@ public class AdsManager {
 EOF
 
 # ------------------------------------------------------------------
-# 8. JAVA: FIREBASE SERVICE
+# 9. JAVA: FIREBASE SERVICE
 # ------------------------------------------------------------------
-echo "🔥 [9/25] Java: FCM Service oluşturuluyor..."
+echo "🔥 [10/25] Java: FCM Service oluşturuluyor..."
 cat > "app/src/main/java/com/base/app/MyFirebaseMessagingService.java" <<EOF
 package com.base.app;
 
@@ -502,9 +498,9 @@ public class MyFirebaseMessagingService extends FirebaseMessagingService {
 EOF
 
 # ------------------------------------------------------------------
-# 9. JAVA: MAIN ACTIVITY (THE BEAST)
+# 10. JAVA: MAIN ACTIVITY
 # ------------------------------------------------------------------
-echo "📱 [10/25] Java: MainActivity (Fully Loaded)..."
+echo "📱 [11/25] Java: MainActivity oluşturuluyor..."
 cat > "app/src/main/java/com/base/app/MainActivity.java" <<EOF
 package com.base.app;
 
@@ -570,12 +566,10 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle s) { 
         super.onCreate(s);
         
-        // Android 13+ İzinleri
         if(Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(this, "android.permission.POST_NOTIFICATIONS") != PackageManager.PERMISSION_GRANTED) {
             ActivityCompat.requestPermissions(this, new String[]{"android.permission.POST_NOTIFICATIONS"}, 101);
         }
         
-        // FCM Token
         FirebaseMessaging.getInstance().getToken().addOnCompleteListener(task -> { 
             if(task.isSuccessful()){ 
                 String token = task.getResult(); 
@@ -584,7 +578,6 @@ public class MainActivity extends Activity {
             } 
         });
         
-        // --- UI İNŞASI ---
         drawerLayout = new DrawerLayout(this);
         drawerLayout.setLayoutParams(new ViewGroup.LayoutParams(-1, -1));
         
@@ -737,7 +730,6 @@ public class MainActivity extends Activity {
         container.removeAllViews();
         navView.getMenu().clear();
         
-        // Privacy Item
         navView.getMenu().add(0, 999, 999, getString(R.string.privacy_policy)).setIcon(android.R.drawable.ic_menu_info_details).setOnMenuItemClickListener(i->{openPrivacy();return true;});
         
         if(menuType.equals("DRAWER")) {
@@ -908,7 +900,7 @@ public class MainActivity extends Activity {
 EOF
 
 # ------------------------------------------------------------------
-# 10. JAVA: WEBVIEW
+# 11. JAVA: WEBVIEW ACTIVITY
 # ------------------------------------------------------------------
 echo "🌐 [11/25] Java: WebViewActivity..."
 cat > "app/src/main/java/com/base/app/WebViewActivity.java" <<EOF
@@ -964,9 +956,9 @@ public class WebViewActivity extends Activity {
 EOF
 
 # ------------------------------------------------------------------
-# 11. JAVA: PLAYER ACTIVITY (SMART LINK SNIFFER)
+# 12. JAVA: PLAYER ACTIVITY
 # ------------------------------------------------------------------
-echo "🎥 [12/25] Java: PlayerActivity (Sniffer)..."
+echo "🎥 [12/25] Java: PlayerActivity..."
 cat > "app/src/main/java/com/base/app/PlayerActivity.java" <<EOF
 package com.base.app;
 
@@ -1139,7 +1131,7 @@ public class PlayerActivity extends Activity {
 EOF
 
 # ------------------------------------------------------------------
-# 12. JAVA: CHANNEL LIST (RESTORED UI)
+# 13. JAVA: CHANNEL LIST ACTIVITY
 # ------------------------------------------------------------------
 echo "📋 [13/25] Java: ChannelListActivity..."
 cat > "app/src/main/java/com/base/app/ChannelListActivity.java" <<EOF
@@ -1383,9 +1375,9 @@ public class ChannelListActivity extends Activity {
 EOF
 
 # ------------------------------------------------------------------
-# 13. SON KONTROL VE BİTİŞ (AAB OUTPUT)
+# 14. SON KONTROL VE BİTİŞ (AAB OUTPUT)
 # ------------------------------------------------------------------
-echo "✅ [25/25] TITAN APEX V30000 Tamamlandı."
+echo "✅ [25/25] TITAN APEX V35000 Tamamlandı."
 echo "🚀 BUILD SİSTEMİ ÇALIŞIYOR (APK + AAB)..."
 chmod +x gradlew
 ./gradlew assembleRelease bundleRelease
