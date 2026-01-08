@@ -1,38 +1,46 @@
 #!/bin/bash
-set -e
-
-# ==============================================================================
-# TITAN APEX V6000 - ULTIMATE SOURCE GENERATOR (SECURITY PLUS EDITION V6000.9)
-# ==============================================================================
-# BU SCRIPT, SIKIŞTIRILMAMIŞ, TAM PROFESYONEL ANDROID PROJESİ OLUŞTURUR.
-# EKSTRA: SIKI PLUS GÜVENLİK, URL DOĞRULAMA, DAHA SAĞLAM İKON MOTORU,
-#         TR/EN DİL, AKTİF/PASİF MODÜL, GELİŞMİŞ WELCOME POPUP, WATERMARK OVERLAY.
-# ==============================================================================
-
-# ------------------------------------------------------------------
-# 0. SIKI PLUS GÜVENLİK KATMANI
-# ------------------------------------------------------------------
 set -Eeuo pipefail
 IFS=$'\n\t'
 trap 'echo "❌ [SCRIPTHOOK] HATA! satır=$LINENO komut=$BASH_COMMAND" >&2' ERR
 
-# Girdi Parametreleri
+# ==============================================================================
+# TITAN APEX V6000.10 - ULTIMATE SOURCE GENERATOR (PLAYER MAX COMPAT EDITION)
+# ==============================================================================
+# - Tek dosyada tam üretim
+# - Strict güvenlik + input doğrulama
+# - Güçlü ikon motoru + tüm mipmap boyutları
+# - TR/EN strings
+# - Aktif/Pasif modül + Welcome Popup + Rate Us + Maintenance altyapısı
+# - Watermark overlay
+# - PLAYER: Redirect çözme + Content-Type sniff + uzantısız link desteği
+# - PLAYER: HLS (.m3u8), DASH (.mpd), SmoothStreaming, RTSP, MP4/TS/AUDIO progressive
+# ==============================================================================
+
+# -----------------------
+# Parametreler
+# -----------------------
 PACKAGE_NAME="${1:-}"
 APP_NAME="${2:-}"
 CONFIG_URL="${3:-}"
 ICON_URL="${4:-}"
 VERSION_CODE="${5:-}"
 VERSION_NAME="${6:-}"
-PRIVACY_URL="${7:-}"   # opsiyonel (panel daha sonra), ama altyapı hazır
+PRIVACY_URL="${7:-}"   # opsiyonel
 
-# Basit sanitize / doğrulama
+# FFmpeg extension opsiyonel (GPL risk) - varsayılan kapalı
+ENABLE_FFMPEG_EXT="${ENABLE_FFMPEG_EXT:-false}"
+
+# Media3 sürümü (stabil bir sürüm seçildi)
+MEDIA3_VER="${MEDIA3_VER:-1.9.0}"
+
+# -----------------------
+# Yardımcılar
+# -----------------------
 is_int() { [[ "${1:-}" =~ ^[0-9]+$ ]]; }
 is_pkg() { [[ "${1:-}" =~ ^[a-zA-Z][a-zA-Z0-9_]*(\.[a-zA-Z0-9_]+)+$ ]]; }
 is_http_url() { [[ "${1:-}" =~ ^https?:// ]]; }
-
 req_cmd() { command -v "$1" >/dev/null 2>&1 || { echo "❌ Gerekli komut eksik: $1"; exit 1; }; }
 
-# Komut bağımlılıkları (minimum)
 req_cmd curl
 req_cmd sed
 req_cmd cat
@@ -45,90 +53,68 @@ if [[ -z "$PACKAGE_NAME" || -z "$APP_NAME" || -z "$CONFIG_URL" || -z "$VERSION_C
   echo "   ./prep_build.sh <PACKAGE_NAME> <APP_NAME> <CONFIG_URL> <ICON_URL> <VERSION_CODE> <VERSION_NAME> [PRIVACY_URL]"
   exit 1
 fi
-
-if ! is_pkg "$PACKAGE_NAME"; then
-  echo "❌ Paket adı formatı hatalı: $PACKAGE_NAME"
-  exit 1
-fi
-
-if ! is_int "$VERSION_CODE"; then
-  echo "❌ VERSION_CODE sayı olmalı: $VERSION_CODE"
-  exit 1
-fi
-
-if ! is_http_url "$CONFIG_URL"; then
-  echo "❌ CONFIG_URL http/https olmalı: $CONFIG_URL"
-  exit 1
-fi
-
-# ICON_URL boş olabilir ama doluysa doğrula
-if [[ -n "$ICON_URL" && ! "$(is_http_url "$ICON_URL"; echo $?)" == "0" ]]; then
-  echo "❌ ICON_URL http/https olmalı: $ICON_URL"
-  exit 1
-fi
-
-# Gizlilik URL opsiyonel ama doluysa doğrula
-if [[ -n "$PRIVACY_URL" && ! "$(is_http_url "$PRIVACY_URL"; echo $?)" == "0" ]]; then
-  echo "❌ PRIVACY_URL http/https olmalı: $PRIVACY_URL"
-  exit 1
-fi
+if ! is_pkg "$PACKAGE_NAME"; then echo "❌ Paket adı formatı hatalı: $PACKAGE_NAME"; exit 1; fi
+if ! is_int "$VERSION_CODE"; then echo "❌ VERSION_CODE sayı olmalı: $VERSION_CODE"; exit 1; fi
+if ! is_http_url "$CONFIG_URL"; then echo "❌ CONFIG_URL http/https olmalı: $CONFIG_URL"; exit 1; fi
+if [[ -n "$ICON_URL" ]] && ! is_http_url "$ICON_URL"; then echo "❌ ICON_URL http/https olmalı: $ICON_URL"; exit 1; fi
+if [[ -n "$PRIVACY_URL" ]] && ! is_http_url "$PRIVACY_URL"; then echo "❌ PRIVACY_URL http/https olmalı: $PRIVACY_URL"; exit 1; fi
 
 echo "============================================================"
-echo "   🚀 TITAN APEX V6000 - PROJE OLUŞTURMA BAŞLATILIYOR"
+echo "   🚀 TITAN APEX V6000.10 - PROJE OLUŞTURMA BAŞLIYOR"
 echo "   📦 PAKET ADI  : $PACKAGE_NAME"
 echo "   📱 UYGULAMA   : $APP_NAME"
 echo "   🌍 CONFIG URL : $CONFIG_URL"
-echo "   🔒 SECURITY   : SIKI PLUS (STRICT MODE)"
+echo "   🧩 MEDIA3     : $MEDIA3_VER"
 echo "============================================================"
 
 # ------------------------------------------------------------------
-# 1. SİSTEM KONTROLLERİ VE GEREKSİNİMLER
+# 1) ImageMagick (opsiyonel)
 # ------------------------------------------------------------------
 echo "⚙️ [1/18] Sistem bağımlılıkları kontrol ediliyor..."
-
 if ! command -v convert &> /dev/null; then
-    echo "⚠️ 'convert' (ImageMagick) bulunamadı. Yüklenmeye çalışılıyor..."
+    echo "⚠️ 'convert' (ImageMagick) yok. Kurmayı deniyorum..."
     sudo apt-get update >/dev/null 2>&1 || true
     sudo apt-get install -y imagemagick >/dev/null 2>&1 || true
 fi
 
 # ------------------------------------------------------------------
-# 2. PROJE TEMİZLİĞİ VE DİZİN YAPISI
+# 2) Temizlik
 # ------------------------------------------------------------------
 echo "🧹 [2/18] Eski proje dosyaları temizleniyor..."
-
-# Kaynak klasörlerini temizle
-rm -rf app/src/main/res/drawable*
-rm -rf app/src/main/res/mipmap*
-rm -rf app/src/main/res/values*
-rm -rf app/src/main/res/values-tr*
-rm -rf app/src/main/java/com/base/app/*
-
-# Build önbelleklerini temizle
-rm -rf .gradle
-rm -rf app/build
-rm -rf build
-
-echo "📂 [3/18] Yeni dizin yapısı oluşturuluyor..."
-mkdir -p "app/src/main/java/com/base/app"
-mkdir -p "app/src/main/res/mipmap-xxxhdpi"
-mkdir -p "app/src/main/res/values"
-mkdir -p "app/src/main/res/values-tr"
-mkdir -p "app/src/main/res/xml"
-mkdir -p "app/src/main/res/layout"
-mkdir -p "app/src/main/res/menu"
+rm -rf app/src/main/res/drawable* || true
+rm -rf app/src/main/res/mipmap* || true
+rm -rf app/src/main/res/values* || true
+rm -rf app/src/main/res/values-tr* || true
+rm -rf app/src/main/java/com/base/app/* || true
+rm -rf .gradle app/build build || true
 
 # ------------------------------------------------------------------
-# 3. İKON İŞLEME MOTORU (GÜÇLENDİRİLMİŞ)
+# 3) Dizinler
+# ------------------------------------------------------------------
+echo "📂 [3/18] Dizin yapısı oluşturuluyor..."
+mkdir -p app/src/main/java/com/base/app
+mkdir -p app/src/main/res/xml
+mkdir -p app/src/main/res/layout
+mkdir -p app/src/main/res/menu
+mkdir -p app/src/main/res/values
+mkdir -p app/src/main/res/values-tr
+
+# mipmap klasörleri
+mkdir -p app/src/main/res/mipmap-mdpi
+mkdir -p app/src/main/res/mipmap-hdpi
+mkdir -p app/src/main/res/mipmap-xhdpi
+mkdir -p app/src/main/res/mipmap-xxhdpi
+mkdir -p app/src/main/res/mipmap-xxxhdpi
+
+# ------------------------------------------------------------------
+# 4) İkon motoru (güçlü)
 # ------------------------------------------------------------------
 echo "🖼️ [4/18] Uygulama ikonu işleniyor..."
-ICON_TARGET="app/src/main/res/mipmap-xxxhdpi/ic_launcher.png"
 TEMP_ICON="icon_temp.png"
 
 safe_curl_icon() {
   local url="$1"
   local out="$2"
-  # Sıkı curl: fail + retry + timeout + TLS
   curl --fail --silent --show-error -L \
     --retry 3 --retry-delay 1 --connect-timeout 10 --max-time 25 \
     -A "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123 Safari/537.36" \
@@ -136,34 +122,47 @@ safe_curl_icon() {
   return 0
 }
 
-# İkonu indirmeyi dene (ICON_URL boş olabilir)
 if [[ -n "$ICON_URL" ]]; then
   safe_curl_icon "$ICON_URL" "$TEMP_ICON" || true
 fi
 
-if [ -s "$TEMP_ICON" ]; then
-    if command -v convert &> /dev/null; then
-        # ImageMagick ile boyutlandır ve şeffaflık koru
-        convert "$TEMP_ICON" -resize 512x512! -background none -flatten "$ICON_TARGET"
-    else
-        cp "$TEMP_ICON" "$ICON_TARGET"
-    fi
-else
-    echo "⚠️ İkon indirilemedi. Varsayılan ikon oluşturuluyor..."
-    if command -v convert &> /dev/null; then
-        convert -size 512x512 xc:#4f46e5 -fill white -gravity center -pointsize 150 -annotate 0 "APP" "$ICON_TARGET"
-    else
-        # En kötü ihtimal: boş dosya bırakma -> build patlamasın diye küçük placeholder üret
-        printf '' > "$ICON_TARGET"
-    fi
+make_placeholder() {
+  local out="$1"
+  if command -v convert &> /dev/null; then
+    convert -size 1024x1024 xc:#4f46e5 -fill white -gravity center -pointsize 260 -annotate 0 "APP" "$out"
+  else
+    printf '' > "$out"
+  fi
+}
+
+if [ ! -s "$TEMP_ICON" ]; then
+  echo "⚠️ İkon indirilemedi. Placeholder üretiliyor..."
+  make_placeholder "$TEMP_ICON"
 fi
+
+gen_icon() {
+  local size="$1"
+  local out="$2"
+  if command -v convert &> /dev/null; then
+    convert "$TEMP_ICON" -resize "${size}x${size}!" -background none -flatten "$out"
+  else
+    cp "$TEMP_ICON" "$out"
+  fi
+}
+
+gen_icon 48   app/src/main/res/mipmap-mdpi/ic_launcher.png
+gen_icon 72   app/src/main/res/mipmap-hdpi/ic_launcher.png
+gen_icon 96   app/src/main/res/mipmap-xhdpi/ic_launcher.png
+gen_icon 144  app/src/main/res/mipmap-xxhdpi/ic_launcher.png
+gen_icon 192  app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+
 rm -f "$TEMP_ICON" || true
 
 # ------------------------------------------------------------------
-# 4. GRADLE AYARLARI (SETTINGS.GRADLE)
+# 5) settings.gradle
 # ------------------------------------------------------------------
 echo "📦 [5/18] settings.gradle oluşturuluyor..."
-cat > settings.gradle <<EOF
+cat > settings.gradle <<'EOF'
 pluginManagement {
     repositories {
         google()
@@ -184,20 +183,17 @@ include ':app'
 EOF
 
 # ------------------------------------------------------------------
-# 5. ROOT BUILD.GRADLE
+# 6) root build.gradle
 # ------------------------------------------------------------------
 echo "📦 [6/18] Root build.gradle oluşturuluyor..."
-cat > build.gradle <<EOF
+cat > build.gradle <<'EOF'
 buildscript {
     repositories {
         google()
         mavenCentral()
     }
     dependencies {
-        // Android Gradle Plugin (Stabil Sürüm)
         classpath 'com.android.tools.build:gradle:8.2.1'
-
-        // Google Services Plugin (Firebase İçin)
         classpath 'com.google.gms:google-services:4.4.1'
     }
 }
@@ -207,16 +203,15 @@ task clean(type: Delete) {
 EOF
 
 # ------------------------------------------------------------------
-# 6. GOOGLE SERVICES JSON ONARIM
+# 7) google-services.json kontrol/onarım
 # ------------------------------------------------------------------
 echo "🔧 [7/18] google-services.json kontrol ediliyor..."
 JSON_FILE="app/google-services.json"
-
 if [ -f "$JSON_FILE" ]; then
-    echo "✅ JSON dosyası bulundu. Paket adı güncelleniyor: $PACKAGE_NAME"
-    sed -i 's/"package_name": *"[^"]*"/"package_name": "'"$PACKAGE_NAME"'"/g' "$JSON_FILE"
+    echo "✅ JSON bulundu, package_name güncelleniyor: $PACKAGE_NAME"
+    sed -i 's/"package_name": *"[^"]*"/"package_name": "'"$PACKAGE_NAME"'"/g' "$JSON_FILE" || true
 else
-    echo "⚠️ JSON dosyası bulunamadı! Dummy JSON oluşturuluyor (Push çalışmaz)."
+    echo "⚠️ JSON yok. Dummy oluşturuluyor (Push çalışmaz)."
     cat > "$JSON_FILE" <<EOF
 {
   "project_info": {
@@ -233,9 +228,7 @@ else
         }
       },
       "api_key": [
-        {
-          "current_key": "dummy_api_key"
-        }
+        { "current_key": "dummy_api_key" }
       ]
     }
   ]
@@ -244,9 +237,23 @@ EOF
 fi
 
 # ------------------------------------------------------------------
-# 7. APP BUILD.GRADLE (MODÜL)
+# 8) app/build.gradle
 # ------------------------------------------------------------------
 echo "📚 [8/18] App modülü yapılandırılıyor..."
+# cleartext sadece config_url https değilse açık
+CLEAR_OK="true"
+if [[ "$CONFIG_URL" == https://* ]]; then
+  CLEAR_OK="false"
+fi
+
+# FFmpeg opsiyonel dependency (GPL) - kapalıysa eklenmez
+FFMPEG_DEP=""
+if [[ "$ENABLE_FFMPEG_EXT" == "true" ]]; then
+  # UYARI: GPL lisanslı olabilir; ticari dağıtımda risk.
+  # Jellyfin prebuilt örnek artifact:
+  FFMPEG_DEP="implementation 'org.jellyfin.media3:media3-ffmpeg-decoder:1.8.0+1'"
+fi
+
 cat > app/build.gradle <<EOF
 plugins {
     id 'com.android.application'
@@ -294,7 +301,6 @@ android {
         targetCompatibility JavaVersion.VERSION_1_8
     }
 
-    // Lint hatalarını yoksay (Build başarısı için kritik)
     lint {
         abortOnError false
         checkReleaseBuilds false
@@ -302,37 +308,42 @@ android {
 }
 
 dependencies {
-    // Android Core
     implementation 'androidx.appcompat:appcompat:1.6.1'
     implementation 'com.google.android.material:material:1.11.0'
     implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
 
-    // Firebase BOM & Services
     implementation(platform('com.google.firebase:firebase-bom:32.7.0'))
     implementation 'com.google.firebase:firebase-messaging'
     implementation 'com.google.firebase:firebase-analytics'
 
-    // ExoPlayer (Media3)
-    implementation 'androidx.media3:media3-exoplayer:1.2.0'
-    implementation 'androidx.media3:media3-exoplayer-hls:1.2.0'
-    implementation 'androidx.media3:media3-ui:1.2.0'
-    implementation 'androidx.media3:media3-datasource-okhttp:1.2.0'
+    // Media3 - MAX COMPAT
+    implementation "androidx.media3:media3-exoplayer:\$MEDIA3_VER"
+    implementation "androidx.media3:media3-exoplayer-hls:\$MEDIA3_VER"
+    implementation "androidx.media3:media3-exoplayer-dash:\$MEDIA3_VER"
+    implementation "androidx.media3:media3-exoplayer-smoothstreaming:\$MEDIA3_VER"
+    implementation "androidx.media3:media3-exoplayer-rtsp:\$MEDIA3_VER"
+    implementation "androidx.media3:media3-ui:\$MEDIA3_VER"
+    implementation "androidx.media3:media3-datasource-okhttp:\$MEDIA3_VER"
 
-    // Image Loading
+    // Glide
     implementation 'com.github.bumptech.glide:glide:4.16.0'
 
-    // Ad Networks
+    // Ads
     implementation 'com.unity3d.ads:unity-ads:4.9.2'
     implementation 'com.google.android.gms:play-services-ads:22.6.0'
+
+    // OkHttp (bazı build’lerde datasource-okhttp için net olsun)
+    implementation 'com.squareup.okhttp3:okhttp:4.12.0'
+
+    $FFMPEG_DEP
 }
 EOF
 
 # ------------------------------------------------------------------
-# 8. MANIFEST VE XML KAYNAKLARI (GÜÇLENDİRİLMİŞ)
+# 9) Resources + Manifest + Proguard
 # ------------------------------------------------------------------
-echo "📜 [9/18] Manifest ve XML kaynakları oluşturuluyor..."
+echo "📜 [9/18] Manifest ve kaynaklar oluşturuluyor..."
 
-# Strings (EN default)
 cat > app/src/main/res/values/strings.xml <<EOF
 <resources>
     <string name="app_name">$APP_NAME</string>
@@ -347,7 +358,6 @@ cat > app/src/main/res/values/strings.xml <<EOF
 </resources>
 EOF
 
-# Strings (TR)
 cat > app/src/main/res/values-tr/strings.xml <<EOF
 <resources>
     <string name="app_name">$APP_NAME</string>
@@ -362,12 +372,6 @@ cat > app/src/main/res/values-tr/strings.xml <<EOF
 </resources>
 EOF
 
-# Network Security Config (Sıkı Plus: https ise cleartext kapatmaya hazır)
-CLEAR_OK="true"
-if [[ "$CONFIG_URL" == https://* ]]; then
-  CLEAR_OK="false"
-fi
-
 cat > app/src/main/res/xml/network_security_config.xml <<EOF
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
@@ -379,8 +383,7 @@ cat > app/src/main/res/xml/network_security_config.xml <<EOF
 </network-security-config>
 EOF
 
-# Styles
-cat > app/src/main/res/values/styles.xml <<EOF
+cat > app/src/main/res/values/styles.xml <<'EOF'
 <resources>
     <style name="AppTheme" parent="Theme.MaterialComponents.Light.NoActionBar">
         <item name="android:windowNoTitle">true</item>
@@ -397,7 +400,6 @@ cat > app/src/main/res/values/styles.xml <<EOF
 </resources>
 EOF
 
-# Proguard kuralları (Player + WebView + JSON için temel)
 cat > app/proguard-rules.pro <<'EOF'
 -keep class org.json.** { *; }
 -keep class androidx.media3.** { *; }
@@ -408,7 +410,6 @@ cat > app/proguard-rules.pro <<'EOF'
 -dontwarn org.conscrypt.**
 EOF
 
-# AndroidManifest.xml
 cat > app/src/main/AndroidManifest.xml <<EOF
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
@@ -464,10 +465,10 @@ cat > app/src/main/AndroidManifest.xml <<EOF
 EOF
 
 # ------------------------------------------------------------------
-# 9. JAVA SINIFI: ADS MANAGER (AÇIK KAYNAK)
+# 10) AdsManager.java
 # ------------------------------------------------------------------
 echo "☕ [10/18] Java: AdsManager oluşturuluyor..."
-cat > "app/src/main/java/com/base/app/AdsManager.java" <<EOF
+cat > app/src/main/java/com/base/app/AdsManager.java <<'EOF'
 package com.base.app;
 
 import android.app.Activity;
@@ -475,11 +476,9 @@ import android.view.ViewGroup;
 import org.json.JSONObject;
 import androidx.annotation.NonNull;
 
-// Unity Ads
 import com.unity3d.ads.*;
 import com.unity3d.services.banners.*;
 
-// AdMob
 import com.google.android.gms.ads.*;
 import com.google.android.gms.ads.interstitial.*;
 
@@ -492,7 +491,6 @@ public class AdsManager {
     private static boolean interActive = false;
     private static String provider = "UNITY";
 
-    // Reklam Kimlikleri
     private static String unityGameId = "";
     private static String unityBannerId = "";
     private static String unityInterId = "";
@@ -501,9 +499,6 @@ public class AdsManager {
 
     private static InterstitialAd mAdMobInter;
 
-    /**
-     * Reklam Sistemini Başlatır
-     */
     public static void init(Activity activity, JSONObject config) {
         try {
             if (config == null) return;
@@ -513,37 +508,28 @@ public class AdsManager {
             bannerActive = config.optBoolean("banner_active");
             interActive = config.optBoolean("inter_active");
             frequency = Math.max(1, config.optInt("inter_freq", 3));
-
             if (!isEnabled) return;
 
-            // Unity Başlatma
             if (provider.equals("UNITY") || provider.equals("BOTH")) {
                 unityGameId = config.optString("unity_game_id");
                 unityBannerId = config.optString("unity_banner_id");
                 unityInterId = config.optString("unity_inter_id");
-
                 if (!unityGameId.isEmpty()) {
                     UnityAds.initialize(activity.getApplicationContext(), unityGameId, false, null);
                 }
             }
 
-            // AdMob Başlatma
             if (provider.equals("ADMOB") || provider.equals("BOTH")) {
                 admobBannerId = config.optString("admob_banner_id");
                 admobInterId = config.optString("admob_inter_id");
-
                 MobileAds.initialize(activity, initializationStatus -> {});
                 loadAdMobInter(activity);
             }
-
         } catch (Exception e) {
             e.printStackTrace();
         }
     }
 
-    /**
-     * AdMob Geçiş Reklamını Önden Yükler
-     */
     private static void loadAdMobInter(Activity activity) {
         if (!interActive || admobInterId.isEmpty()) return;
 
@@ -556,44 +542,31 @@ public class AdsManager {
         });
     }
 
-    /**
-     * Banner Gösterir
-     */
     public static void showBanner(Activity activity, ViewGroup container) {
         if (!isEnabled || !bannerActive) return;
 
         container.removeAllViews();
 
-        // AdMob Banner
         if ((provider.equals("ADMOB") || provider.equals("BOTH")) && !admobBannerId.isEmpty()) {
             AdView adView = new AdView(activity);
             adView.setAdSize(AdSize.BANNER);
             adView.setAdUnitId(admobBannerId);
             container.addView(adView);
             adView.loadAd(new AdRequest.Builder().build());
-        }
-        // Unity Banner
-        else if ((provider.equals("UNITY") || provider.equals("BOTH")) && !unityBannerId.isEmpty()) {
+        } else if ((provider.equals("UNITY") || provider.equals("BOTH")) && !unityBannerId.isEmpty()) {
             BannerView bannerView = new BannerView(activity, unityBannerId, new UnityBannerSize(320, 50));
             bannerView.load();
             container.addView(bannerView);
         }
     }
 
-    /**
-     * Geçiş Reklamı Kontrolü ve Gösterimi
-     */
     public static void checkInter(Activity activity, Runnable onComplete) {
-        if (!isEnabled || !interActive) {
-            onComplete.run();
-            return;
-        }
+        if (!isEnabled || !interActive) { onComplete.run(); return; }
 
         counter++;
         if (counter >= frequency) {
             counter = 0;
 
-            // Önce AdMob Dene
             if ((provider.equals("ADMOB") || provider.equals("BOTH")) && mAdMobInter != null) {
                 mAdMobInter.show(activity);
                 mAdMobInter = null;
@@ -602,27 +575,19 @@ public class AdsManager {
                 return;
             }
 
-            // Sonra Unity Dene
             if ((provider.equals("UNITY") || provider.equals("BOTH")) && !unityInterId.isEmpty()) {
                 if (UnityAds.isInitialized()) {
                     UnityAds.load(unityInterId, new IUnityAdsLoadListener() {
                         @Override
                         public void onUnityAdsAdLoaded(String placementId) {
                             UnityAds.show(activity, placementId, new IUnityAdsShowListener() {
-                                @Override
-                                public void onUnityAdsShowComplete(String placementId, UnityAds.UnityAdsShowCompletionState state) { onComplete.run(); }
-                                @Override
-                                public void onUnityAdsShowFailure(String placementId, UnityAds.UnityAdsShowError error, String message) { onComplete.run(); }
-                                @Override
-                                public void onUnityAdsShowStart(String placementId) {}
-                                @Override
-                                public void onUnityAdsShowClick(String placementId) {}
+                                @Override public void onUnityAdsShowComplete(String placementId, UnityAds.UnityAdsShowCompletionState state) { onComplete.run(); }
+                                @Override public void onUnityAdsShowFailure(String placementId, UnityAds.UnityAdsShowError error, String message) { onComplete.run(); }
+                                @Override public void onUnityAdsShowStart(String placementId) {}
+                                @Override public void onUnityAdsShowClick(String placementId) {}
                             });
                         }
-                        @Override
-                        public void onUnityAdsFailedToLoad(String placementId, UnityAds.UnityAdsLoadError error, String message) {
-                            onComplete.run();
-                        }
+                        @Override public void onUnityAdsFailedToLoad(String placementId, UnityAds.UnityAdsLoadError error, String message) { onComplete.run(); }
                     });
                     return;
                 }
@@ -637,10 +602,10 @@ public class AdsManager {
 EOF
 
 # ------------------------------------------------------------------
-# 10. JAVA SINIFI: FIREBASE MESSAGING (BİLDİRİM)
+# 11) MyFirebaseMessagingService.java
 # ------------------------------------------------------------------
 echo "🔥 [11/18] Java: FirebaseMessagingService oluşturuluyor..."
-cat > "app/src/main/java/com/base/app/MyFirebaseMessagingService.java" <<EOF
+cat > app/src/main/java/com/base/app/MyFirebaseMessagingService.java <<'EOF'
 package com.base.app;
 
 import android.app.NotificationChannel;
@@ -663,9 +628,7 @@ public class MyFirebaseMessagingService extends FirebaseMessagingService {
         } else if (remoteMessage.getData().size() > 0) {
             String title = remoteMessage.getData().get("title");
             String body = remoteMessage.getData().get("body");
-            if(title != null && body != null) {
-                sendNotification(title, body);
-            }
+            if(title != null && body != null) sendNotification(title, body);
         }
     }
 
@@ -699,9 +662,7 @@ public class MyFirebaseMessagingService extends FirebaseMessagingService {
                 (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            NotificationChannel channel = new NotificationChannel(channelId,
-                    "Genel Bildirimler",
-                    NotificationManager.IMPORTANCE_DEFAULT);
+            NotificationChannel channel = new NotificationChannel(channelId, "Genel Bildirimler", NotificationManager.IMPORTANCE_DEFAULT);
             notificationManager.createNotificationChannel(channel);
         }
 
@@ -710,11 +671,11 @@ public class MyFirebaseMessagingService extends FirebaseMessagingService {
 }
 EOF
 
-# --------------------------------------------------------
-# 11. JAVA SINIFI: MAIN ACTIVITY (ULTRA GELİŞTİRİLDİ)
-# --------------------------------------------------------
-echo "📱 [12/18] Java: MainActivity (Ultra + Active/Passive + Menus + Welcome) oluşturuluyor..."
-cat > "app/src/main/java/com/base/app/MainActivity.java" <<EOF
+# ------------------------------------------------------------------
+# 12) MainActivity.java (senin sistemin - korunarak)
+# ------------------------------------------------------------------
+echo "📱 [12/18] Java: MainActivity oluşturuluyor..."
+cat > app/src/main/java/com/base/app/MainActivity.java <<EOF
 package com.base.app;
 
 import android.app.*;
@@ -726,12 +687,15 @@ import android.graphics.*;
 import android.graphics.drawable.*;
 import android.net.Uri;
 import android.content.pm.PackageManager;
+
 import org.json.*;
 import java.io.*;
 import java.net.*;
 import java.util.*;
+
 import com.bumptech.glide.Glide;
 import com.google.firebase.messaging.FirebaseMessaging;
+
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import com.google.android.material.bottomnavigation.BottomNavigationView;
@@ -739,34 +703,29 @@ import com.google.android.material.bottomnavigation.BottomNavigationView;
 public class MainActivity extends Activity {
 
     private String CONFIG_URL = "$CONFIG_URL";
-    private String PRIVACY_URL = "${PRIVACY_URL:-}";
+    private String PRIVACY_URL = "${PRIVACY_URL}";
     private LinearLayout container;
     private TextView titleTxt;
     private ImageView splash, refreshBtn, shareBtn, tgBtn;
     private LinearLayout headerLayout, currentRow;
 
-    // UI Config
     private String hColor="#2196F3", tColor="#FFFFFF", bColor="#F0F0F0", fColor="#FF9800", menuType="LIST";
     private String listType="CLASSIC", listItemBg="#FFFFFF", listIconShape="SQUARE", listBorderColor="#DDDDDD";
     private int listRadius=0, listBorderWidth=0;
     private String playerConfigStr="{}";
     private String telegramUrl="";
-
-    // Features
     private JSONObject featureConfig;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        // Android 13+ Bildirim izni
         if (Build.VERSION.SDK_INT >= 33) {
             if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
                 ActivityCompat.requestPermissions(this, new String[]{android.Manifest.permission.POST_NOTIFICATIONS}, 101);
             }
         }
 
-        // Token al + sync
         FirebaseMessaging.getInstance().getToken().addOnCompleteListener(task -> {
             if (task.isSuccessful() && task.getResult() != null) {
                 String token = task.getResult();
@@ -775,14 +734,12 @@ public class MainActivity extends Activity {
             }
         });
 
-        // Root
         RelativeLayout root = new RelativeLayout(this);
 
         splash = new ImageView(this);
         splash.setScaleType(ImageView.ScaleType.CENTER_CROP);
         root.addView(splash, new RelativeLayout.LayoutParams(-1,-1));
 
-        // Header
         headerLayout = new LinearLayout(this);
         headerLayout.setId(View.generateViewId());
         headerLayout.setPadding(30,30,30,30);
@@ -794,16 +751,12 @@ public class MainActivity extends Activity {
         titleTxt.setTypeface(null, Typeface.BOLD);
         headerLayout.addView(titleTxt, new LinearLayout.LayoutParams(0, -2, 1.0f));
 
-        // Telegram button (opsiyonel)
         tgBtn = new ImageView(this);
         tgBtn.setImageResource(android.R.drawable.ic_dialog_email);
         tgBtn.setPadding(20,0,20,0);
         tgBtn.setOnClickListener(v -> {
-            try {
-                if(telegramUrl != null && !telegramUrl.isEmpty()) {
-                    startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(telegramUrl)));
-                }
-            } catch(Exception e){}
+            try { if(telegramUrl != null && !telegramUrl.isEmpty()) startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(telegramUrl))); }
+            catch(Exception e){}
         });
         headerLayout.addView(tgBtn);
 
@@ -822,7 +775,6 @@ public class MainActivity extends Activity {
         hp.addRule(RelativeLayout.ALIGN_PARENT_TOP);
         root.addView(headerLayout, hp);
 
-        // Content
         ScrollView sv = new ScrollView(this);
         sv.setId(View.generateViewId());
         container = new LinearLayout(this);
@@ -842,11 +794,8 @@ public class MainActivity extends Activity {
         new Thread(() -> {
             try {
                 String baseUrl;
-                if (CONFIG_URL.contains("api.php")) {
-                    baseUrl = CONFIG_URL.substring(0, CONFIG_URL.indexOf("api.php"));
-                } else {
-                    baseUrl = CONFIG_URL.substring(0, CONFIG_URL.lastIndexOf("/") + 1);
-                }
+                if (CONFIG_URL.contains("api.php")) baseUrl = CONFIG_URL.substring(0, CONFIG_URL.indexOf("api.php"));
+                else baseUrl = CONFIG_URL.substring(0, CONFIG_URL.lastIndexOf("/") + 1);
 
                 URL url = new URL(baseUrl + "update_token.php");
                 HttpURLConnection conn = (HttpURLConnection) url.openConnection();
@@ -878,7 +827,6 @@ public class MainActivity extends Activity {
         ));
     }
 
-    // Rate Us (gelişmiş: bir daha gösterme)
     private void checkRateUs() {
         SharedPreferences prefs = getSharedPreferences("TITAN_PREFS", MODE_PRIVATE);
         boolean dont = prefs.getBoolean("rate_dont_show", false);
@@ -898,16 +846,13 @@ public class MainActivity extends Activity {
                     .setPositiveButton(getString(R.string.rate_now), (d, w) -> {
                         try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=" + getPackageName()))); } catch(Exception e){}
                     })
-                    .setNeutralButton(getString(R.string.dont_show_again), (d, w) -> {
-                        prefs.edit().putBoolean("rate_dont_show", true).apply();
-                    })
+                    .setNeutralButton(getString(R.string.dont_show_again), (d, w) -> prefs.edit().putBoolean("rate_dont_show", true).apply())
                     .setNegativeButton(getString(R.string.later), null)
                     .show();
             }
         }
     }
 
-    // Welcome Popup (gelişmiş: tekrar gösterme kontrolü)
     private void checkWelcomePopup() {
         if (featureConfig == null) return;
         JSONObject pop = featureConfig.optJSONObject("welcome_popup");
@@ -930,14 +875,11 @@ public class MainActivity extends Activity {
             }
 
             b.setPositiveButton(getString(R.string.ok), null);
-            b.setNeutralButton(getString(R.string.dont_show_again), (d, w) -> {
-                prefs.edit().putBoolean("welcome_dont_show", true).apply();
-            });
+            b.setNeutralButton(getString(R.string.dont_show_again), (d, w) -> prefs.edit().putBoolean("welcome_dont_show", true).apply());
             b.show();
         }
     }
 
-    // Bottom Nav
     private void renderBottomNav(JSONArray modules) {
         try {
             View svParent = (View) container.getParent();
@@ -948,7 +890,6 @@ public class MainActivity extends Activity {
             bnv.setBackgroundColor(Color.WHITE);
             bnv.setElevation(20f);
 
-            // Aktif modüller
             ArrayList<Integer> map = new ArrayList<>();
             for(int i=0;i<modules.length();i++){
                 JSONObject m = modules.getJSONObject(i);
@@ -986,9 +927,7 @@ public class MainActivity extends Activity {
         } catch(Exception e) { e.printStackTrace(); }
     }
 
-    // Menu tasarımları: 4 farklı stil
     private void applyMenuStyle(View v, int mode) {
-        // mode: 0 LIST, 1 GRID, 2 CARD, 3 ULTRA (yeni)
         int base = Color.parseColor(hColor);
         int focus = Color.parseColor(fColor);
 
@@ -996,23 +935,17 @@ public class MainActivity extends Activity {
         GradientDrawable focused = new GradientDrawable();
 
         if(mode==0){
-            normal.setColor(base);
-            normal.setCornerRadius(18);
-            focused.setColor(focus);
-            focused.setCornerRadius(18);
+            normal.setColor(base); normal.setCornerRadius(18);
+            focused.setColor(focus); focused.setCornerRadius(18);
             focused.setStroke(5, Color.WHITE);
         } else if(mode==1){
-            normal.setColor(adjust(base, 0.10f));
-            normal.setCornerRadius(28);
-            focused.setColor(adjust(focus, 0.10f));
-            focused.setCornerRadius(28);
+            normal.setColor(adjust(base, 0.10f)); normal.setCornerRadius(28);
+            focused.setColor(adjust(focus, 0.10f)); focused.setCornerRadius(28);
             focused.setStroke(6, Color.WHITE);
         } else if(mode==2){
-            normal.setColor(adjust(base, -0.10f));
-            normal.setCornerRadius(22);
+            normal.setColor(adjust(base, -0.10f)); normal.setCornerRadius(22);
             normal.setStroke(2, Color.parseColor("#80FFFFFF"));
-            focused.setColor(focus);
-            focused.setCornerRadius(22);
+            focused.setColor(focus); focused.setCornerRadius(22);
             focused.setStroke(6, Color.WHITE);
         } else {
             normal.setColor(Color.parseColor("#ffffff"));
@@ -1069,7 +1002,6 @@ public class MainActivity extends Activity {
             return;
         }
 
-        // CARD
         if(menuType.equals("CARD")) {
             TextView t = new TextView(this);
             t.setText(txt);
@@ -1087,7 +1019,6 @@ public class MainActivity extends Activity {
             return;
         }
 
-        // ULTRA (yeni menuType)
         if(menuType.equals("ULTRA")) {
             LinearLayout box = new LinearLayout(this);
             box.setOrientation(LinearLayout.VERTICAL);
@@ -1116,7 +1047,6 @@ public class MainActivity extends Activity {
             return;
         }
 
-        // LIST default
         Button b = new Button(this);
         b.setText(txt);
         b.setPadding(40,40,40,40);
@@ -1222,7 +1152,6 @@ public class MainActivity extends Activity {
                         new Handler().postDelayed(() -> splash.setVisibility(View.GONE), 3000);
                     }
 
-                    // Startup Mode (Genişletildi)
                     String sm = ui.optString("startup_mode", "MENU");
                     if(sm.equals("DIRECT")) {
                         String dType = ui.optString("direct_type", "WEB");
@@ -1237,7 +1166,6 @@ public class MainActivity extends Activity {
                         finish();
                         return;
                     } else if(sm.equals("KIOSK_WEB")) {
-                        // WebView ana ekran gibi çalışır
                         String dUrl = ui.optString("direct_url", "");
                         Intent i = new Intent(MainActivity.this, WebViewActivity.class);
                         i.putExtra("WEB_URL", dUrl);
@@ -1245,7 +1173,6 @@ public class MainActivity extends Activity {
                         finish();
                         return;
                     } else if(sm.equals("FIRST_ACTIVE")) {
-                        // İlk aktif modülü aç
                         JSONArray mods = j.optJSONArray("modules");
                         if(mods != null) {
                             for(int x=0;x<mods.length();x++){
@@ -1264,11 +1191,9 @@ public class MainActivity extends Activity {
                     }
                 }
 
-                // Player config
                 JSONObject pc = j.optJSONObject("player_config");
                 if(pc != null) playerConfigStr = pc.toString();
 
-                // Modüller
                 container.removeAllViews();
                 currentRow = null;
 
@@ -1280,10 +1205,7 @@ public class MainActivity extends Activity {
                 } else {
                     for(int i=0; i<m.length(); i++) {
                         JSONObject o = m.getJSONObject(i);
-
-                        // AKTIF / PASIF
                         if(!o.optBoolean("active", true)) continue;
-
                         addBtn(
                             o.optString("title","Item"),
                             o.optString("type","WEB"),
@@ -1296,10 +1218,7 @@ public class MainActivity extends Activity {
                     }
                 }
 
-                // Ads init
                 AdsManager.init(MainActivity.this, j.optJSONObject("ads_config"));
-
-                // Features
                 checkRateUs();
                 checkWelcomePopup();
 
@@ -1310,10 +1229,10 @@ public class MainActivity extends Activity {
 EOF
 
 # ------------------------------------------------------------------
-# 12. JAVA SINIFI: WEBVIEW ACTIVITY (UYGULAMADAN ÇIKMAZ)
+# 13) WebViewActivity.java
 # ------------------------------------------------------------------
 echo "🌐 [13/18] Java: WebViewActivity oluşturuluyor..."
-cat > "app/src/main/java/com/base/app/WebViewActivity.java" <<EOF
+cat > app/src/main/java/com/base/app/WebViewActivity.java <<'EOF'
 package com.base.app;
 
 import android.app.Activity;
@@ -1345,7 +1264,6 @@ public class WebViewActivity extends Activity {
             @Override
             public void onPageFinished(WebView view, String url) {
                 super.onPageFinished(view, url);
-
                 String token = getSharedPreferences("TITAN_PREFS", MODE_PRIVATE).getString("fcm_token", "");
                 if(!token.isEmpty()) {
                     w.loadUrl("javascript:if(typeof onTokenReceived === 'function'){ onTokenReceived('" + token + "'); }");
@@ -1355,10 +1273,7 @@ public class WebViewActivity extends Activity {
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, String url) {
                 if (url.startsWith("http")) return false;
-                try {
-                    Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
-                    startActivity(intent);
-                } catch (Exception e) {}
+                try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url))); } catch (Exception e) {}
                 return true;
             }
         });
@@ -1398,10 +1313,10 @@ public class WebViewActivity extends Activity {
 EOF
 
 # ------------------------------------------------------------------
-# 13. JAVA SINIFI: CHANNEL LIST ACTIVITY (LİSTE TİPİ + AKICILIK)
+# 14) ChannelListActivity.java
 # ------------------------------------------------------------------
 echo "📋 [14/18] Java: ChannelListActivity oluşturuluyor..."
-cat > "app/src/main/java/com/base/app/ChannelListActivity.java" <<'EOF'
+cat > app/src/main/java/com/base/app/ChannelListActivity.java <<'EOF'
 package com.base.app;
 
 import android.app.Activity;
@@ -1412,11 +1327,13 @@ import android.view.*;
 import android.widget.*;
 import android.graphics.drawable.*;
 import android.graphics.Color;
+
 import org.json.*;
 import java.io.*;
 import java.net.*;
 import java.util.*;
 import java.util.regex.*;
+
 import com.bumptech.glide.Glide;
 import com.bumptech.glide.request.RequestOptions;
 
@@ -1541,7 +1458,7 @@ public class ChannelListActivity extends Activity {
                             String kn = o.optString("h" + k + "Key"), kv = o.optString("h" + k + "Val");
                             if (!kn.isEmpty() && !kn.equals("0")) hd.put(kn, kv);
                         }
-                        groups.get(fl).add(new Item(o.optString("title"), u, o.optString("thumb_square"), hd.toString()));
+                        groups.get(fl).add(new Item(o.optString("title"), u.trim(), o.optString("thumb_square"), hd.toString()));
                     }
                 }
 
@@ -1555,24 +1472,29 @@ public class ChannelListActivity extends Activity {
                     for (String l : ln) {
                         l = l.trim();
                         if (l.isEmpty()) continue;
+
                         if (l.startsWith("#EXTINF")) {
                             if (l.contains(",")) ct = l.substring(l.lastIndexOf(",") + 1).trim();
                             Matcher mg = pg.matcher(l); if (mg.find()) cg = mg.group(1);
                             Matcher ml = pl.matcher(l); if (ml.find()) ci = ml.group(1);
+
                         } else if (l.startsWith("#EXTVLCOPT:")) {
                             String op = l.substring(11);
                             if (op.startsWith("http-referrer=")) ch.put("Referer", op.substring(14));
                             if (op.startsWith("http-user-agent=")) ch.put("User-Agent", op.substring(16));
                             if (op.startsWith("http-origin=")) ch.put("Origin", op.substring(12));
+
                         } else if (!l.startsWith("#")) {
                             if (!groups.containsKey(cg)) { groups.put(cg, new ArrayList<>()); gNames.add(cg); }
-                            groups.get(cg).add(new Item(ct, l, ci, ch.toString()));
+                            groups.get(cg).add(new Item(ct, l.trim(), ci, ch.toString()));
                             ct = "Channel"; ci = ""; ch = new JSONObject();
                         }
                     }
                 }
+
                 if (gNames.size() > 1) showGr();
                 else if (gNames.size() == 1) showCh(gNames.get(0));
+
             } catch (Exception e) {}
         }
     }
@@ -1588,13 +1510,15 @@ public class ChannelListActivity extends Activity {
                 LinearLayout l = new LinearLayout(ChannelListActivity.this);
                 l.setOrientation(0);
                 l.setGravity(16);
+
                 ImageView i = new ImageView(ChannelListActivity.this);
                 i.setId(1);
                 l.addView(i);
+
                 TextView t = new TextView(ChannelListActivity.this);
                 t.setId(2);
-                t.setTextColor(Color.BLACK);
                 l.addView(t);
+
                 v = l;
             }
             LinearLayout l = (LinearLayout) v;
@@ -1618,13 +1542,13 @@ public class ChannelListActivity extends Activity {
             LinearLayout.LayoutParams pa = new LinearLayout.LayoutParams(-1, -2);
             if ("CARD".equals(lType)) { pa.setMargins(0, 0, 0, 25); l.setPadding(30, 30, 30, 30); l.setElevation(5f); }
             else if ("MODERN".equals(lType)) { pa.setMargins(0, 0, 0, 15); l.setPadding(20, 50, 20, 50); }
-            else if ("GLASS".equals(lType)) { pa.setMargins(0,0,0,16); l.setPadding(26,26,26,26); l.setElevation(10f); }
             else { pa.setMargins(0, 0, 0, 8); l.setPadding(20, 20, 20, 20); }
             l.setLayoutParams(pa);
 
             ImageView im = v.findViewById(1);
             TextView tx = v.findViewById(2);
             tx.setTextColor(Color.parseColor(tC));
+
             im.setLayoutParams(new LinearLayout.LayoutParams(120, 120));
             ((LinearLayout.LayoutParams) im.getLayoutParams()).setMargins(0, 0, 30, 0);
 
@@ -1649,10 +1573,10 @@ public class ChannelListActivity extends Activity {
 EOF
 
 # ------------------------------------------------------------------
-# 14. JAVA SINIFI: PLAYER ACTIVITY (WATERMARK OVERLAY GERÇEK AKTİF)
+# 15) PlayerActivity.java (MAX FORMAT + uzantısız + redirect + sniff)
 # ------------------------------------------------------------------
-echo "🎥 [15/18] Java: PlayerActivity oluşturuluyor..."
-cat > "app/src/main/java/com/base/app/PlayerActivity.java" <<'EOF'
+echo "🎥 [15/18] Java: PlayerActivity (MAX COMPAT) oluşturuluyor..."
+cat > app/src/main/java/com/base/app/PlayerActivity.java <<'EOF'
 package com.base.app;
 
 import android.app.Activity;
@@ -1674,6 +1598,7 @@ import androidx.media3.exoplayer.DefaultLoadControl;
 import androidx.media3.exoplayer.upstream.DefaultAllocator;
 
 import org.json.JSONObject;
+import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.*;
@@ -1683,6 +1608,9 @@ public class PlayerActivity extends Activity {
     private PlayerView pv;
     private ProgressBar spin;
     private String vid, hdr, cfgStr;
+
+    // Sniff limit
+    private static final int SNIFF_BYTES = 2048;
 
     protected void onCreate(Bundle s) {
         super.onCreate(s);
@@ -1714,7 +1642,7 @@ public class PlayerActivity extends Activity {
         vid = getIntent().getStringExtra("VIDEO_URL");
         hdr = getIntent().getStringExtra("HEADERS_JSON");
 
-        // Watermark Overlay + ayarlanabilir
+        // Overlay + resize + rotate
         try {
             JSONObject c = (cfgStr != null && !cfgStr.isEmpty()) ? new JSONObject(cfgStr) : new JSONObject();
 
@@ -1755,59 +1683,184 @@ public class PlayerActivity extends Activity {
 
         setContentView(r);
 
-        if (vid != null && !vid.isEmpty()) new Res().execute(vid.trim());
+        if (vid != null && !vid.isEmpty()) new Resolve().execute(vid.trim());
     }
 
-    class Inf { String u, m; Inf(String uu, String mm) { u = uu; m = mm; } }
+    static class Info {
+        String finalUrl;
+        String mime; // Media3 MimeTypes or null
+        Info(String u, String m) { finalUrl = u; mime = m; }
+    }
 
-    class Res extends AsyncTask<String, Void, Inf> {
-        protected Inf doInBackground(String... p) {
-            String cu = p[0], dm = null;
+    private HttpURLConnection openConn(String url, String method, boolean range) throws Exception {
+        URL u = new URL(url);
+        HttpURLConnection c = (HttpURLConnection) u.openConnection();
+        c.setRequestMethod(method);
+        c.setInstanceFollowRedirects(false);
+        c.setConnectTimeout(9000);
+        c.setReadTimeout(14000);
+
+        // headers
+        String ua = "Mozilla/5.0";
+        if (hdr != null && !hdr.isEmpty()) {
+            JSONObject h = new JSONObject(hdr);
+            Iterator<String> k = h.keys();
+            while (k.hasNext()) {
+                String key = k.next();
+                String val = h.optString(key, "");
+                if (val == null) val = "";
+                if (key.equalsIgnoreCase("User-Agent")) ua = val;
+                else c.setRequestProperty(key, val);
+            }
+        }
+        c.setRequestProperty("User-Agent", ua);
+
+        if (range) {
+            c.setRequestProperty("Range", "bytes=0-" + (SNIFF_BYTES - 1));
+        }
+        return c;
+    }
+
+    private boolean looksLikeM3U(String s) {
+        if (s == null) return false;
+        s = s.trim();
+        return s.startsWith("#EXTM3U") || s.contains("#EXT-X-STREAM-INF") || s.contains("#EXT-X-TARGETDURATION");
+    }
+
+    private boolean looksLikeMPD(String s) {
+        if (s == null) return false;
+        String t = s.trim();
+        return t.startsWith("<?xml") && t.contains("<MPD") || t.startsWith("<MPD");
+    }
+
+    private boolean looksLikeSS(String s) {
+        if (s == null) return false;
+        String t = s.trim();
+        return t.contains("SmoothStreamingMedia");
+    }
+
+    private String mimeFromUrl(String u) {
+        String x = u.toLowerCase(Locale.ROOT);
+        if (x.contains(".m3u8")) return MimeTypes.APPLICATION_M3U8;
+        if (x.contains(".mpd")) return MimeTypes.APPLICATION_MPD;
+        if (x.contains(".ism/manifest") || x.contains("manifest(format=mpd-time-csf)") || x.contains("smoothstreaming")) return MimeTypes.APPLICATION_SS;
+        if (x.startsWith("rtsp://")) return MimeTypes.APPLICATION_RTSP;
+
+        if (x.endsWith(".mp3")) return MimeTypes.AUDIO_MPEG;
+        if (x.endsWith(".m4a")) return MimeTypes.AUDIO_MP4;
+        if (x.endsWith(".aac")) return MimeTypes.AUDIO_AAC;
+        if (x.endsWith(".wav")) return MimeTypes.AUDIO_WAV;
+        if (x.endsWith(".flac")) return MimeTypes.AUDIO_FLAC;
+        if (x.endsWith(".ogg") || x.endsWith(".opus")) return MimeTypes.AUDIO_OGG;
+
+        if (x.endsWith(".ts")) return MimeTypes.VIDEO_MP2T;
+        if (x.endsWith(".mp4") || x.endsWith(".mkv") || x.endsWith(".webm") || x.endsWith(".mov")) return MimeTypes.VIDEO_MP4; // progressive için net olmak adına
+        return null;
+    }
+
+    private String mimeFromContentType(String ct) {
+        if (ct == null) return null;
+        ct = ct.toLowerCase(Locale.ROOT);
+        if (ct.contains("mpegurl") || ct.contains("application/vnd.apple.mpegurl")) return MimeTypes.APPLICATION_M3U8;
+        if (ct.contains("dash") || ct.contains("mpd")) return MimeTypes.APPLICATION_MPD;
+        if (ct.contains("smoothstreaming") || ct.contains("application/vnd.ms-sstr+xml")) return MimeTypes.APPLICATION_SS;
+        if (ct.contains("video/mp2t")) return MimeTypes.VIDEO_MP2T;
+        if (ct.contains("audio/mpeg")) return MimeTypes.AUDIO_MPEG;
+        if (ct.contains("audio/aac")) return MimeTypes.AUDIO_AAC;
+        if (ct.contains("audio/mp4")) return MimeTypes.AUDIO_MP4;
+        if (ct.contains("audio/ogg")) return MimeTypes.AUDIO_OGG;
+        if (ct.contains("audio/flac")) return MimeTypes.AUDIO_FLAC;
+        if (ct.contains("video/mp4")) return MimeTypes.VIDEO_MP4;
+        return null;
+    }
+
+    class Resolve extends AsyncTask<String, Void, Info> {
+        protected Info doInBackground(String... p) {
+            String cur = p[0];
+            String guessed = mimeFromUrl(cur);
+            String contentType = null;
+
             try {
-                if (!cu.startsWith("http")) return new Inf(cu, null);
-                for (int i = 0; i < 5; i++) {
-                    URL u = new URL(cu);
-                    HttpURLConnection c = (HttpURLConnection) u.openConnection();
-                    c.setInstanceFollowRedirects(false);
+                if (!cur.startsWith("http") && !cur.startsWith("rtsp")) {
+                    return new Info(cur, guessed);
+                }
 
-                    if (hdr != null) {
-                        JSONObject h = new JSONObject(hdr);
-                        Iterator<String> k = h.keys();
-                        while (k.hasNext()) {
-                            String ky = k.next();
-                            c.setRequestProperty(ky, h.getString(ky));
-                        }
-                    } else c.setRequestProperty("User-Agent", "Mozilla/5.0");
-
-                    c.setConnectTimeout(8000);
-                    c.setReadTimeout(12000);
+                // Redirect çöz (maks 8)
+                for (int i = 0; i < 8; i++) {
+                    HttpURLConnection c = openConn(cur, "HEAD", false);
                     c.connect();
-                    int cd = c.getResponseCode();
-                    if (cd >= 300 && cd < 400) {
-                        String n = c.getHeaderField("Location");
-                        if (n != null) { cu = n; continue; }
-                    }
-                    dm = c.getContentType();
+                    int code = c.getResponseCode();
+                    contentType = c.getContentType();
+                    String loc = c.getHeaderField("Location");
                     c.disconnect();
+
+                    if (code >= 300 && code < 400 && loc != null && !loc.isEmpty()) {
+                        // relative redirect olabilir
+                        if (loc.startsWith("/")) {
+                            URL base = new URL(cur);
+                            loc = base.getProtocol() + "://" + base.getHost() + loc;
+                        }
+                        cur = loc;
+                        guessed = mimeFromUrl(cur);
+                        continue;
+                    }
                     break;
                 }
-            } catch (Exception e) {}
-            return new Inf(cu, dm);
+
+                // Content-Type ile mime çıkar
+                String m = mimeFromContentType(contentType);
+                if (m != null) return new Info(cur, m);
+
+                // URL ile çıkarabildiysek dön
+                if (guessed != null) return new Info(cur, guessed);
+
+                // Uzantısız ise sniff (Range GET)
+                HttpURLConnection g = openConn(cur, "GET", true);
+                g.connect();
+
+                InputStream is = g.getInputStream();
+                byte[] buf = new byte[SNIFF_BYTES];
+                int n = is.read(buf);
+                is.close();
+
+                String head = "";
+                if (n > 0) head = new String(buf, 0, n);
+                String ct2 = g.getContentType();
+                g.disconnect();
+
+                // önce ct2
+                String m2 = mimeFromContentType(ct2);
+                if (m2 != null) return new Info(cur, m2);
+
+                // sonra içerik sniff
+                if (looksLikeM3U(head)) return new Info(cur, MimeTypes.APPLICATION_M3U8);
+                if (looksLikeMPD(head)) return new Info(cur, MimeTypes.APPLICATION_MPD);
+                if (looksLikeSS(head)) return new Info(cur, MimeTypes.APPLICATION_SS);
+
+                // TS / MP4 / audio için ExoPlayer sniff’e bırak
+                return new Info(cur, null);
+
+            } catch (Exception e) {
+                return new Info(cur, guessed);
+            }
         }
 
-        protected void onPostExecute(Inf i) { init(i); }
+        protected void onPostExecute(Info i) { init(i); }
     }
 
-    void init(Inf i) {
+    void init(Info i) {
         if (pl != null) return;
+
         String ua = "Mozilla/5.0";
         Map<String, String> mp = new HashMap<>();
+
         if (hdr != null) {
             try {
                 JSONObject h = new JSONObject(hdr);
                 Iterator<String> k = h.keys();
                 while (k.hasNext()) {
-                    String ky = k.next(), vl = h.getString(ky);
+                    String ky = k.next();
+                    String vl = h.optString(ky, "");
                     if (ky.equalsIgnoreCase("User-Agent")) ua = vl;
                     else mp.put(ky, vl);
                 }
@@ -1839,11 +1892,8 @@ public class PlayerActivity extends Activity {
         });
 
         try {
-            MediaItem.Builder it = new MediaItem.Builder().setUri(Uri.parse(i.u));
-            if (i.m != null) {
-                if (i.m.contains("mpegurl")) it.setMimeType(MimeTypes.APPLICATION_M3U8);
-                else if (i.m.contains("dash")) it.setMimeType(MimeTypes.APPLICATION_MPD);
-            }
+            MediaItem.Builder it = new MediaItem.Builder().setUri(Uri.parse(i.finalUrl));
+            if (i.mime != null && !i.mime.isEmpty()) it.setMimeType(i.mime);
             pl.setMediaItem(it.build());
             pl.prepare();
         } catch (Exception e) {}
@@ -1860,9 +1910,10 @@ public class PlayerActivity extends Activity {
 EOF
 
 # ------------------------------------------------------------------
-# 15. İŞLEM TAMAMLANDI
+# 16) Bitti
 # ------------------------------------------------------------------
-echo "✅ [16/18] TITAN APEX V6000 Kaynak kodları başarıyla oluşturuldu."
-echo "🚀 Sıradaki Adım: YAML dosyasının 'Build Signed Release' komutunu çalıştırması."
-
-# Alsana dosyam simdi guncelle  <-- (Senin mesajın script içine karışmıştı, bash hata vermesin diye yorum yaptım)
+echo "✅ [16/18] TITAN APEX V6000.10 kaynak kodları oluşturuldu."
+echo "🧩 PLAYER: Redirect + uzantısız link + sniff + HLS/DASH/SS/RTSP + MP4/TS/AUDIO aktif."
+echo "⚠️ FFmpeg extension: ENABLE_FFMPEG_EXT=true yaparsan GPL lisans riskini kabul etmiş olursun."
+echo "🚀 Sıradaki adım: GitHub Actions 'Build Signed Release' çalışacak."
+echo "============================================================"
