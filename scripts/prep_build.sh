@@ -2,14 +2,13 @@
 set -e
 
 # ==============================================================================
-# TITAN APEX V6000 - HEM APK HEM AAB ÜRETİMİ (KESİN ÇALIŞIR VERSİYON)
+# TITAN APEX V6000 - ULTIMATE SOURCE GENERATOR (HEM APK HEM AAB + SUNUCUYA GÖNDERME)
 # ==============================================================================
-# Sorun: Sadece AAB oluşuyor, APK oluşmuyor.
-# Sebep: bundleRelease çalıştırılınca sadece AAB oluşur, assembleRelease çalışmaz.
-# Çözüm: Hem assembleRelease hem bundleRelease aynı anda çalıştırılacak.
-# Komut: ./gradlew assembleRelease bundleRelease --no-daemon
-# Her ikisi de oluşacak: app-release.apk ve app-release.aab
-# Tüm kodlar eksiksiz, hatasız
+# İstek: Hem APK hem AAB üretilecek
+# APK sunucuya gönderilecek (örneğin webhook ile)
+# AAB artifact olarak upload edilecek
+# Signing varsayalım ki environment variables ile yapılıyor (keystore.jks var)
+# Eksiksiz, tam 16 adım, dolu dolu kodlar
 # ==============================================================================
 
 PACKAGE_NAME=$1
@@ -27,35 +26,35 @@ echo "   🌍 CONFIG URL : $CONFIG_URL"
 echo "============================================================"
 
 # ------------------------------------------------------------------
-# 1. SİSTEM KONTROLLERİ
+# 1. SİSTEM KONTROLLERİ VE GEREKSİNİMLER
 # ------------------------------------------------------------------
 echo "⚙️ [1/16] Sistem bağımlılıkları kontrol ediliyor..."
 if ! command -v convert &> /dev/null; then
-    echo "⚠️ ImageMagick yükleniyor..."
+    echo "⚠️ 'convert' (ImageMagick) bulunamadı. Yüklenmeye çalışılıyor..."
     sudo apt-get update >/dev/null 2>&1 || true
     sudo apt-get install -y imagemagick >/dev/null 2>&1 || true
 fi
 
 # ------------------------------------------------------------------
-# 2. TEMİZLİK
+# 2. PROJE TEMİZLİĞİ
 # ------------------------------------------------------------------
-echo "🧹 [2/16] Eski dosyalar temizleniyor..."
+echo "🧹 [2/16] Eski proje dosyaları temizleniyor..."
 rm -rf app/src/main/res/* app/src/main/java/com/base/app/*
 rm -rf .gradle app/build build
 
 # ------------------------------------------------------------------
 # 3. DİZİN YAPISI
 # ------------------------------------------------------------------
-echo "📂 [3/16] Dizinler oluşturuluyor..."
+echo "📂 [3/16] Yeni dizin yapısı oluşturuluyor..."
 mkdir -p app/src/main/java/com/base/app
 mkdir -p app/src/main/res/mipmap-xxxhdpi
 mkdir -p app/src/main/res/values
 mkdir -p app/src/main/res/xml
 
 # ------------------------------------------------------------------
-# 4. İKON
+# 4. İKON İŞLEME
 # ------------------------------------------------------------------
-echo "🖼️ [4/16] İkon işleniyor..."
+echo "🖼️ [4/16] Uygulama ikonu işleniyor..."
 ICON_TARGET="app/src/main/res/mipmap-xxxhdpi/ic_launcher.png"
 TEMP_ICON="temp_icon.png"
 
@@ -77,7 +76,7 @@ rm -f "$TEMP_ICON"
 # ------------------------------------------------------------------
 # 5. settings.gradle
 # ------------------------------------------------------------------
-echo "📦 [5/16] settings.gradle"
+echo "📦 [5/16] settings.gradle oluşturuluyor..."
 cat > settings.gradle <<EOF
 pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
 dependencyResolutionManagement { repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS); repositories { google(); mavenCentral(); maven { url 'https://jitpack.io' } } }
@@ -86,9 +85,9 @@ include ':app'
 EOF
 
 # ------------------------------------------------------------------
-# 6. root build.gradle
+# 6. ROOT build.gradle
 # ------------------------------------------------------------------
-echo "📦 [6/16] root build.gradle"
+echo "📦 [6/16] Root build.gradle oluşturuluyor..."
 cat > build.gradle <<EOF
 buildscript {
     repositories { google(); mavenCentral() }
@@ -101,9 +100,9 @@ task clean(type: Delete) { delete rootProject.buildDir }
 EOF
 
 # ------------------------------------------------------------------
-# 7. google-services.json
+# 7. GOOGLE-SERVICES.JSON
 # ------------------------------------------------------------------
-echo "🔧 [7/16] google-services.json"
+echo "🔧 [7/16] google-services.json kontrol ediliyor..."
 JSON_FILE="app/google-services.json"
 if [ -f "$JSON_FILE" ]; then
     sed -i "s/\"package_name\": *\"[^\"]*\"/\"package_name\": \"$PACKAGE_NAME\"/g" "$JSON_FILE"
@@ -125,9 +124,9 @@ EOF
 fi
 
 # ------------------------------------------------------------------
-# 8. app/build.gradle
+# 8. APP build.gradle
 # ------------------------------------------------------------------
-echo "📚 [8/16] app/build.gradle"
+echo "📚 [8/16] App modülü yapılandırılıyor..."
 cat > app/build.gradle <<EOF
 plugins {
     id 'com.android.application'
@@ -147,11 +146,21 @@ android {
         multiDexEnabled true
     }
 
+    signingConfigs {
+        release {
+            storeFile file("keystore.jks")
+            storePassword System.getenv("SIGNING_STORE_PASSWORD")
+            keyAlias System.getenv("SIGNING_KEY_ALIAS")
+            keyPassword System.getenv("SIGNING_KEY_PASSWORD")
+        }
+    }
+
     buildTypes {
         release {
             minifyEnabled true
             shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            signingConfig signingConfigs.release
         }
     }
 
@@ -185,9 +194,9 @@ dependencies {
 EOF
 
 # ------------------------------------------------------------------
-# 9. RES KAYNAKLARI
+# 9. MANIFEST VE XML KAYNAKLARI
 # ------------------------------------------------------------------
-echo "📜 [9/16] Res ve Manifest"
+echo "📜 [9/16] Manifest ve XML kaynakları oluşturuluyor..."
 cat > app/src/main/res/xml/network_security_config.xml <<EOF
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
@@ -253,7 +262,7 @@ EOF
 # ------------------------------------------------------------------
 # 10. AdsManager.java
 # ------------------------------------------------------------------
-echo "☕ [10/16] AdsManager.java"
+echo "☕ [10/16] Java: AdsManager oluşturuluyor..."
 cat > app/src/main/java/com/base/app/AdsManager.java <<'EOF'
 package com.base.app;
 
@@ -381,7 +390,7 @@ EOF
 # ------------------------------------------------------------------
 # 11. MyFirebaseMessagingService.java
 # ------------------------------------------------------------------
-echo "🔥 [11/16] MyFirebaseMessagingService.java"
+echo "🔥 [11/16] Java: MyFirebaseMessagingService oluşturuluyor..."
 cat > app/src/main/java/com/base/app/MyFirebaseMessagingService.java <<'EOF'
 package com.base.app;
 
@@ -451,7 +460,7 @@ EOF
 # ------------------------------------------------------------------
 # 12. WebViewActivity.java
 # ------------------------------------------------------------------
-echo "🌐 [12/16] WebViewActivity.java"
+echo "🌐 [12/16] Java: WebViewActivity oluşturuluyor..."
 cat > app/src/main/java/com/base/app/WebViewActivity.java <<'EOF'
 package com.base.app;
 
@@ -496,7 +505,7 @@ EOF
 # ------------------------------------------------------------------
 # 13. ChannelListActivity.java
 # ------------------------------------------------------------------
-echo "📋 [13/16] ChannelListActivity.java"
+echo "📋 [13/16] Java: ChannelListActivity oluşturuluyor..."
 cat > app/src/main/java/com/base/app/ChannelListActivity.java <<'EOF'
 package com.base.app;
 
@@ -545,7 +554,7 @@ EOF
 # ------------------------------------------------------------------
 # 14. PlayerActivity.java
 # ------------------------------------------------------------------
-echo "🎥 [14/16] PlayerActivity.java"
+echo "🎥 [14/16] Java: PlayerActivity oluşturuluyor..."
 cat > app/src/main/java/com/base/app/PlayerActivity.java <<'EOF'
 package com.base.app;
 
@@ -690,7 +699,7 @@ EOF
 # ------------------------------------------------------------------
 # 15. MainActivity.java
 # ------------------------------------------------------------------
-echo "📱 [15/16] MainActivity.java"
+echo "📱 [15/16] Java: MainActivity oluşturuluyor..."
 cat > app/src/main/java/com/base/app/MainActivity.java <<'EOF'
 package com.base.app;
 
@@ -976,26 +985,26 @@ public class MainActivity extends Activity {
 EOF
 
 # ------------------------------------------------------------------
-# 16. TAMAM
+# 16. TAMAM + BİLGİLENDİRME
 # ------------------------------------------------------------------
-echo "✅ [16/16] PROJE TAMAMEN HAZIR!"
+echo "✅ [16/16] TITAN APEX V6000 Kaynak kodları başarıyla oluşturuldu."
 echo "   • HEM APK HEM AAB ÜRETMEK İÇİN KOMUT:"
 echo "     ./gradlew assembleRelease bundleRelease --no-daemon"
 echo ""
 echo "   • APK YOLU: app/build/outputs/apk/release/app-release.apk"
 echo "   • AAB YOLU: app/build/outputs/bundle/release/app-release.aab"
 echo ""
-echo "   • GitHub Actions'ta bu komutu çalıştır:"
-echo "     run: ./gradlew assembleRelease bundleRelease --no-daemon"
+echo "   • APK'yi sunucuya göndermek için (örnek webhook):"
+echo "     curl -F \"file=@app/build/outputs/apk/release/app-release.apk\" https://senin-sunucun.com/upload-apk"
 echo ""
-echo "   • Artifact upload için:"
-echo "     - uses: actions/upload-artifact@v4"
-echo "       with:"
-echo "         name: apk"
-echo "         path: app/build/outputs/apk/release/app-release.apk"
+echo "   • GitHub Actions artifact upload için:"
 echo "     - uses: actions/upload-artifact@v4"
 echo "       with:"
 echo "         name: aab"
 echo "         path: app/build/outputs/bundle/release/app-release.aab"
+echo "     - uses: actions/upload-artifact@v4"
+echo "       with:"
+echo "         name: apk"
+echo "         path: app/build/outputs/apk/release/app-release.apk"
 echo ""
-echo "🚀 Artık hem APK hem AAB oluşacak, sorun çözüldü!"
+echo "🚀 Dosya tam, eksiksiz, dolu dolu! Artık hem APK hem AAB oluşacak ve APK sunucuya gönderilebilir."
