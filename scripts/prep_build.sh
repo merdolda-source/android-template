@@ -1,7 +1,5 @@
 #!/bin/bash
-set -Eeuo pipefail
-IFS=$'\n\t'
-trap 'echo "❌ HATA: satır=$LINENO komut=$BASH_COMMAND" >&2' ERR
+set -e
 
 # ==============================================================================
 # TITAN APEX V6000 - ULTIMATE SOURCE GENERATOR
@@ -9,68 +7,24 @@ trap 'echo "❌ HATA: satır=$LINENO komut=$BASH_COMMAND" >&2' ERR
 # BU SCRIPT, SIKIŞTIRILMAMIŞ, TAM PROFESYONEL ANDROID PROJESİ OLUŞTURUR.
 # ==============================================================================
 
-PACKAGE_NAME="${1:-}"
-APP_NAME="${2:-}"
-CONFIG_URL="${3:-}"
-ICON_URL="${4:-}"
-VERSION_CODE="${5:-}"
-VERSION_NAME="${6:-}"
+PACKAGE_NAME=$1
+APP_NAME=$2
+CONFIG_URL=$3
+ICON_URL=$4
+VERSION_CODE=$5
+VERSION_NAME=$6
 
 echo "============================================================"
 echo "   🚀 TITAN APEX V6000 - PROJE OLUŞTURMA BAŞLATILIYOR"
 echo "   📦 PAKET ADI  : $PACKAGE_NAME"
 echo "   📱 UYGULAMA   : $APP_NAME"
 echo "   🌍 CONFIG URL : $CONFIG_URL"
-echo "   🧩 VERSION    : $VERSION_NAME ($VERSION_CODE)"
 echo "============================================================"
-
-# ------------------------------------------------------------------
-# VALIDATION
-# ------------------------------------------------------------------
-is_int() { [[ "${1:-}" =~ ^[0-9]+$ ]]; }
-is_pkg() { [[ "${1:-}" =~ ^[a-zA-Z][a-zA-Z0-9_]*(\.[a-zA-Z0-9_]+)+$ ]]; }
-is_http_url() { [[ "${1:-}" =~ ^https?:// ]]; }
-
-if [[ -z "$PACKAGE_NAME" || -z "$APP_NAME" || -z "$CONFIG_URL" || -z "$VERSION_CODE" || -z "$VERSION_NAME" ]]; then
-  echo "❌ Eksik parametre!"
-  echo "Kullanım: ./scripts/prep_build.sh <PACKAGE_NAME> <APP_NAME> <CONFIG_URL> <ICON_URL> <VERSION_CODE> <VERSION_NAME>"
-  exit 1
-fi
-
-if ! is_pkg "$PACKAGE_NAME"; then
-  echo "❌ Paket adı formatı hatalı: $PACKAGE_NAME"
-  exit 1
-fi
-
-if ! is_int "$VERSION_CODE"; then
-  echo "❌ VERSION_CODE sayı olmalı: $VERSION_CODE"
-  exit 1
-fi
-
-if ! is_http_url "$CONFIG_URL"; then
-  echo "❌ CONFIG_URL http/https olmalı: $CONFIG_URL"
-  exit 1
-fi
-
-if [[ -n "$ICON_URL" ]]; then
-  if ! is_http_url "$ICON_URL"; then
-    echo "❌ ICON_URL http/https olmalı: $ICON_URL"
-    exit 1
-  fi
-fi
-
-PKG_PATH="${PACKAGE_NAME//./\/}"
-JAVA_BASE="app/src/main/java/${PKG_PATH}"
 
 # ------------------------------------------------------------------
 # 1. SİSTEM KONTROLLERİ VE GEREKSİNİMLER
 # ------------------------------------------------------------------
 echo "⚙️ [1/16] Sistem bağımlılıkları kontrol ediliyor..."
-
-if ! command -v curl >/dev/null 2>&1; then
-  echo "❌ curl yok. Runner'da curl olmalı."
-  exit 1
-fi
 
 if ! command -v convert &> /dev/null; then
     echo "⚠️ 'convert' (ImageMagick) bulunamadı. Yüklenmeye çalışılıyor..."
@@ -83,78 +37,56 @@ fi
 # ------------------------------------------------------------------
 echo "🧹 [2/16] Eski proje dosyaları temizleniyor..."
 
-rm -rf app/src/main/res/drawable* || true
-rm -rf app/src/main/res/mipmap* || true
-rm -rf app/src/main/res/values* || true
-rm -rf app/src/main/res/xml || true
-rm -rf app/src/main/res/layout || true
-rm -rf app/src/main/res/menu || true
-rm -rf app/src/main/java || true
+# Kaynak klasörlerini temizle
+rm -rf app/src/main/res/drawable*
+rm -rf app/src/main/res/mipmap*
+rm -rf app/src/main/res/values*
+rm -rf app/src/main/java/com/base/app/*
 
-rm -rf .gradle || true
-rm -rf app/build || true
-rm -rf build || true
+# Build önbelleklerini temizle
+rm -rf .gradle 
+rm -rf app/build 
+rm -rf build
 
 echo "📂 [3/16] Yeni dizin yapısı oluşturuluyor..."
-mkdir -p "${JAVA_BASE}"
+mkdir -p "app/src/main/java/com/base/app"
 mkdir -p "app/src/main/res/mipmap-xxxhdpi"
-mkdir -p "app/src/main/res/mipmap-xxhdpi"
-mkdir -p "app/src/main/res/mipmap-xhdpi"
-mkdir -p "app/src/main/res/mipmap-hdpi"
-mkdir -p "app/src/main/res/mipmap-mdpi"
 mkdir -p "app/src/main/res/values"
 mkdir -p "app/src/main/res/xml"
 mkdir -p "app/src/main/res/layout"
 mkdir -p "app/src/main/res/menu"
-
-mkdir -p "app" || true
 
 # ------------------------------------------------------------------
 # 3. İKON İŞLEME MOTORU
 # ------------------------------------------------------------------
 echo "🖼️ [4/16] Uygulama ikonu işleniyor..."
 ICON_TARGET="app/src/main/res/mipmap-xxxhdpi/ic_launcher.png"
-TEMP_ICON="icon_temp.bin"
+TEMP_ICON="icon_temp.png"
 
-safe_curl() {
-  local url="$1"
-  local out="$2"
-  curl --fail --silent --show-error -L \
-    --retry 3 --retry-delay 1 --connect-timeout 10 --max-time 25 \
-    -A "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123 Safari/537.36" \
-    -o "$out" "$url"
-}
+# İkonu indirmeyi dene
+curl -s -L -k -A "Mozilla/5.0" -o "$TEMP_ICON" "$ICON_URL" || true
 
-if [[ -n "$ICON_URL" ]]; then
-  safe_curl "$ICON_URL" "$TEMP_ICON" || true
-fi
-
-if [[ -s "$TEMP_ICON" ]]; then
+if [ -s "$TEMP_ICON" ]; then
     if command -v convert &> /dev/null; then
-        convert "$TEMP_ICON" -resize 512x512\! -background none -flatten "$ICON_TARGET" || cp "$TEMP_ICON" "$ICON_TARGET"
+        # ImageMagick ile boyutlandır ve arkaplanı düzelt
+        convert "$TEMP_ICON" -resize 512x512! -background none -flatten "$ICON_TARGET"
     else
+        # Fallback: Direkt kopyala
         cp "$TEMP_ICON" "$ICON_TARGET"
     fi
 else
     echo "⚠️ İkon indirilemedi. Varsayılan ikon oluşturuluyor..."
     if command -v convert &> /dev/null; then
-        convert -size 512x512 xc:#4f46e5 -fill white -gravity center -pointsize 150 -annotate 0 "APP" "$ICON_TARGET" || true
-    else
-        : > "$ICON_TARGET"
+        convert -size 512x512 xc:#4f46e5 -fill white -gravity center -pointsize 150 -annotate 0 "APP" "$ICON_TARGET"
     fi
 fi
-rm -f "$TEMP_ICON" || true
-
-# diğer mipmaplere kopyala
-for d in mipmap-xxhdpi mipmap-xhdpi mipmap-hdpi mipmap-mdpi; do
-  cp -f "$ICON_TARGET" "app/src/main/res/${d}/ic_launcher.png" 2>/dev/null || true
-done
+rm -f "$TEMP_ICON"
 
 # ------------------------------------------------------------------
 # 4. GRADLE AYARLARI (SETTINGS.GRADLE)
 # ------------------------------------------------------------------
 echo "📦 [5/16] settings.gradle oluşturuluyor..."
-cat > settings.gradle <<'EOF'
+cat > settings.gradle <<EOF
 pluginManagement {
     repositories {
         google()
@@ -178,29 +110,23 @@ EOF
 # 5. ROOT BUILD.GRADLE
 # ------------------------------------------------------------------
 echo "📦 [6/16] Root build.gradle oluşturuluyor..."
-cat > build.gradle <<'EOF'
+cat > build.gradle <<EOF
 buildscript {
     repositories {
         google()
         mavenCentral()
     }
     dependencies {
+        // Android Gradle Plugin (Stabil Sürüm)
         classpath 'com.android.tools.build:gradle:8.2.1'
+        
+        // Google Services Plugin (Firebase İçin)
         classpath 'com.google.gms:google-services:4.4.1'
     }
 }
-tasks.register("clean", Delete) {
+task clean(type: Delete) {
     delete rootProject.buildDir
 }
-EOF
-
-# gradle.properties (stabil)
-cat > gradle.properties <<'EOF'
-org.gradle.jvmargs=-Xmx3g -Dfile.encoding=UTF-8
-android.useAndroidX=true
-android.enableJetifier=true
-org.gradle.parallel=true
-org.gradle.caching=true
 EOF
 
 # ------------------------------------------------------------------
@@ -209,9 +135,9 @@ EOF
 echo "🔧 [7/16] google-services.json kontrol ediliyor..."
 JSON_FILE="app/google-services.json"
 
-if [[ -f "$JSON_FILE" ]]; then
+if [ -f "$JSON_FILE" ]; then
     echo "✅ JSON dosyası bulundu. Paket adı güncelleniyor: $PACKAGE_NAME"
-    sed -i 's/"package_name":[[:space:]]*"[^"]*"/"package_name": "'"$PACKAGE_NAME"'"/g' "$JSON_FILE" || true
+    sed -i 's/"package_name": *"[^"]*"/"package_name": "'"$PACKAGE_NAME"'"/g' "$JSON_FILE"
 else
     echo "⚠️ JSON dosyası bulunamadı! Dummy JSON oluşturuluyor (Push çalışmaz)."
     cat > "$JSON_FILE" <<EOF
@@ -230,7 +156,9 @@ else
         }
       },
       "api_key": [
-        { "current_key": "dummy_api_key" }
+        {
+          "current_key": "dummy_api_key"
+        }
       ]
     }
   ]
@@ -249,13 +177,13 @@ plugins {
 }
 
 android {
-    namespace "$PACKAGE_NAME"
-    compileSdk 34
+    namespace 'com.base.app'
+    compileSdkVersion 34
 
     defaultConfig {
         applicationId "$PACKAGE_NAME"
-        minSdk 24
-        targetSdk 34
+        minSdkVersion 24
+        targetSdkVersion 34
         versionCode $VERSION_CODE
         versionName "$VERSION_NAME"
         multiDexEnabled true
@@ -277,17 +205,14 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
             signingConfig signingConfigs.release
         }
-        debug {
-            minifyEnabled false
-            shrinkResources false
-        }
     }
-
+    
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_8
         targetCompatibility JavaVersion.VERSION_1_8
     }
-
+    
+    // Lint hatalarını yoksay (Build başarısı için kritik)
     lint {
         abortOnError false
         checkReleaseBuilds false
@@ -295,32 +220,29 @@ android {
 }
 
 dependencies {
+    // Android Core
     implementation 'androidx.appcompat:appcompat:1.6.1'
     implementation 'com.google.android.material:material:1.11.0'
     implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
-
+    
+    // Firebase BOM & Services
     implementation(platform('com.google.firebase:firebase-bom:32.7.0'))
     implementation 'com.google.firebase:firebase-messaging'
     implementation 'com.google.firebase:firebase-analytics'
 
+    // ExoPlayer (Media3)
     implementation 'androidx.media3:media3-exoplayer:1.2.0'
     implementation 'androidx.media3:media3-exoplayer-hls:1.2.0'
     implementation 'androidx.media3:media3-ui:1.2.0'
     implementation 'androidx.media3:media3-datasource-okhttp:1.2.0'
-
+    
+    // Image Loading
     implementation 'com.github.bumptech.glide:glide:4.16.0'
-
+    
+    // Ad Networks
     implementation 'com.unity3d.ads:unity-ads:4.9.2'
     implementation 'com.google.android.gms:play-services-ads:22.6.0'
 }
-EOF
-
-# Proguard dosyası yoksa release build bazen patlar
-cat > app/proguard-rules.pro <<'EOF'
--keep class org.json.** { *; }
--keep class androidx.media3.** { *; }
--dontwarn okhttp3.**
--dontwarn okio.**
 EOF
 
 # ------------------------------------------------------------------
@@ -328,7 +250,8 @@ EOF
 # ------------------------------------------------------------------
 echo "📜 [9/16] Manifest ve XML kaynakları oluşturuluyor..."
 
-cat > app/src/main/res/xml/network_security_config.xml <<'EOF'
+# Network Security Config
+cat > app/src/main/res/xml/network_security_config.xml <<EOF
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
     <base-config cleartextTrafficPermitted="true">
@@ -339,7 +262,8 @@ cat > app/src/main/res/xml/network_security_config.xml <<'EOF'
 </network-security-config>
 EOF
 
-cat > app/src/main/res/values/styles.xml <<'EOF'
+# Styles
+cat > app/src/main/res/values/styles.xml <<EOF
 <resources>
     <style name="AppTheme" parent="Theme.MaterialComponents.Light.NoActionBar">
         <item name="android:windowNoTitle">true</item>
@@ -348,7 +272,7 @@ cat > app/src/main/res/values/styles.xml <<'EOF'
         <item name="colorPrimaryDark">#3700B3</item>
         <item name="colorAccent">#03DAC5</item>
     </style>
-
+    
     <style name="PlayerTheme" parent="Theme.AppCompat.NoActionBar">
         <item name="android:windowFullscreen">true</item>
         <item name="android:windowContentOverlay">@null</item>
@@ -356,12 +280,7 @@ cat > app/src/main/res/values/styles.xml <<'EOF'
 </resources>
 EOF
 
-cat > app/src/main/res/values/strings.xml <<EOF
-<resources>
-    <string name="app_name">$APP_NAME</string>
-</resources>
-EOF
-
+# AndroidManifest.xml
 cat > app/src/main/AndroidManifest.xml <<EOF
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
@@ -380,33 +299,30 @@ cat > app/src/main/AndroidManifest.xml <<EOF
         android:networkSecurityConfig="@xml/network_security_config"
         android:usesCleartextTraffic="true"
         android:theme="@style/AppTheme">
-
+        
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"
             android:value="ca-app-pub-3940256099942544~3347511713"/>
 
-        <activity
-            android:name=".MainActivity"
-            android:exported="true"
+        <activity android:name=".MainActivity" 
+            android:exported="true" 
             android:screenOrientation="portrait">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-
-        <activity
-            android:name=".WebViewActivity"
+        
+        <activity android:name=".WebViewActivity" 
             android:configChanges="orientation|screenSize|keyboardHidden"/>
-
+            
         <activity android:name=".ChannelListActivity" />
-
-        <activity
-            android:name=".PlayerActivity"
+        
+        <activity android:name=".PlayerActivity"
             android:configChanges="orientation|screenSize|keyboardHidden|smallestScreenSize|screenLayout"
             android:screenOrientation="sensor"
             android:theme="@style/PlayerTheme" />
-
+            
         <service
             android:name=".MyFirebaseMessagingService"
             android:exported="false">
@@ -420,11 +336,11 @@ cat > app/src/main/AndroidManifest.xml <<EOF
 EOF
 
 # ------------------------------------------------------------------
-# 9. JAVA SINIFI: ADS MANAGER
+# 9. JAVA SINIFI: ADS MANAGER (AÇIK KAYNAK)
 # ------------------------------------------------------------------
 echo "☕ [10/16] Java: AdsManager oluşturuluyor..."
-cat > "${JAVA_BASE}/AdsManager.java" <<EOF
-package $PACKAGE_NAME;
+cat > "app/src/main/java/com/base/app/AdsManager.java" <<EOF
+package com.base.app;
 
 import android.app.Activity;
 import android.view.ViewGroup;
@@ -440,26 +356,30 @@ import com.google.android.gms.ads.*;
 import com.google.android.gms.ads.interstitial.*;
 
 public class AdsManager {
-
+    
     public static int counter = 0;
     private static int frequency = 3;
     private static boolean isEnabled = false;
     private static boolean bannerActive = false;
     private static boolean interActive = false;
-    private static String provider = "UNITY";
-
+    private static String provider = "UNITY"; 
+    
+    // Reklam Kimlikleri
     private static String unityGameId = "";
     private static String unityBannerId = "";
     private static String unityInterId = "";
     private static String admobBannerId = "";
     private static String admobInterId = "";
-
+    
     private static InterstitialAd mAdMobInter;
 
+    /**
+     * Reklam Sistemini Başlatır
+     */
     public static void init(Activity activity, JSONObject config) {
         try {
             if (config == null) return;
-
+            
             isEnabled = config.optBoolean("enabled", false);
             provider = config.optString("provider", "UNITY");
             bannerActive = config.optBoolean("banner_active");
@@ -468,20 +388,22 @@ public class AdsManager {
 
             if (!isEnabled) return;
 
+            // Unity Başlatma
             if (provider.equals("UNITY") || provider.equals("BOTH")) {
                 unityGameId = config.optString("unity_game_id");
                 unityBannerId = config.optString("unity_banner_id");
                 unityInterId = config.optString("unity_inter_id");
-
+                
                 if (!unityGameId.isEmpty()) {
                     UnityAds.initialize(activity.getApplicationContext(), unityGameId, false, null);
                 }
             }
 
+            // AdMob Başlatma
             if (provider.equals("ADMOB") || provider.equals("BOTH")) {
                 admobBannerId = config.optString("admob_banner_id");
                 admobInterId = config.optString("admob_inter_id");
-
+                
                 MobileAds.initialize(activity, initializationStatus -> {});
                 loadAdMobInter(activity);
             }
@@ -491,9 +413,12 @@ public class AdsManager {
         }
     }
 
+    /**
+     * AdMob Geçiş Reklamını Önden Yükler
+     */
     private static void loadAdMobInter(Activity activity) {
         if (!interActive || admobInterId.isEmpty()) return;
-
+        
         AdRequest adRequest = new AdRequest.Builder().build();
         InterstitialAd.load(activity, admobInterId, adRequest, new InterstitialAdLoadCallback() {
             @Override
@@ -503,18 +428,23 @@ public class AdsManager {
         });
     }
 
+    /**
+     * Banner Gösterir
+     */
     public static void showBanner(Activity activity, ViewGroup container) {
         if (!isEnabled || !bannerActive) return;
-
+        
         container.removeAllViews();
 
+        // AdMob Banner
         if ((provider.equals("ADMOB") || provider.equals("BOTH")) && !admobBannerId.isEmpty()) {
             AdView adView = new AdView(activity);
             adView.setAdSize(AdSize.BANNER);
             adView.setAdUnitId(admobBannerId);
             container.addView(adView);
             adView.loadAd(new AdRequest.Builder().build());
-        }
+        } 
+        // Unity Banner
         else if ((provider.equals("UNITY") || provider.equals("BOTH")) && !unityBannerId.isEmpty()) {
             BannerView bannerView = new BannerView(activity, unityBannerId, new UnityBannerSize(320, 50));
             bannerView.load();
@@ -522,6 +452,9 @@ public class AdsManager {
         }
     }
 
+    /**
+     * Geçiş Reklamı Kontrolü ve Gösterimi
+     */
     public static void checkInter(Activity activity, Runnable onComplete) {
         if (!isEnabled || !interActive) {
             onComplete.run();
@@ -532,14 +465,16 @@ public class AdsManager {
         if (counter >= frequency) {
             counter = 0;
 
+            // Önce AdMob Dene
             if ((provider.equals("ADMOB") || provider.equals("BOTH")) && mAdMobInter != null) {
                 mAdMobInter.show(activity);
                 mAdMobInter = null;
-                loadAdMobInter(activity);
+                loadAdMobInter(activity); // Yenisini yükle
                 onComplete.run();
                 return;
             }
 
+            // Sonra Unity Dene
             if ((provider.equals("UNITY") || provider.equals("BOTH")) && !unityInterId.isEmpty()) {
                 if (UnityAds.isInitialized()) {
                     UnityAds.load(unityInterId, new IUnityAdsLoadListener() {
@@ -564,7 +499,8 @@ public class AdsManager {
                     return;
                 }
             }
-
+            
+            // Reklam yoksa devam et
             onComplete.run();
         } else {
             onComplete.run();
@@ -574,11 +510,11 @@ public class AdsManager {
 EOF
 
 # ------------------------------------------------------------------
-# 10. JAVA SINIFI: FIREBASE MESSAGING
+# 10. JAVA SINIFI: FIREBASE MESSAGING (BİLDİRİM)
 # ------------------------------------------------------------------
 echo "🔥 [11/16] Java: FirebaseMessagingService oluşturuluyor..."
-cat > "${JAVA_BASE}/MyFirebaseMessagingService.java" <<EOF
-package $PACKAGE_NAME;
+cat > "app/src/main/java/com/base/app/MyFirebaseMessagingService.java" <<EOF
+package com.base.app;
 
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
@@ -595,9 +531,12 @@ public class MyFirebaseMessagingService extends FirebaseMessagingService {
 
     @Override
     public void onMessageReceived(RemoteMessage remoteMessage) {
+        // Notification Payload
         if (remoteMessage.getNotification() != null) {
             sendNotification(remoteMessage.getNotification().getTitle(), remoteMessage.getNotification().getBody());
-        } else if (remoteMessage.getData().size() > 0) {
+        } 
+        // Data Payload (Arkaplanda çalışırken)
+        else if (remoteMessage.getData().size() > 0) {
             String title = remoteMessage.getData().get("title");
             String body = remoteMessage.getData().get("body");
             if(title != null && body != null) {
@@ -608,6 +547,7 @@ public class MyFirebaseMessagingService extends FirebaseMessagingService {
 
     @Override
     public void onNewToken(String token) {
+        // Token değişirse hafızaya al, uygulama açıldığında sunucuya gidecek
         getSharedPreferences("TITAN_PREFS", MODE_PRIVATE)
             .edit()
             .putString("fcm_token", token)
@@ -617,12 +557,12 @@ public class MyFirebaseMessagingService extends FirebaseMessagingService {
     private void sendNotification(String title, String messageBody) {
         Intent intent = new Intent(this, MainActivity.class);
         intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
-
+        
         PendingIntent pendingIntent = PendingIntent.getActivity(this, 0, intent,
                 PendingIntent.FLAG_ONE_SHOT | PendingIntent.FLAG_IMMUTABLE);
 
         String channelId = "TitanChannel";
-
+        
         NotificationCompat.Builder notificationBuilder =
                 new NotificationCompat.Builder(this, channelId)
                         .setSmallIcon(android.R.drawable.ic_dialog_info)
@@ -635,6 +575,7 @@ public class MyFirebaseMessagingService extends FirebaseMessagingService {
         NotificationManager notificationManager =
                 (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
 
+        // Android 8.0+ Kanal Oluşturma
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             NotificationChannel channel = new NotificationChannel(channelId,
                     "Genel Bildirimler",
@@ -648,11 +589,11 @@ public class MyFirebaseMessagingService extends FirebaseMessagingService {
 EOF
 
 # --------------------------------------------------------
-# 11. JAVA SINIFI: MAIN ACTIVITY
+# 11. JAVA SINIFI: MAIN ACTIVITY (CORRECTED & FULL)
 # --------------------------------------------------------
-echo "📱 [12/16] Java: MainActivity oluşturuluyor..."
-cat > "${JAVA_BASE}/MainActivity.java" <<EOF
-package $PACKAGE_NAME;
+echo "📱 [12/16] Java: MainActivity (Fixed ViewParent Error) oluşturuluyor..."
+cat > "app/src/main/java/com/base/app/MainActivity.java" <<EOF
+package com.base.app;
 
 import android.app.*;
 import android.content.*;
@@ -674,30 +615,34 @@ import androidx.core.content.ContextCompat;
 import com.google.android.material.bottomnavigation.BottomNavigationView;
 
 public class MainActivity extends Activity {
-
-    private String CONFIG_URL = "$CONFIG_URL";
+    
+    private String CONFIG_URL = "$CONFIG_URL"; 
     private LinearLayout container;
-    private TextView titleTxt;
+    private TextView titleTxt; 
     private ImageView splash, refreshBtn, shareBtn;
     private LinearLayout headerLayout, currentRow;
-
+    
+    // Configs
     private String hColor="#2196F3", tColor="#FFFFFF", bColor="#F0F0F0", fColor="#FF9800", menuType="LIST";
     private String listType="CLASSIC", listItemBg="#FFFFFF", listIconShape="SQUARE", listBorderColor="#DDDDDD";
     private int listRadius=0, listBorderWidth=0;
     private String playerConfigStr="", telegramUrl="";
-
+    
+    // Feature Flags
     private JSONObject featureConfig;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-
+        
+        // 1. İzin İsteme (Android 13+)
         if (Build.VERSION.SDK_INT >= 33) {
             if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
                 ActivityCompat.requestPermissions(this, new String[]{android.Manifest.permission.POST_NOTIFICATIONS}, 101);
             }
         }
 
+        // 2. Token Sync
         FirebaseMessaging.getInstance().getToken().addOnCompleteListener(task -> {
             if (task.isSuccessful() && task.getResult() != null) {
                 String token = task.getResult();
@@ -706,18 +651,21 @@ public class MainActivity extends Activity {
             }
         });
 
+        // 3. UI Kök Yapısı
         RelativeLayout root = new RelativeLayout(this);
-
+        
+        // Splash
         splash = new ImageView(this);
         splash.setScaleType(ImageView.ScaleType.CENTER_CROP);
         root.addView(splash, new RelativeLayout.LayoutParams(-1,-1));
 
+        // Header
         headerLayout = new LinearLayout(this);
         headerLayout.setId(View.generateViewId());
         headerLayout.setPadding(30,30,30,30);
         headerLayout.setGravity(Gravity.CENTER_VERTICAL);
         headerLayout.setElevation(10f);
-
+        
         titleTxt = new TextView(this);
         titleTxt.setTextSize(20);
         titleTxt.setTypeface(null, Typeface.BOLD);
@@ -738,17 +686,18 @@ public class MainActivity extends Activity {
         hp.addRule(RelativeLayout.ALIGN_PARENT_TOP);
         root.addView(headerLayout, hp);
 
+        // İçerik Alanı
         ScrollView sv = new ScrollView(this);
         sv.setId(View.generateViewId());
         container = new LinearLayout(this);
         container.setOrientation(LinearLayout.VERTICAL);
-        container.setPadding(20,20,20,150);
+        container.setPadding(20,20,20,150); // Alt boşluk (Bottom nav için)
         sv.addView(container);
-
+        
         RelativeLayout.LayoutParams sp = new RelativeLayout.LayoutParams(-1,-1);
         sp.addRule(RelativeLayout.BELOW, headerLayout.getId());
         root.addView(sv, sp);
-
+        
         setContentView(root);
         new Fetch().execute(CONFIG_URL);
     }
@@ -756,59 +705,58 @@ public class MainActivity extends Activity {
     private void syncToken(String token) {
         new Thread(() -> {
             try {
-                String baseUrl;
-                if (CONFIG_URL.contains("api.php")) baseUrl = CONFIG_URL.substring(0, CONFIG_URL.indexOf("api.php"));
-                else baseUrl = CONFIG_URL.substring(0, CONFIG_URL.lastIndexOf("/") + 1);
-
+                String baseUrl = "";
+                if (CONFIG_URL.contains("api.php")) {
+                    baseUrl = CONFIG_URL.substring(0, CONFIG_URL.indexOf("api.php"));
+                } else {
+                    baseUrl = CONFIG_URL.substring(0, CONFIG_URL.lastIndexOf("/") + 1);
+                }
+                
                 URL url = new URL(baseUrl + "update_token.php");
                 HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-                conn.setRequestMethod("POST");
+                conn.setRequestMethod("POST"); 
                 conn.setDoOutput(true);
-
-                String data = "fcm_token=" + URLEncoder.encode(token, "UTF-8")
-                        + "&package_name=" + URLEncoder.encode(getPackageName(), "UTF-8");
-
-                OutputStream os = conn.getOutputStream();
-                os.write(data.getBytes());
-                os.flush();
+                
+                String data = "fcm_token=" + URLEncoder.encode(token, "UTF-8") + "&package_name=" + URLEncoder.encode(getPackageName(), "UTF-8");
+                OutputStream os = conn.getOutputStream(); 
+                os.write(data.getBytes()); 
+                os.flush(); 
                 os.close();
-
-                conn.getResponseCode();
+                
+                conn.getResponseCode(); 
                 conn.disconnect();
-            } catch (Exception ignored) {}
+            } catch (Exception e) {}
         }).start();
     }
 
     private void shareApp() {
-        startActivity(Intent.createChooser(
-                new Intent(Intent.ACTION_SEND)
-                        .setType("text/plain")
-                        .putExtra(Intent.EXTRA_TEXT, titleTxt.getText() + " İndir: https://play.google.com/store/apps/details?id=" + getPackageName()),
-                "Paylaş"));
+        startActivity(Intent.createChooser(new Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, titleTxt.getText() + " İndir: https://play.google.com/store/apps/details?id=" + getPackageName()), "Paylaş"));
     }
 
+    // --- FEATURE 1: RATE US ---
     private void checkRateUs() {
         SharedPreferences prefs = getSharedPreferences("TITAN_PREFS", MODE_PRIVATE);
         int count = prefs.getInt("launch_count", 0) + 1;
         prefs.edit().putInt("launch_count", count).apply();
-
+        
         if (featureConfig == null) return;
         JSONObject rate = featureConfig.optJSONObject("rate_us");
         if (rate != null && rate.optBoolean("active", false)) {
             int freq = rate.optInt("freq", 5);
             if (count % freq == 0) {
                 new AlertDialog.Builder(this)
-                        .setTitle("Bizi Değerlendir")
-                        .setMessage("Uygulamamızı beğendiysen 5 yıldız verir misin?")
-                        .setPositiveButton("Şimdi Puanla", (d, w) -> {
-                            try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=" + getPackageName()))); } catch(Exception ignored){}
-                        })
-                        .setNegativeButton("Daha Sonra", null)
-                        .show();
+                    .setTitle("Bizi Değerlendir")
+                    .setMessage("Uygulamamızı beğendiysen 5 yıldız verir misin?")
+                    .setPositiveButton("Şimdi Puanla", (d, w) -> {
+                        try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=" + getPackageName()))); } catch(Exception e){}
+                    })
+                    .setNegativeButton("Daha Sonra", null)
+                    .show();
             }
         }
     }
 
+    // --- FEATURE 2: WELCOME POPUP ---
     private void checkWelcomePopup() {
         if (featureConfig == null) return;
         JSONObject pop = featureConfig.optJSONObject("welcome_popup");
@@ -816,7 +764,8 @@ public class MainActivity extends Activity {
             AlertDialog.Builder b = new AlertDialog.Builder(this);
             b.setTitle(pop.optString("title", "Duyuru"));
             b.setMessage(pop.optString("message", "Hoş geldiniz!"));
-
+            
+            // Eğer resim varsa
             String imgUrl = pop.optString("image", "");
             if(!imgUrl.isEmpty()) {
                 ImageView iv = new ImageView(this);
@@ -829,267 +778,154 @@ public class MainActivity extends Activity {
         }
     }
 
+    // --- FEATURE 3: BOTTOM NAVIGATION (Düzeltildi) ---
     private void renderBottomNav(JSONArray modules) {
         try {
-            View svParent = (View) container.getParent();
-            RelativeLayout root = (RelativeLayout) svParent.getParent();
-
+            // Önce mevcut içeriği temizle (Parent RelativeLayout)
+            // container -> ScrollView -> RelativeLayout (root)
+            View svParent = (View) container.getParent(); // ScrollView
+            RelativeLayout root = (RelativeLayout) svParent.getParent(); // Root
+            
+            // BottomNavigationView oluştur
             BottomNavigationView bnv = new BottomNavigationView(this);
             bnv.setId(View.generateViewId());
             bnv.setBackgroundColor(Color.WHITE);
             bnv.setElevation(20f);
-
+            
+            // Menü itemlerini ekle (Max 5 tane)
             int limit = Math.min(modules.length(), 5);
             for(int i=0; i<limit; i++) {
                 JSONObject m = modules.getJSONObject(i);
                 bnv.getMenu().add(0, i, 0, m.getString("title")).setIcon(android.R.drawable.ic_menu_view);
             }
-
-            bnv.setOnItemSelectedListener(item -> {
+            
+            // Tıklama Olayı
+            bnv.setOnNavigationItemSelectedListener(item -> {
                 try {
                     JSONObject m = modules.getJSONObject(item.getItemId());
                     JSONObject h = new JSONObject();
                     if(m.has("ua")) h.put("User-Agent", m.getString("ua"));
                     open(m.getString("type"), m.optString("url"), m.optString("content"), h.toString());
-                } catch(Exception ignored){}
+                } catch(Exception e){}
                 return true;
             });
 
+            // Layout Params (En alta sabitle)
             RelativeLayout.LayoutParams lp = new RelativeLayout.LayoutParams(-1, -2);
             lp.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM);
             root.addView(bnv, lp);
-
+            
+            // ScrollView'in altını BottomNav kadar yukarı it
+            // HATA BURADAYDI, ŞİMDİ DÜZELDİ: (View) cast eklendi.
             View sv = (View) container.getParent();
             RelativeLayout.LayoutParams sp = (RelativeLayout.LayoutParams) sv.getLayoutParams();
             sp.addRule(RelativeLayout.ABOVE, bnv.getId());
             sv.setLayoutParams(sp);
-
+            
         } catch(Exception e) { e.printStackTrace(); }
     }
 
     private void addBtn(String txt, String type, String url, String cont, String ua, String ref, String org) {
         JSONObject h = new JSONObject();
-        try {
-            if(ua!=null)h.put("User-Agent",ua);
-            if(ref!=null)h.put("Referer",ref);
-            if(org!=null)h.put("Origin",org);
-        } catch(Exception ignored){}
+        try { if(ua!=null)h.put("User-Agent",ua); if(ref!=null)h.put("Referer",ref); if(org!=null)h.put("Origin",org); } catch(Exception e){}
         String hStr = h.toString();
 
         View v = null;
-
         if(menuType.equals("GRID")) {
             if(currentRow == null || currentRow.getChildCount() >= 2) {
-                currentRow = new LinearLayout(this);
-                currentRow.setOrientation(LinearLayout.HORIZONTAL);
-                currentRow.setWeightSum(2);
-                container.addView(currentRow);
+                currentRow = new LinearLayout(this); currentRow.setOrientation(0); currentRow.setWeightSum(2); container.addView(currentRow);
             }
-            Button b = new Button(this);
-            b.setText(txt);
-            b.setTextColor(Color.parseColor(tColor));
-            setFocusBg(b);
-
-            LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(0, 200, 1.0f);
-            p.setMargins(10,10,10,10);
-            b.setLayoutParams(p);
-
+            Button b = new Button(this); b.setText(txt); b.setTextColor(Color.parseColor(tColor)); setFocusBg(b);
+            LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(0, 200, 1.0f); p.setMargins(10,10,10,10); b.setLayoutParams(p);
             b.setOnClickListener(x -> AdsManager.checkInter(this, () -> open(type, url, cont, hStr)));
-            currentRow.addView(b);
-            return;
-        }
+            currentRow.addView(b); return;
+        } 
         else if(menuType.equals("CARD")) {
-            TextView t = new TextView(this);
-            t.setText(txt);
-            t.setTextSize(22);
-            t.setGravity(Gravity.CENTER);
-            t.setTextColor(Color.parseColor(tColor));
-            t.setPadding(50,150,50,150);
-            setFocusBg(t);
-
-            LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-1, -2);
-            p.setMargins(0,0,0,30);
-            t.setLayoutParams(p);
-
-            v = t;
-            v.setOnClickListener(x -> AdsManager.checkInter(this, () -> open(type, url, cont, hStr)));
-        }
+            TextView t = new TextView(this); t.setText(txt); t.setTextSize(22); t.setGravity(17); t.setTextColor(Color.parseColor(tColor));
+            t.setPadding(50,150,50,150); setFocusBg(t);
+            LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-1, -2); p.setMargins(0,0,0,30); t.setLayoutParams(p);
+            v = t; v.setOnClickListener(x -> AdsManager.checkInter(this, () -> open(type, url, cont, hStr)));
+        } 
         else {
-            Button b = new Button(this);
-            b.setText(txt);
-            b.setPadding(40,40,40,40);
-            b.setTextColor(Color.parseColor(tColor));
-            setFocusBg(b);
-
-            LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-1, -2);
-            p.setMargins(0,0,0,20);
-            b.setLayoutParams(p);
-
-            v = b;
-            v.setOnClickListener(x -> AdsManager.checkInter(this, () -> open(type, url, cont, hStr)));
+            Button b = new Button(this); b.setText(txt); b.setPadding(40,40,40,40); b.setTextColor(Color.parseColor(tColor)); setFocusBg(b);
+            LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-1, -2); p.setMargins(0,0,0,20); b.setLayoutParams(p);
+            v = b; v.setOnClickListener(x -> AdsManager.checkInter(this, () -> open(type, url, cont, hStr)));
         }
-
         if(v != null) container.addView(v);
     }
 
     private void setFocusBg(View v) {
-        GradientDrawable d = new GradientDrawable();
-        d.setColor(Color.parseColor(hColor));
-        d.setCornerRadius(20);
-
-        GradientDrawable f = new GradientDrawable();
-        f.setColor(Color.parseColor(fColor));
-        f.setCornerRadius(20);
-        f.setStroke(5, Color.WHITE);
-
-        StateListDrawable s = new StateListDrawable();
-        s.addState(new int[]{android.R.attr.state_focused}, f);
-        s.addState(new int[]{android.R.attr.state_pressed}, f);
-        s.addState(new int[]{}, d);
-
-        v.setBackground(s);
-        v.setFocusable(true);
-        v.setClickable(true);
+        GradientDrawable d = new GradientDrawable(); d.setColor(Color.parseColor(hColor)); d.setCornerRadius(20);
+        GradientDrawable f = new GradientDrawable(); f.setColor(Color.parseColor(fColor)); f.setCornerRadius(20); f.setStroke(5, Color.WHITE);
+        StateListDrawable s = new StateListDrawable(); s.addState(new int[]{android.R.attr.state_focused}, f); s.addState(new int[]{android.R.attr.state_pressed}, f); s.addState(new int[]{}, d);
+        v.setBackground(s); v.setFocusable(true); v.setClickable(true);
     }
 
     private void open(String t, String u, String c, String h) {
         if(t.equals("WEB") || t.equals("HTML")) {
-            Intent i = new Intent(this, WebViewActivity.class);
-            i.putExtra("WEB_URL", u);
-            i.putExtra("HTML_DATA", c);
-            startActivity(i);
+            Intent i = new Intent(this, WebViewActivity.class); i.putExtra("WEB_URL", u); i.putExtra("HTML_DATA", c); startActivity(i);
         } else if(t.equals("SINGLE_STREAM")) {
-            Intent i = new Intent(this, PlayerActivity.class);
-            i.putExtra("VIDEO_URL", u);
-            i.putExtra("HEADERS_JSON", h);
-            i.putExtra("PLAYER_CONFIG", playerConfigStr);
-            startActivity(i);
+            Intent i = new Intent(this, PlayerActivity.class); i.putExtra("VIDEO_URL", u); i.putExtra("HEADERS_JSON", h); i.putExtra("PLAYER_CONFIG", playerConfigStr); startActivity(i);
         } else {
-            Intent i = new Intent(this, ChannelListActivity.class);
-            i.putExtra("LIST_URL", u);
-            i.putExtra("LIST_CONTENT", c);
-            i.putExtra("TYPE", t);
-
-            i.putExtra("HEADER_COLOR", hColor);
-            i.putExtra("BG_COLOR", bColor);
-            i.putExtra("TEXT_COLOR", tColor);
-            i.putExtra("FOCUS_COLOR", fColor);
-
-            i.putExtra("PLAYER_CONFIG", playerConfigStr);
-            i.putExtra("L_TYPE", listType);
-            i.putExtra("L_BG", listItemBg);
-            i.putExtra("L_RAD", listRadius);
-            i.putExtra("L_ICON", listIconShape);
-            i.putExtra("L_BORDER_W", listBorderWidth);
-            i.putExtra("L_BORDER_C", listBorderColor);
-
+            Intent i = new Intent(this, ChannelListActivity.class); i.putExtra("LIST_URL", u); i.putExtra("LIST_CONTENT", c); i.putExtra("TYPE", t);
+            i.putExtra("HEADER_COLOR", hColor); i.putExtra("BG_COLOR", bColor); i.putExtra("TEXT_COLOR", tColor); i.putExtra("FOCUS_COLOR", fColor);
+            i.putExtra("PLAYER_CONFIG", playerConfigStr); i.putExtra("L_TYPE", listType); i.putExtra("L_BG", listItemBg); i.putExtra("L_RAD", listRadius); i.putExtra("L_ICON", listIconShape); i.putExtra("L_BORDER_W", listBorderWidth); i.putExtra("L_BORDER_C", listBorderColor);
             startActivity(i);
         }
     }
 
     class Fetch extends AsyncTask<String,Void,String> {
         protected String doInBackground(String... u) {
-            try {
-                URL url = new URL(u[0]);
-                HttpURLConnection c = (HttpURLConnection)url.openConnection();
-                BufferedReader r = new BufferedReader(new InputStreamReader(c.getInputStream()));
-                StringBuilder s = new StringBuilder();
-                String l;
-                while((l=r.readLine())!=null) s.append(l);
-                return s.toString();
-            } catch(Exception e){
-                return null;
-            }
+            try { URL url = new URL(u[0]); HttpURLConnection c = (HttpURLConnection)url.openConnection(); BufferedReader r = new BufferedReader(new InputStreamReader(c.getInputStream())); StringBuilder s = new StringBuilder(); String l; while((l=r.readLine())!=null)s.append(l); return s.toString(); } catch(Exception e){ return null; }
         }
-
         protected void onPostExecute(String s) {
             if(s==null) return;
-
             try {
                 JSONObject j = new JSONObject(s);
                 JSONObject ui = j.optJSONObject("ui_config");
                 featureConfig = j.optJSONObject("features");
-
-                if (ui != null) {
-                    hColor = ui.optString("header_color", hColor);
-                    bColor = ui.optString("bg_color", bColor);
-                    tColor = ui.optString("text_color", tColor);
-                    fColor = ui.optString("focus_color", fColor);
-                    menuType = ui.optString("menu_type", "LIST");
-
-                    listType = ui.optString("list_type", "CLASSIC");
-                    listItemBg = ui.optString("list_item_bg", "#FFFFFF");
-                    listRadius = ui.optInt("list_item_radius", 0);
-                    listIconShape = ui.optString("list_icon_shape", "SQUARE");
-                    listBorderWidth = ui.optInt("list_border_width", 0);
-                    listBorderColor = ui.optString("list_border_color", "#DDDDDD");
-
-                    playerConfigStr = j.optString("player_config", "{}");
-                    telegramUrl = ui.optString("telegram_url", "");
-
-                    String customHeader = ui.optString("custom_header_text", "");
-                    titleTxt.setText(customHeader.isEmpty() ? j.optString("app_name", "$APP_NAME") : customHeader);
-
-                    titleTxt.setTextColor(Color.parseColor(tColor));
-                    headerLayout.setBackgroundColor(Color.parseColor(hColor));
-                    ((View)container.getParent()).setBackgroundColor(Color.parseColor(bColor));
-
-                    if(!ui.optBoolean("show_header", true)) headerLayout.setVisibility(View.GONE);
-                    refreshBtn.setVisibility(ui.optBoolean("show_refresh", true) ? View.VISIBLE : View.GONE);
-                    shareBtn.setVisibility(ui.optBoolean("show_share", true) ? View.VISIBLE : View.GONE);
-
-                    String spl = ui.optString("splash_image", "");
-                    if(!spl.isEmpty()){
-                        if(!spl.startsWith("http")) {
-                            spl = CONFIG_URL.substring(0, CONFIG_URL.lastIndexOf("/") + 1) + spl;
-                        }
-                        splash.setVisibility(View.VISIBLE);
-                        Glide.with(MainActivity.this).load(spl).into(splash);
-                        new Handler().postDelayed(() -> splash.setVisibility(View.GONE), 3000);
-                    }
-
-                    if(ui.optString("startup_mode", "").equals("DIRECT")) {
-                        String dType = ui.optString("direct_type", "");
-                        String dUrl = ui.optString("direct_url", "");
-                        if(dType.equals("WEB")) {
-                            Intent i = new Intent(MainActivity.this, WebViewActivity.class);
-                            i.putExtra("WEB_URL", dUrl);
-                            startActivity(i);
-                        } else {
-                            open(dType, dUrl, "", "");
-                        }
-                        finish();
-                        return;
-                    }
+                
+                hColor = ui.optString("header_color"); bColor = ui.optString("bg_color"); tColor = ui.optString("text_color"); fColor = ui.optString("focus_color"); menuType = ui.optString("menu_type", "LIST");
+                listType = ui.optString("list_type", "CLASSIC"); listItemBg = ui.optString("list_item_bg", "#FFFFFF"); listRadius = ui.optInt("list_item_radius", 0); listIconShape = ui.optString("list_icon_shape", "SQUARE"); listBorderWidth = ui.optInt("list_border_width", 0); listBorderColor = ui.optString("list_border_color", "#DDDDDD");
+                playerConfigStr = j.optString("player_config", "{}"); telegramUrl = ui.optString("telegram_url");
+                
+                String customHeader = ui.optString("custom_header_text", ""); titleTxt.setText(customHeader.isEmpty() ? j.optString("app_name") : customHeader); titleTxt.setTextColor(Color.parseColor(tColor));
+                headerLayout.setBackgroundColor(Color.parseColor(hColor)); ((View)container.getParent()).setBackgroundColor(Color.parseColor(bColor));
+                
+                if(!ui.optBoolean("show_header", true)) headerLayout.setVisibility(View.GONE);
+                refreshBtn.setVisibility(ui.optBoolean("show_refresh", true) ? View.VISIBLE : View.GONE);
+                shareBtn.setVisibility(ui.optBoolean("show_share", true) ? View.VISIBLE : View.GONE);
+                
+                String spl = ui.optString("splash_image");
+                if(!spl.isEmpty()){
+                    if(!spl.startsWith("http")) spl = CONFIG_URL.substring(0, CONFIG_URL.lastIndexOf("/") + 1) + spl;
+                    splash.setVisibility(View.VISIBLE); Glide.with(MainActivity.this).load(spl).into(splash);
+                    new android.os.Handler().postDelayed(() -> splash.setVisibility(View.GONE), 3000);
+                }
+                
+                if(ui.optString("startup_mode").equals("DIRECT")) {
+                    String dType = ui.optString("direct_type"); String dUrl = ui.optString("direct_url");
+                    if(dType.equals("WEB")) { Intent i = new Intent(MainActivity.this, WebViewActivity.class); i.putExtra("WEB_URL", dUrl); startActivity(i); } else { open(dType, dUrl, "", ""); }
+                    finish(); return;
                 }
 
-                container.removeAllViews();
-                currentRow = null;
-
+                container.removeAllViews(); currentRow = null;
                 JSONArray m = j.getJSONArray("modules");
-
+                
                 if(menuType.equals("BOTTOM")) {
                     renderBottomNav(m);
                 } else {
                     for(int i=0; i<m.length(); i++) {
                         JSONObject o = m.getJSONObject(i);
-                        addBtn(
-                            o.getString("title"),
-                            o.getString("type"),
-                            o.optString("url"),
-                            o.optString("content"),
-                            o.optString("ua", null),
-                            o.optString("ref", null),
-                            o.optString("org", null)
-                        );
+                        addBtn(o.getString("title"), o.getString("type"), o.optString("url"), o.optString("content"), o.optString("ua"), o.optString("ref"), o.optString("org"));
                     }
                 }
-
+                
                 AdsManager.init(MainActivity.this, j.optJSONObject("ads_config"));
                 checkRateUs();
                 checkWelcomePopup();
-
-            } catch(Exception ignored){}
+                
+            } catch(Exception e){}
         }
     }
 }
@@ -1099,8 +935,8 @@ EOF
 # 12. JAVA SINIFI: WEBVIEW ACTIVITY
 # ------------------------------------------------------------------
 echo "🌐 [13/16] Java: WebViewActivity oluşturuluyor..."
-cat > "${JAVA_BASE}/WebViewActivity.java" <<EOF
-package $PACKAGE_NAME;
+cat > "app/src/main/java/com/base/app/WebViewActivity.java" <<EOF
+package com.base.app;
 
 import android.app.Activity;
 import android.os.Bundle;
@@ -1112,26 +948,27 @@ import android.view.KeyEvent;
 
 public class WebViewActivity extends Activity {
     private WebView w;
-
+    
     @Override
     protected void onCreate(Bundle s) {
         super.onCreate(s);
         w = new WebView(this);
         setContentView(w);
-
+        
         WebSettings ws = w.getSettings();
         ws.setJavaScriptEnabled(true);
         ws.setDomStorageEnabled(true);
         ws.setAllowFileAccess(true);
         ws.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
-
+        
+        // JS Köprüsü
         w.addJavascriptInterface(new WebAppInterface(this), "Android");
-
+        
         w.setWebViewClient(new WebViewClient() {
             @Override
             public void onPageFinished(WebView view, String url) {
                 super.onPageFinished(view, url);
-
+                
                 String token = getSharedPreferences("TITAN_PREFS", MODE_PRIVATE).getString("fcm_token", "");
                 if(!token.isEmpty()) {
                     w.loadUrl("javascript:if(typeof onTokenReceived === 'function'){ onTokenReceived('" + token + "'); }");
@@ -1140,25 +977,25 @@ public class WebViewActivity extends Activity {
 
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, String url) {
-                if (url.startsWith("http")) return false;
+                if (url.startsWith("http")) return false; 
                 try {
                     Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
                     startActivity(intent);
-                } catch (Exception ignored) {}
+                } catch (Exception e) {}
                 return true;
             }
         });
 
         String u = getIntent().getStringExtra("WEB_URL");
         String h = getIntent().getStringExtra("HTML_DATA");
-
+        
         if(h != null && !h.isEmpty()) {
             w.loadData(Base64.encodeToString(h.getBytes(), Base64.NO_PADDING), "text/html", "base64");
         } else {
             w.loadUrl(u);
         }
     }
-
+    
     @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
         if (keyCode == KeyEvent.KEYCODE_BACK && w.canGoBack()) {
@@ -1167,7 +1004,7 @@ public class WebViewActivity extends Activity {
         }
         return super.onKeyDown(keyCode, event);
     }
-
+    
     public class WebAppInterface {
         Activity mContext;
         WebAppInterface(Activity c) { mContext = c; }
@@ -1187,8 +1024,8 @@ EOF
 # 13. JAVA SINIFI: CHANNEL LIST ACTIVITY
 # ------------------------------------------------------------------
 echo "📋 [14/16] Java: ChannelListActivity oluşturuluyor..."
-cat > "${JAVA_BASE}/ChannelListActivity.java" <<EOF
-package $PACKAGE_NAME;
+cat > "app/src/main/java/com/base/app/ChannelListActivity.java" <<EOF
+package com.base.app;
 
 import android.app.Activity;
 import android.content.Intent;
@@ -1207,21 +1044,21 @@ import com.bumptech.glide.Glide;
 import com.bumptech.glide.request.RequestOptions;
 
 public class ChannelListActivity extends Activity {
-    private ListView lv;
-    private Map<String, List<Item>> groups = new LinkedHashMap<>();
-    private List<String> gNames = new ArrayList<>();
-    private List<Item> curList = new ArrayList<>();
+    private ListView lv; 
+    private Map<String, List<Item>> groups = new LinkedHashMap<>(); 
+    private List<String> gNames = new ArrayList<>(); 
+    private List<Item> curList = new ArrayList<>(); 
     private boolean isGroup = false;
-
+    
     private String hC, bC, tC, pCfg, fC, lType, lBg, lIcon, lBC;
     private int lRad, lBW;
     private TextView title;
 
-    class Item {
-        String n, u, i, h;
-        Item(String name, String url, String img, String head) {
-            n = name; u = url; i = img; h = head;
-        }
+    class Item { 
+        String n, u, i, h; 
+        Item(String name, String url, String img, String head) { 
+            n = name; u = url; i = img; h = head; 
+        } 
     }
 
     protected void onCreate(Bundle s) {
@@ -1239,13 +1076,13 @@ public class ChannelListActivity extends Activity {
         lBC = getIntent().getStringExtra("L_BORDER_C");
 
         LinearLayout r = new LinearLayout(this);
-        r.setOrientation(LinearLayout.VERTICAL);
+        r.setOrientation(1);
         r.setBackgroundColor(Color.parseColor(bC));
 
         LinearLayout h = new LinearLayout(this);
         h.setBackgroundColor(Color.parseColor(hC));
         h.setPadding(30, 30, 30, 30);
-
+        
         title = new TextView(this);
         title.setText("Yükleniyor...");
         title.setTextColor(Color.parseColor(tC));
@@ -1257,8 +1094,8 @@ public class ChannelListActivity extends Activity {
         lv.setDivider(null);
         lv.setPadding(20, 20, 20, 20);
         lv.setClipToPadding(false);
-        lv.setOverScrollMode(View.OVER_SCROLL_NEVER);
-
+        lv.setOverScrollMode(2);
+        
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, 0, 1.0f);
         r.addView(lv, lp);
         setContentView(r);
@@ -1308,7 +1145,7 @@ public class ChannelListActivity extends Activity {
             if (r == null) return;
             try {
                 groups.clear(); gNames.clear();
-
+                
                 if ("JSON_LIST".equals(t) || r.trim().startsWith("{")) {
                     JSONObject rt = new JSONObject(r);
                     JSONArray ar = rt.getJSONObject("list").getJSONArray("item");
@@ -1319,7 +1156,6 @@ public class ChannelListActivity extends Activity {
                         JSONObject o = ar.getJSONObject(i);
                         String u = o.optString("media_url", o.optString("url"));
                         if (u.isEmpty()) continue;
-
                         JSONObject hd = new JSONObject();
                         for (int k = 1; k <= 5; k++) {
                             String kn = o.optString("h" + k + "Key"), kv = o.optString("h" + k + "Val");
@@ -1328,14 +1164,14 @@ public class ChannelListActivity extends Activity {
                         groups.get(fl).add(new Item(o.optString("title"), u, o.optString("thumb_square"), hd.toString()));
                     }
                 }
-
+                
                 if (groups.isEmpty()) {
                     String[] ln = r.split("\n");
                     String ct = "Kanal", ci = "", cg = "Genel";
                     JSONObject ch = new JSONObject();
-                    Pattern pg = Pattern.compile("group-title=\\"([^\\"]*)\\"");
-                    Pattern pl = Pattern.compile("tvg-logo=\\"([^\\"]*)\\"");
-
+                    Pattern pg = Pattern.compile("group-title=\"([^\"]*)\"");
+                    Pattern pl = Pattern.compile("tvg-logo=\"([^\"]*)\"");
+                    
                     for (String l : ln) {
                         l = l.trim();
                         if (l.isEmpty()) continue;
@@ -1357,7 +1193,7 @@ public class ChannelListActivity extends Activity {
                 }
                 if (gNames.size() > 1) showGr();
                 else if (gNames.size() == 1) showCh(gNames.get(0));
-            } catch (Exception ignored) {}
+            } catch (Exception e) {}
         }
     }
 
@@ -1367,36 +1203,31 @@ public class ChannelListActivity extends Activity {
         public int getCount() { return d.size(); }
         public Object getItem(int p) { return d.get(p); }
         public long getItemId(int p) { return p; }
-
         public View getView(int p, View v, ViewGroup gr) {
             if (v == null) {
                 LinearLayout l = new LinearLayout(ChannelListActivity.this);
-                l.setOrientation(LinearLayout.HORIZONTAL);
-                l.setGravity(Gravity.CENTER_VERTICAL);
-
+                l.setOrientation(0);
+                l.setGravity(16);
                 ImageView i = new ImageView(ChannelListActivity.this);
                 i.setId(1);
                 l.addView(i);
-
                 TextView t = new TextView(ChannelListActivity.this);
                 t.setId(2);
+                t.setTextColor(Color.BLACK);
                 l.addView(t);
-
                 v = l;
             }
-
             LinearLayout l = (LinearLayout) v;
-
             GradientDrawable n = new GradientDrawable();
             n.setColor(Color.parseColor(lBg));
             n.setCornerRadius(lRad);
             if (lBW > 0) n.setStroke(lBW, Color.parseColor(lBC));
-
+            
             GradientDrawable f = new GradientDrawable();
             f.setColor(Color.parseColor(fC));
             f.setCornerRadius(lRad);
             f.setStroke(Math.max(3, lBW + 2), Color.WHITE);
-
+            
             StateListDrawable sl = new StateListDrawable();
             sl.addState(new int[]{android.R.attr.state_focused}, f);
             sl.addState(new int[]{android.R.attr.state_pressed}, f);
@@ -1404,20 +1235,19 @@ public class ChannelListActivity extends Activity {
             l.setBackground(sl);
 
             LinearLayout.LayoutParams pa = new LinearLayout.LayoutParams(-1, -2);
-            if ("CARD".equals(lType)) { pa.setMargins(0, 0, 0, 25); l.setPadding(30, 30, 30, 30); l.setElevation(5f); }
-            else if ("MODERN".equals(lType)) { pa.setMargins(0, 0, 0, 15); l.setPadding(20, 50, 20, 50); }
+            if (lType.equals("CARD")) { pa.setMargins(0, 0, 0, 25); l.setPadding(30, 30, 30, 30); l.setElevation(5f); }
+            else if (lType.equals("MODERN")) { pa.setMargins(0, 0, 0, 15); l.setPadding(20, 50, 20, 50); }
             else { pa.setMargins(0, 0, 0, 5); l.setPadding(20, 20, 20, 20); }
             l.setLayoutParams(pa);
 
             ImageView im = v.findViewById(1);
             TextView tx = v.findViewById(2);
-
             tx.setTextColor(Color.parseColor(tC));
             im.setLayoutParams(new LinearLayout.LayoutParams(120, 120));
             ((LinearLayout.LayoutParams) im.getLayoutParams()).setMargins(0, 0, 30, 0);
-
+            
             RequestOptions op = new RequestOptions();
-            if ("CIRCLE".equals(lIcon)) op = op.circleCrop();
+            if (lIcon.equals("CIRCLE")) op = op.circleCrop();
 
             if (g) {
                 tx.setText(d.get(p).toString());
@@ -1440,8 +1270,8 @@ EOF
 # 14. JAVA SINIFI: PLAYER ACTIVITY
 # ------------------------------------------------------------------
 echo "🎥 [15/16] Java: PlayerActivity oluşturuluyor..."
-cat > "${JAVA_BASE}/PlayerActivity.java" <<EOF
-package $PACKAGE_NAME;
+cat > "app/src/main/java/com/base/app/PlayerActivity.java" <<EOF
+package com.base.app;
 
 import android.app.Activity;
 import android.net.Uri;
@@ -1471,39 +1301,39 @@ public class PlayerActivity extends Activity {
 
     protected void onCreate(Bundle s) {
         super.onCreate(s);
-
+        
         requestWindowFeature(Window.FEATURE_NO_TITLE);
         getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-
+        
         getWindow().getDecorView().setSystemUiVisibility(
-            View.SYSTEM_UI_FLAG_HIDE_NAVIGATION |
-            View.SYSTEM_UI_FLAG_FULLSCREEN |
+            View.SYSTEM_UI_FLAG_HIDE_NAVIGATION | 
+            View.SYSTEM_UI_FLAG_FULLSCREEN | 
             View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
         );
-
+        
         FrameLayout r = new FrameLayout(this);
         r.setBackgroundColor(Color.BLACK);
-
+        
         pv = new PlayerView(this);
         pv.setShowNextButton(false);
         pv.setShowPreviousButton(false);
         r.addView(pv);
-
+        
         spin = new ProgressBar(this);
         FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(-2, -2);
         lp.gravity = Gravity.CENTER;
         r.addView(spin, lp);
-
+        
         try {
             JSONObject c = new JSONObject(getIntent().getStringExtra("PLAYER_CONFIG"));
             String rm = c.optString("resize_mode", "FIT");
             if (rm.equals("FILL")) pv.setResizeMode(AspectRatioFrameLayout.RESIZE_MODE_FILL);
             else if (rm.equals("ZOOM")) pv.setResizeMode(AspectRatioFrameLayout.RESIZE_MODE_ZOOM);
             else pv.setResizeMode(AspectRatioFrameLayout.RESIZE_MODE_FIT);
-
+            
             if (!c.optBoolean("auto_rotate", true)) setRequestedOrientation(0);
-
+            
             if (c.optBoolean("enable_overlay", false)) {
                 TextView o = new TextView(this);
                 o.setText(c.optString("watermark_text", ""));
@@ -1516,12 +1346,12 @@ public class PlayerActivity extends Activity {
                 p.gravity = (pos.equals("right") ? Gravity.TOP | Gravity.END : Gravity.TOP | Gravity.START);
                 r.addView(o, p);
             }
-        } catch (Exception ignored) {}
-
+        } catch (Exception e) {}
+        
         setContentView(r);
         vid = getIntent().getStringExtra("VIDEO_URL");
         hdr = getIntent().getStringExtra("HEADERS_JSON");
-
+        
         if (vid != null && !vid.isEmpty()) new Res().execute(vid.trim());
     }
 
@@ -1544,7 +1374,7 @@ public class PlayerActivity extends Activity {
                             c.setRequestProperty(ky, h.getString(ky));
                         }
                     } else c.setRequestProperty("User-Agent", "Mozilla/5.0");
-
+                    
                     c.setConnectTimeout(8000);
                     c.connect();
                     int cd = c.getResponseCode();
@@ -1556,7 +1386,7 @@ public class PlayerActivity extends Activity {
                     c.disconnect();
                     break;
                 }
-            } catch (Exception ignored) {}
+            } catch (Exception e) {}
             return new Inf(cu, dm);
         }
 
@@ -1576,24 +1406,24 @@ public class PlayerActivity extends Activity {
                     if (ky.equalsIgnoreCase("User-Agent")) ua = vl;
                     else mp.put(ky, vl);
                 }
-            } catch (Exception ignored) {}
+            } catch (Exception e) {}
         }
-
+        
         DefaultHttpDataSource.Factory df = new DefaultHttpDataSource.Factory()
             .setUserAgent(ua)
             .setAllowCrossProtocolRedirects(true)
             .setDefaultRequestProperties(mp);
-
+            
         DefaultLoadControl lc = new DefaultLoadControl.Builder()
             .setAllocator(new DefaultAllocator(true, 16 * 1024))
             .setBufferDurationsMs(50000, 50000, 2500, 5000)
             .build();
-
+            
         pl = new ExoPlayer.Builder(this)
             .setLoadControl(lc)
             .setMediaSourceFactory(new DefaultMediaSourceFactory(this).setDataSourceFactory(df))
             .build();
-
+            
         pv.setPlayer(pl);
         pl.setPlayWhenReady(true);
         pl.addListener(new Player.Listener() {
@@ -1602,7 +1432,7 @@ public class PlayerActivity extends Activity {
                 else spin.setVisibility(View.GONE);
             }
         });
-
+        
         try {
             MediaItem.Builder it = new MediaItem.Builder().setUri(Uri.parse(i.u));
             if (i.m != null) {
@@ -1611,7 +1441,7 @@ public class PlayerActivity extends Activity {
             }
             pl.setMediaItem(it.build());
             pl.prepare();
-        } catch (Exception ignored) {}
+        } catch (Exception e) {}
     }
 
     protected void onStop() {
