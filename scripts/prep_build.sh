@@ -2,11 +2,12 @@
 set -e
 
 # ==============================================================================
-# TITAN APEX V15000 - FULL DYNAMIC EDITION
+# TITAN APEX V15000 - ULTIMATE FINAL EDITION
 # ==============================================================================
-# 1. ADMOB APP ID ARTIK PANEL'DEN OTOMATİK GELİR ($7 parametresi).
-# 2. MANUEL DÜZENLEMEYE GEREK YOKTUR.
-# 3. REKLAM, YÖNLENDİRME VE PLAYER AYARLARI KORUNDU.
+# 1. ADMOB & UNITY HİBRİT REKLAM SİSTEMİ
+# 2. WHATSAPP & TELEGRAM HEADER ENTEGRASYONU
+# 3. PLAYER: SENSÖR DÖNME, WATERMARK, TAM EKRAN
+# 4. WEBVIEW: DOSYA YÜKLEME, İNDİRME VE HARİCİ LİNK DESTEĞİ
 # ==============================================================================
 
 PACKAGE_NAME=$1
@@ -17,28 +18,26 @@ VERSION_CODE=$5
 VERSION_NAME=$6
 INCOMING_ADMOB_ID=$7
 
-# Eğer Panelden ID gelmezse, uygulama çökmesin diye Google Test ID kullanılır
+# AdMob ID Kontrolü (Panelden gelmezse Test ID kullanılır)
 if [ -z "$INCOMING_ADMOB_ID" ] || [ "$INCOMING_ADMOB_ID" == "null" ]; then
     ADMOB_APP_ID="ca-app-pub-3940256099942544~3347511713"
-    echo "⚠️ UYARI: Panelden AdMob ID gelmedi. Test ID kullanılıyor."
 else
     ADMOB_APP_ID="$INCOMING_ADMOB_ID"
-    echo "✅ AdMob ID Panelden Alındı: $ADMOB_APP_ID"
 fi
 
 echo "============================================================"
 echo "   🚀 TITAN APEX V15000 BAŞLATILIYOR..."
 echo "   📦 Paket: $PACKAGE_NAME"
-echo "   🌍 Config: $CONFIG_URL"
+echo "   💰 AdMob: $ADMOB_APP_ID"
 echo "============================================================"
 
-# 1. SİSTEM
+# 1. SİSTEM HAZIRLIĞI
 if ! command -v convert &> /dev/null; then
     sudo apt-get update >/dev/null 2>&1 || true
     sudo apt-get install -y imagemagick >/dev/null 2>&1 || true
 fi
 
-# 2. TEMİZLİK
+# 2. DİZİN TEMİZLİĞİ
 rm -rf app/src/main/res/drawable*
 rm -rf app/src/main/res/mipmap*
 rm -rf app/src/main/res/values*
@@ -50,7 +49,7 @@ mkdir -p "app/src/main/res/values"
 mkdir -p "app/src/main/res/xml"
 mkdir -p "app/src/main/res/layout"
 
-# 3. İKON
+# 3. İKON İŞLEME
 ICON_TARGET="app/src/main/res/mipmap-xxxhdpi/ic_launcher.png"
 TEMP_ICON="icon_temp.png"
 curl -s -L -k -A "Mozilla/5.0" -o "$TEMP_ICON" "$ICON_URL" || true
@@ -67,7 +66,7 @@ else
 fi
 rm -f "$TEMP_ICON"
 
-# 4. SETTINGS
+# 4. GRADLE SETTINGS
 cat > settings.gradle <<EOF
 pluginManagement {
     repositories {
@@ -88,7 +87,7 @@ rootProject.name = "TitanApp"
 include ':app'
 EOF
 
-# 5. ROOT BUILD
+# 5. ROOT BUILD.GRADLE
 cat > build.gradle <<EOF
 buildscript {
     repositories {
@@ -105,7 +104,7 @@ task clean(type: Delete) {
 }
 EOF
 
-# 6. JSON
+# 6. JSON SERVICES
 JSON_FILE="app/google-services.json"
 if [ -f "$JSON_FILE" ]; then
     sed -i 's/"package_name": *"[^"]*"/"package_name": "'"$PACKAGE_NAME"'"/g' "$JSON_FILE"
@@ -130,7 +129,7 @@ else
 EOF
 fi
 
-# 7. APP BUILD
+# 7. APP BUILD.GRADLE
 cat > app/build.gradle <<EOF
 plugins {
     id 'com.android.application'
@@ -184,20 +183,26 @@ dependencies {
     implementation 'com.google.android.material:material:1.11.0'
     implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
     implementation 'androidx.swiperefreshlayout:swiperefreshlayout:1.1.0'
+    
+    // Firebase
     implementation(platform('com.google.firebase:firebase-bom:32.7.0'))
     implementation 'com.google.firebase:firebase-messaging'
     implementation 'com.google.firebase:firebase-analytics'
+
+    // Player
     implementation 'androidx.media3:media3-exoplayer:1.2.0'
     implementation 'androidx.media3:media3-exoplayer-hls:1.2.0'
     implementation 'androidx.media3:media3-ui:1.2.0'
     implementation 'androidx.media3:media3-datasource-okhttp:1.2.0'
+    
+    // Image & Ads
     implementation 'com.github.bumptech.glide:glide:4.16.0'
     implementation 'com.unity3d.ads:unity-ads:4.9.2'
-    implementation 'com.google.android.gms:play-services-ads:22.6.0'
+    implementation 'com.google.android.gms:play-services-ads:23.0.0'
 }
 EOF
 
-# 8. MANIFEST (DYNAMIC ADMOB ID)
+# 8. MANIFEST & XML
 cat > app/src/main/res/xml/network_security_config.xml <<EOF
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
@@ -205,6 +210,13 @@ cat > app/src/main/res/xml/network_security_config.xml <<EOF
         <trust-anchors><certificates src="system" /></trust-anchors>
     </base-config>
 </network-security-config>
+EOF
+
+cat > app/src/main/res/xml/file_paths.xml <<EOF
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <external-path name="external_files" path="."/>
+</paths>
 EOF
 
 cat > app/src/main/res/values/styles.xml <<EOF
@@ -233,6 +245,7 @@ cat > app/src/main/AndroidManifest.xml <<EOF
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <uses-permission android:name="com.google.android.gms.permission.AD_ID"/>
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29"/>
 
     <application
         android:allowBackup="true"
@@ -240,9 +253,18 @@ cat > app/src/main/AndroidManifest.xml <<EOF
         android:icon="@mipmap/ic_launcher"
         android:networkSecurityConfig="@xml/network_security_config"
         android:usesCleartextTraffic="true"
+        android:requestLegacyExternalStorage="true"
         android:theme="@style/AppTheme">
         
         <meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="$ADMOB_APP_ID"/>
+        
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${PACKAGE_NAME}.provider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/file_paths" />
+        </provider>
 
         <activity android:name=".MainActivity" 
             android:exported="true" 
@@ -259,6 +281,7 @@ cat > app/src/main/AndroidManifest.xml <<EOF
             android:configChanges="orientation|screenSize|keyboardHidden|smallestScreenSize|screenLayout"
             android:screenOrientation="sensor"
             android:theme="@style/PlayerTheme" />
+            
         <service android:name=".MyFirebaseMessagingService" android:exported="false">
             <intent-filter>
                 <action android:name="com.google.firebase.MESSAGING_EVENT" />
@@ -268,7 +291,7 @@ cat > app/src/main/AndroidManifest.xml <<EOF
 </manifest>
 EOF
 
-# 9. ADS MANAGER
+# 9. ADS MANAGER (HİBRİT)
 cat > "app/src/main/java/com/base/app/AdsManager.java" <<EOF
 package com.base.app;
 import android.app.Activity;
@@ -316,12 +339,14 @@ public class AdsManager {
             
             if (!isEnabled) return;
 
+            // ADMOB INIT
             if (provider.equals("ADMOB") || provider.equals("BOTH")) {
                 activity.runOnUiThread(() -> {
                     MobileAds.initialize(activity, s -> loadAdMobInter(activity));
                 });
             }
             
+            // UNITY INIT
             if (provider.equals("UNITY") || provider.equals("BOTH")) {
                 if (!unityGameId.isEmpty()) {
                     UnityAds.initialize(activity.getApplicationContext(), unityGameId, false, new IUnityAdsInitializationListener() {
@@ -335,6 +360,7 @@ public class AdsManager {
 
     private static void loadAdMobInter(Activity activity) {
         if (!interActive || admobInterId.isEmpty()) return;
+        
         AdRequest adRequest = new AdRequest.Builder().build();
         InterstitialAd.load(activity, admobInterId, adRequest, new InterstitialAdLoadCallback() {
             public void onAdLoaded(@NonNull InterstitialAd i) { mAdMobInter = i; }
@@ -346,6 +372,7 @@ public class AdsManager {
         if (!isEnabled || !bannerActive) return;
         container.removeAllViews();
         
+        // 1. AdMob
         if ((provider.equals("ADMOB") || provider.equals("BOTH")) && !admobBannerId.isEmpty()) {
             AdView adView = new AdView(activity);
             adView.setAdSize(AdSize.BANNER);
@@ -353,6 +380,7 @@ public class AdsManager {
             container.addView(adView);
             adView.loadAd(new AdRequest.Builder().build());
         } 
+        // 2. Unity
         else if ((provider.equals("UNITY") || provider.equals("BOTH")) && !unityBannerId.isEmpty()) {
             BannerView bannerView = new BannerView(activity, unityBannerId, new UnityBannerSize(320, 50));
             bannerView.load();
@@ -365,6 +393,7 @@ public class AdsManager {
         counter++;
         if (counter >= frequency) {
             counter = 0;
+            // AdMob
             if (mAdMobInter != null) {
                 mAdMobInter.show(activity);
                 mAdMobInter = null;
@@ -372,21 +401,15 @@ public class AdsManager {
                 onComplete.run();
                 return;
             }
-            if ((provider.equals("UNITY") || provider.equals("BOTH")) && !unityInterId.isEmpty()) {
-                if(UnityAds.isInitialized()) {
-                    UnityAds.load(unityInterId, new IUnityAdsLoadListener() {
-                        public void onUnityAdsAdLoaded(String id) {
-                            UnityAds.show(activity, id, new IUnityAdsShowListener() {
-                                public void onUnityAdsShowComplete(String i, UnityAds.UnityAdsShowCompletionState s) { onComplete.run(); }
-                                public void onUnityAdsShowFailure(String i, UnityAds.UnityAdsShowError e, String m) { onComplete.run(); }
-                                public void onUnityAdsShowStart(String i) {}
-                                public void onUnityAdsShowClick(String i) {}
-                            });
-                        }
-                        public void onUnityAdsFailedToLoad(String id, UnityAds.UnityAdsLoadError e, String m) { onComplete.run(); }
-                    });
-                    return;
-                }
+            // Unity
+            if ((provider.equals("UNITY") || provider.equals("BOTH")) && !unityInterId.isEmpty() && isUnityInitialized) {
+                UnityAds.show(activity, unityInterId, new IUnityAdsShowListener() {
+                    public void onUnityAdsShowComplete(String i, UnityAds.UnityAdsShowCompletionState s) { onComplete.run(); }
+                    public void onUnityAdsShowFailure(String i, UnityAds.UnityAdsShowError e, String m) { onComplete.run(); }
+                    public void onUnityAdsShowStart(String i) {}
+                    public void onUnityAdsShowClick(String i) {}
+                });
+                return;
             }
             onComplete.run();
         } else { onComplete.run(); }
@@ -410,12 +433,16 @@ import com.google.firebase.messaging.RemoteMessage;
 
 public class MyFirebaseMessagingService extends FirebaseMessagingService {
     public void onMessageReceived(RemoteMessage remoteMessage) {
-        if (remoteMessage.getNotification() != null) sendNotification(remoteMessage.getNotification().getTitle(), remoteMessage.getNotification().getBody());
-        else if (remoteMessage.getData().size() > 0) sendNotification(remoteMessage.getData().get("title"), remoteMessage.getData().get("body"));
+        if (remoteMessage.getNotification() != null) {
+            sendNotification(remoteMessage.getNotification().getTitle(), remoteMessage.getNotification().getBody());
+        } else if (remoteMessage.getData().size() > 0) {
+            sendNotification(remoteMessage.getData().get("title"), remoteMessage.getData().get("body"));
+        }
     }
-    public void onNewToken(String token) { getSharedPreferences("TITAN_PREFS", MODE_PRIVATE).edit().putString("fcm_token", token).apply(); }
+    public void onNewToken(String token) {
+        getSharedPreferences("TITAN_PREFS", MODE_PRIVATE).edit().putString("fcm_token", token).apply();
+    }
     private void sendNotification(String title, String messageBody) {
-        if(title==null) return;
         Intent intent = new Intent(this, MainActivity.class);
         intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
         PendingIntent pendingIntent = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_ONE_SHOT | PendingIntent.FLAG_IMMUTABLE);
@@ -433,7 +460,7 @@ public class MyFirebaseMessagingService extends FirebaseMessagingService {
 }
 EOF
 
-# 11. MAIN ACTIVITY
+# 11. MAIN ACTIVITY (HEADER + REFRESH FIX)
 cat > "app/src/main/java/com/base/app/MainActivity.java" <<EOF
 package com.base.app;
 
@@ -678,9 +705,10 @@ public class MainActivity extends Activity {
 }
 EOF
 
-# 12. WEBVIEW
+# 12. WEBVIEW ACTIVITY (UNIVERSAL REDIRECTS)
 cat > "app/src/main/java/com/base/app/WebViewActivity.java" <<EOF
 package com.base.app;
+
 import android.app.Activity;
 import android.os.Bundle;
 import android.webkit.*;
@@ -706,6 +734,7 @@ public class WebViewActivity extends Activity {
         w = new WebView(this);
         swipe.addView(w);
         setContentView(swipe);
+        
         swipe.setOnRefreshListener(() -> w.reload());
         
         WebSettings ws = w.getSettings();
@@ -733,7 +762,7 @@ public class WebViewActivity extends Activity {
                 DownloadManager dm = (DownloadManager) getSystemService(DOWNLOAD_SERVICE);
                 dm.enqueue(request);
                 Toast.makeText(getApplicationContext(), "İndiriliyor...", Toast.LENGTH_SHORT).show();
-            } catch (Exception e) {}
+            } catch (Exception e) { Toast.makeText(getApplicationContext(), "Hata: " + e.getMessage(), Toast.LENGTH_SHORT).show(); }
         });
 
         w.setWebChromeClient(new WebChromeClient() {
@@ -754,10 +783,17 @@ public class WebViewActivity extends Activity {
                 super.onPageFinished(view, url);
                 swipe.setRefreshing(false);
             }
+
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, String url) {
-                if (url.startsWith("http")) return false; 
-                try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url))); } catch (Exception e) {}
+                // HTTP/HTTPS ise WebView'de aç
+                if (url.startsWith("http://") || url.startsWith("https://")) return false; 
+                
+                // Diğer her şey (WhatsApp, Telegram vb.) dışarı at
+                try {
+                    Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+                    startActivity(intent);
+                } catch (Exception e) {}
                 return true;
             }
         });
@@ -773,7 +809,8 @@ public class WebViewActivity extends Activity {
         if (requestCode == FILECHOOSER_RESULTCODE) {
             if (mUploadMessage == null) return;
             Uri result = intent == null || resultCode != RESULT_OK ? null : intent.getData();
-            if (result != null) mUploadMessage.onReceiveValue(new Uri[]{result}); else mUploadMessage.onReceiveValue(null);
+            if (result != null) mUploadMessage.onReceiveValue(new Uri[]{result});
+            else mUploadMessage.onReceiveValue(null);
             mUploadMessage = null;
         }
     }
@@ -917,7 +954,7 @@ public class ChannelListActivity extends Activity {
 }
 EOF
 
-# 14. PLAYER
+# 14. PLAYER ACTIVITY (SENSOR & CUTOUT)
 cat > "app/src/main/java/com/base/app/PlayerActivity.java" <<EOF
 package com.base.app;
 
@@ -1061,5 +1098,5 @@ public class PlayerActivity extends Activity {
 EOF
 
 # 15. SONUÇ
-echo "✅ [16/16] TITAN APEX V11500 OLUŞTURULDU."
+echo "✅ [16/16] TITAN APEX V15000 OLUŞTURULDU."
 echo "🚀 AdMob ID -> Script | Unit IDs -> Panel | Redirects -> Fixed."
