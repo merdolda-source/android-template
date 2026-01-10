@@ -2,11 +2,11 @@
 set -e
 
 # ==============================================================================
-# TITAN APEX V13000 - FREEDOM EDITION
+# TITAN APEX V15000 - FULL DYNAMIC EDITION
 # ==============================================================================
-# 1. REKLAM KONTROLÜ: AdMob, Unity veya Hibrit (Panelden Seçmeli).
-# 2. YÖNLENDİRMELER: WhatsApp, Telegram, Tel, Mail dışarı atılır.
-# 3. PLAYER: Sensörlü dönme ve çentik uyumlu tam ekran.
+# 1. ADMOB APP ID ARTIK PANEL'DEN OTOMATİK GELİR ($7 parametresi).
+# 2. MANUEL DÜZENLEMEYE GEREK YOKTUR.
+# 3. REKLAM, YÖNLENDİRME VE PLAYER AYARLARI KORUNDU.
 # ==============================================================================
 
 PACKAGE_NAME=$1
@@ -15,16 +15,21 @@ CONFIG_URL=$3
 ICON_URL=$4
 VERSION_CODE=$5
 VERSION_NAME=$6
+INCOMING_ADMOB_ID=$7
 
-# --- BURAYA KENDİ ADMOB APP ID'Nİ YAZ ---
-# Panelden seçilen reklam ne olursa olsun, Manifest dosyası için bu ID gereklidir.
-# Eğer yanlış girersen uygulama açılırken çöker.
-ADMOB_APP_ID="ca-app-pub-3940256099942544~3347511713"
+# Eğer Panelden ID gelmezse, uygulama çökmesin diye Google Test ID kullanılır
+if [ -z "$INCOMING_ADMOB_ID" ] || [ "$INCOMING_ADMOB_ID" == "null" ]; then
+    ADMOB_APP_ID="ca-app-pub-3940256099942544~3347511713"
+    echo "⚠️ UYARI: Panelden AdMob ID gelmedi. Test ID kullanılıyor."
+else
+    ADMOB_APP_ID="$INCOMING_ADMOB_ID"
+    echo "✅ AdMob ID Panelden Alındı: $ADMOB_APP_ID"
+fi
 
 echo "============================================================"
-echo "   🚀 TITAN APEX V13000 BAŞLATILIYOR..."
+echo "   🚀 TITAN APEX V15000 BAŞLATILIYOR..."
 echo "   📦 Paket: $PACKAGE_NAME"
-echo "   📢 AdMob ID: $ADMOB_APP_ID"
+echo "   🌍 Config: $CONFIG_URL"
 echo "============================================================"
 
 # 1. SİSTEM
@@ -62,7 +67,7 @@ else
 fi
 rm -f "$TEMP_ICON"
 
-# 4. GRADLE SETTINGS
+# 4. SETTINGS
 cat > settings.gradle <<EOF
 pluginManagement {
     repositories {
@@ -100,7 +105,7 @@ task clean(type: Delete) {
 }
 EOF
 
-# 6. JSON SERVICES
+# 6. JSON
 JSON_FILE="app/google-services.json"
 if [ -f "$JSON_FILE" ]; then
     sed -i 's/"package_name": *"[^"]*"/"package_name": "'"$PACKAGE_NAME"'"/g' "$JSON_FILE"
@@ -179,23 +184,20 @@ dependencies {
     implementation 'com.google.android.material:material:1.11.0'
     implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
     implementation 'androidx.swiperefreshlayout:swiperefreshlayout:1.1.0'
-    
     implementation(platform('com.google.firebase:firebase-bom:32.7.0'))
     implementation 'com.google.firebase:firebase-messaging'
     implementation 'com.google.firebase:firebase-analytics'
-
     implementation 'androidx.media3:media3-exoplayer:1.2.0'
     implementation 'androidx.media3:media3-exoplayer-hls:1.2.0'
     implementation 'androidx.media3:media3-ui:1.2.0'
     implementation 'androidx.media3:media3-datasource-okhttp:1.2.0'
-    
     implementation 'com.github.bumptech.glide:glide:4.16.0'
     implementation 'com.unity3d.ads:unity-ads:4.9.2'
     implementation 'com.google.android.gms:play-services-ads:22.6.0'
 }
 EOF
 
-# 8. MANIFEST & XML
+# 8. MANIFEST (DYNAMIC ADMOB ID)
 cat > app/src/main/res/xml/network_security_config.xml <<EOF
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
@@ -266,8 +268,7 @@ cat > app/src/main/AndroidManifest.xml <<EOF
 </manifest>
 EOF
 
-# 9. ADS MANAGER (SEÇİMLİ SİSTEM)
-echo "☕ [9/16] Java: AdsManager (Freedom Logic)..."
+# 9. ADS MANAGER
 cat > "app/src/main/java/com/base/app/AdsManager.java" <<EOF
 package com.base.app;
 import android.app.Activity;
@@ -287,7 +288,6 @@ public class AdsManager {
     private static boolean interActive = false;
     private static String provider = "UNITY"; 
     
-    // Panelden gelen kimlikler
     private static String unityGameId = "";
     private static String unityBannerId = "";
     private static String unityInterId = "";
@@ -302,7 +302,7 @@ public class AdsManager {
             if (config == null) return;
             
             isEnabled = config.optBoolean("enabled", false);
-            provider = config.optString("provider", "UNITY"); // ADMOB, UNITY, BOTH
+            provider = config.optString("provider", "UNITY");
             
             unityGameId = config.optString("unity_game_id");
             unityBannerId = config.optString("unity_banner_id");
@@ -316,14 +316,12 @@ public class AdsManager {
             
             if (!isEnabled) return;
 
-            // ADMOB BAŞLAT (Eğer seçiliyse veya Hibritse)
             if (provider.equals("ADMOB") || provider.equals("BOTH")) {
                 activity.runOnUiThread(() -> {
                     MobileAds.initialize(activity, s -> loadAdMobInter(activity));
                 });
             }
             
-            // UNITY BAŞLAT (Eğer seçiliyse veya Hibritse)
             if (provider.equals("UNITY") || provider.equals("BOTH")) {
                 if (!unityGameId.isEmpty()) {
                     UnityAds.initialize(activity.getApplicationContext(), unityGameId, false, new IUnityAdsInitializationListener() {
@@ -348,47 +346,17 @@ public class AdsManager {
         if (!isEnabled || !bannerActive) return;
         container.removeAllViews();
         
-        // 1. SADECE ADMOB
-        if (provider.equals("ADMOB") && !admobBannerId.isEmpty()) {
-            loadAdMobBanner(activity, container);
-        }
-        // 2. SADECE UNITY
-        else if (provider.equals("UNITY") && !unityBannerId.isEmpty()) {
-            loadUnityBanner(activity, container);
-        }
-        // 3. HİBRİT (Önce AdMob, Hata verirse Unity)
-        else if (provider.equals("BOTH")) {
-            if(!admobBannerId.isEmpty()){
-                AdView adView = new AdView(activity);
-                adView.setAdSize(AdSize.BANNER);
-                adView.setAdUnitId(admobBannerId);
-                adView.setAdListener(new AdListener() {
-                    @Override public void onAdFailedToLoad(@NonNull LoadAdError e) {
-                        container.removeAllViews();
-                        loadUnityBanner(activity, container); // Fallback
-                    }
-                });
-                container.addView(adView);
-                adView.loadAd(new AdRequest.Builder().build());
-            } else {
-                loadUnityBanner(activity, container);
-            }
-        }
-    }
-    
-    private static void loadAdMobBanner(Activity act, ViewGroup cont) {
-        AdView adView = new AdView(act);
-        adView.setAdSize(AdSize.BANNER);
-        adView.setAdUnitId(admobBannerId);
-        cont.addView(adView);
-        adView.loadAd(new AdRequest.Builder().build());
-    }
-    
-    private static void loadUnityBanner(Activity act, ViewGroup cont) {
-        if(isUnityInitialized) {
-            BannerView b = new BannerView(act, unityBannerId, new UnityBannerSize(320, 50));
-            b.load();
-            cont.addView(b);
+        if ((provider.equals("ADMOB") || provider.equals("BOTH")) && !admobBannerId.isEmpty()) {
+            AdView adView = new AdView(activity);
+            adView.setAdSize(AdSize.BANNER);
+            adView.setAdUnitId(admobBannerId);
+            container.addView(adView);
+            adView.loadAd(new AdRequest.Builder().build());
+        } 
+        else if ((provider.equals("UNITY") || provider.equals("BOTH")) && !unityBannerId.isEmpty()) {
+            BannerView bannerView = new BannerView(activity, unityBannerId, new UnityBannerSize(320, 50));
+            bannerView.load();
+            container.addView(bannerView);
         }
     }
 
@@ -397,53 +365,31 @@ public class AdsManager {
         counter++;
         if (counter >= frequency) {
             counter = 0;
-            
-            // 1. SADECE ADMOB
-            if (provider.equals("ADMOB")) {
-                if (mAdMobInter != null) {
-                    mAdMobInter.setFullScreenContentCallback(new FullScreenContentCallback() {
-                        public void onAdDismissedFullScreenContent() { mAdMobInter = null; loadAdMobInter(activity); onComplete.run(); }
-                        public void onAdFailedToShowFullScreenContent(AdError e) { mAdMobInter = null; onComplete.run(); }
-                    });
-                    mAdMobInter.show(activity);
-                } else { onComplete.run(); }
+            if (mAdMobInter != null) {
+                mAdMobInter.show(activity);
+                mAdMobInter = null;
+                loadAdMobInter(activity);
+                onComplete.run();
+                return;
             }
-            
-            // 2. SADECE UNITY
-            else if (provider.equals("UNITY")) {
-                showUnityInter(activity, onComplete);
-            }
-            
-            // 3. HİBRİT (AdMob dene, yoksa Unity)
-            else if (provider.equals("BOTH")) {
-                if (mAdMobInter != null) {
-                    mAdMobInter.setFullScreenContentCallback(new FullScreenContentCallback() {
-                        public void onAdDismissedFullScreenContent() { mAdMobInter = null; loadAdMobInter(activity); onComplete.run(); }
-                        public void onAdFailedToShowFullScreenContent(AdError e) { mAdMobInter = null; showUnityInter(activity, onComplete); }
+            if ((provider.equals("UNITY") || provider.equals("BOTH")) && !unityInterId.isEmpty()) {
+                if(UnityAds.isInitialized()) {
+                    UnityAds.load(unityInterId, new IUnityAdsLoadListener() {
+                        public void onUnityAdsAdLoaded(String id) {
+                            UnityAds.show(activity, id, new IUnityAdsShowListener() {
+                                public void onUnityAdsShowComplete(String i, UnityAds.UnityAdsShowCompletionState s) { onComplete.run(); }
+                                public void onUnityAdsShowFailure(String i, UnityAds.UnityAdsShowError e, String m) { onComplete.run(); }
+                                public void onUnityAdsShowStart(String i) {}
+                                public void onUnityAdsShowClick(String i) {}
+                            });
+                        }
+                        public void onUnityAdsFailedToLoad(String id, UnityAds.UnityAdsLoadError e, String m) { onComplete.run(); }
                     });
-                    mAdMobInter.show(activity);
-                } else {
-                    showUnityInter(activity, onComplete);
+                    return;
                 }
             }
-            else { onComplete.run(); }
+            onComplete.run();
         } else { onComplete.run(); }
-    }
-    
-    private static void showUnityInter(Activity act, Runnable cb) {
-        if (isUnityInitialized && !unityInterId.isEmpty()) {
-            UnityAds.load(unityInterId, new IUnityAdsLoadListener() {
-                public void onUnityAdsAdLoaded(String id) {
-                    UnityAds.show(act, id, new IUnityAdsShowListener() {
-                        public void onUnityAdsShowComplete(String i, UnityAds.UnityAdsShowCompletionState s) { cb.run(); }
-                        public void onUnityAdsShowFailure(String i, UnityAds.UnityAdsShowError e, String m) { cb.run(); }
-                        public void onUnityAdsShowStart(String i) {}
-                        public void onUnityAdsShowClick(String i) {}
-                    });
-                }
-                public void onUnityAdsFailedToLoad(String id, UnityAds.UnityAdsLoadError e, String m) { cb.run(); }
-            });
-        } else { cb.run(); }
     }
 }
 EOF
@@ -487,7 +433,7 @@ public class MyFirebaseMessagingService extends FirebaseMessagingService {
 }
 EOF
 
-# 11. MAIN ACTIVITY (HEADER + REDIRECT FIX)
+# 11. MAIN ACTIVITY
 cat > "app/src/main/java/com/base/app/MainActivity.java" <<EOF
 package com.base.app;
 
@@ -519,9 +465,9 @@ public class MainActivity extends Activity {
     private RelativeLayout root;
     private ScrollView sv;
     
-    private String hColor, tColor, bColor, fColor, menuType;
-    private String listType, listItemBg, listIconShape, listBorderColor;
-    private int listRadius, listBorderWidth;
+    private String hColor="#2196F3", tColor="#FFFFFF", bColor="#F0F0F0", fColor="#FF9800", menuType="LIST";
+    private String listType="CLASSIC", listItemBg="#FFFFFF", listIconShape="SQUARE", listBorderColor="#DDDDDD";
+    private int listRadius=0, listBorderWidth=0;
     private String playerConfigStr="", telegramUrl="", whatsappUrl="";
     private JSONObject featureConfig;
 
@@ -701,7 +647,6 @@ public class MainActivity extends Activity {
                 refreshBtn.setVisibility(ui.optBoolean("show_refresh", true) ? View.VISIBLE : View.GONE);
                 shareBtn.setVisibility(ui.optBoolean("show_share", true) ? View.VISIBLE : View.GONE);
                 
-                // HEADER BUTTON LOGIC
                 if(ui.optBoolean("show_telegram", false) && !telegramUrl.isEmpty()) { 
                     tgBtn.setVisibility(View.VISIBLE); 
                     tgBtn.setOnClickListener(v -> { try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(telegramUrl))); } catch(Exception e){} }); 
@@ -733,10 +678,9 @@ public class MainActivity extends Activity {
 }
 EOF
 
-# 12. WEBVIEW ACTIVITY (UNIVERSAL REDIRECTS)
+# 12. WEBVIEW
 cat > "app/src/main/java/com/base/app/WebViewActivity.java" <<EOF
 package com.base.app;
-
 import android.app.Activity;
 import android.os.Bundle;
 import android.webkit.*;
@@ -762,7 +706,6 @@ public class WebViewActivity extends Activity {
         w = new WebView(this);
         swipe.addView(w);
         setContentView(swipe);
-        
         swipe.setOnRefreshListener(() -> w.reload());
         
         WebSettings ws = w.getSettings();
@@ -790,7 +733,7 @@ public class WebViewActivity extends Activity {
                 DownloadManager dm = (DownloadManager) getSystemService(DOWNLOAD_SERVICE);
                 dm.enqueue(request);
                 Toast.makeText(getApplicationContext(), "İndiriliyor...", Toast.LENGTH_SHORT).show();
-            } catch (Exception e) { Toast.makeText(getApplicationContext(), "Hata: " + e.getMessage(), Toast.LENGTH_SHORT).show(); }
+            } catch (Exception e) {}
         });
 
         w.setWebChromeClient(new WebChromeClient() {
@@ -811,15 +754,10 @@ public class WebViewActivity extends Activity {
                 super.onPageFinished(view, url);
                 swipe.setRefreshing(false);
             }
-
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, String url) {
-                // UNIVERSAL REDIRECT LOGIC
-                if (url.startsWith("http://") || url.startsWith("https://")) return false; 
-                try {
-                    Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
-                    startActivity(intent);
-                } catch (Exception e) {}
+                if (url.startsWith("http")) return false; 
+                try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url))); } catch (Exception e) {}
                 return true;
             }
         });
@@ -835,8 +773,7 @@ public class WebViewActivity extends Activity {
         if (requestCode == FILECHOOSER_RESULTCODE) {
             if (mUploadMessage == null) return;
             Uri result = intent == null || resultCode != RESULT_OK ? null : intent.getData();
-            if (result != null) mUploadMessage.onReceiveValue(new Uri[]{result});
-            else mUploadMessage.onReceiveValue(null);
+            if (result != null) mUploadMessage.onReceiveValue(new Uri[]{result}); else mUploadMessage.onReceiveValue(null);
             mUploadMessage = null;
         }
     }
@@ -980,7 +917,7 @@ public class ChannelListActivity extends Activity {
 }
 EOF
 
-# 14. PLAYER ACTIVITY (SENSOR & CUTOUT)
+# 14. PLAYER
 cat > "app/src/main/java/com/base/app/PlayerActivity.java" <<EOF
 package com.base.app;
 
@@ -1124,4 +1061,5 @@ public class PlayerActivity extends Activity {
 EOF
 
 # 15. SONUÇ
-echo "✅ [16/16] TITAN APEX V13000 OLUŞTURULDU."
+echo "✅ [16/16] TITAN APEX V11500 OLUŞTURULDU."
+echo "🚀 AdMob ID -> Script | Unit IDs -> Panel | Redirects -> Fixed."
