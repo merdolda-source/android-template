@@ -2,11 +2,11 @@
 set -e
 
 # ==============================================================================
-# TITAN APEX V8500 - ADS & SYNC REPAIR EDITION
+# TITAN APEX V13000 - FREEDOM EDITION
 # ==============================================================================
-# 1. ADMOB -> UNITY WATERFALL (SIRALI GECIS) MANTIGI GERI GETIRILDI.
-# 2. REFRESH (YENILEME) BUTONU HIZLANDIRILDI VE CACHE TEMIZLEME EKLENDI.
-# 3. WHATSAPP/TELEGRAM/PLAYER SENSOR ROTASYONU KORUNDU.
+# 1. REKLAM KONTROLÜ: AdMob, Unity veya Hibrit (Panelden Seçmeli).
+# 2. YÖNLENDİRMELER: WhatsApp, Telegram, Tel, Mail dışarı atılır.
+# 3. PLAYER: Sensörlü dönme ve çentik uyumlu tam ekran.
 # ==============================================================================
 
 PACKAGE_NAME=$1
@@ -16,23 +16,24 @@ ICON_URL=$4
 VERSION_CODE=$5
 VERSION_NAME=$6
 
+# --- BURAYA KENDİ ADMOB APP ID'Nİ YAZ ---
+# Panelden seçilen reklam ne olursa olsun, Manifest dosyası için bu ID gereklidir.
+# Eğer yanlış girersen uygulama açılırken çöker.
+ADMOB_APP_ID="ca-app-pub-3940256099942544~3347511713"
+
 echo "============================================================"
-echo "   🚀 TITAN APEX V8500 - PROJE OLUŞTURULUYOR"
-echo "   📦 PAKET ADI   : $PACKAGE_NAME"
-echo "   📱 UYGULAMA    : $APP_NAME"
-echo "   🌍 CONFIG URL : $CONFIG_URL"
+echo "   🚀 TITAN APEX V13000 BAŞLATILIYOR..."
+echo "   📦 Paket: $PACKAGE_NAME"
+echo "   📢 AdMob ID: $ADMOB_APP_ID"
 echo "============================================================"
 
-# ------------------------------------------------------------------
-# 1. SİSTEM VE TEMİZLİK
-# ------------------------------------------------------------------
-echo "⚙️ [1/16] Sistem hazırlığı..."
+# 1. SİSTEM
 if ! command -v convert &> /dev/null; then
     sudo apt-get update >/dev/null 2>&1 || true
     sudo apt-get install -y imagemagick >/dev/null 2>&1 || true
 fi
 
-echo "🧹 [2/16] Temizlik..."
+# 2. TEMİZLİK
 rm -rf app/src/main/res/drawable*
 rm -rf app/src/main/res/mipmap*
 rm -rf app/src/main/res/values*
@@ -44,10 +45,7 @@ mkdir -p "app/src/main/res/values"
 mkdir -p "app/src/main/res/xml"
 mkdir -p "app/src/main/res/layout"
 
-# ------------------------------------------------------------------
 # 3. İKON
-# ------------------------------------------------------------------
-echo "🖼️ [3/16] İkon..."
 ICON_TARGET="app/src/main/res/mipmap-xxxhdpi/ic_launcher.png"
 TEMP_ICON="icon_temp.png"
 curl -s -L -k -A "Mozilla/5.0" -o "$TEMP_ICON" "$ICON_URL" || true
@@ -64,10 +62,7 @@ else
 fi
 rm -f "$TEMP_ICON"
 
-# ------------------------------------------------------------------
-# 4. GRADLE
-# ------------------------------------------------------------------
-echo "📦 [4/16] Gradle..."
+# 4. GRADLE SETTINGS
 cat > settings.gradle <<EOF
 pluginManagement {
     repositories {
@@ -88,7 +83,7 @@ rootProject.name = "TitanApp"
 include ':app'
 EOF
 
-echo "📦 [5/16] Root build..."
+# 5. ROOT BUILD
 cat > build.gradle <<EOF
 buildscript {
     repositories {
@@ -105,10 +100,7 @@ task clean(type: Delete) {
 }
 EOF
 
-# ------------------------------------------------------------------
-# 6. JSON
-# ------------------------------------------------------------------
-echo "🔧 [6/16] JSON..."
+# 6. JSON SERVICES
 JSON_FILE="app/google-services.json"
 if [ -f "$JSON_FILE" ]; then
     sed -i 's/"package_name": *"[^"]*"/"package_name": "'"$PACKAGE_NAME"'"/g' "$JSON_FILE"
@@ -118,7 +110,7 @@ else
   "project_info": {
     "project_number": "000000000000",
     "project_id": "dummy-project",
-    "storage_bucket": "dummy-project.appspot.com"
+    "storage_bucket": "dummy.appspot.com"
   },
   "client": [
     {
@@ -133,10 +125,7 @@ else
 EOF
 fi
 
-# ------------------------------------------------------------------
-# 7. APP MODULE
-# ------------------------------------------------------------------
-echo "📚 [7/16] App Modülü..."
+# 7. APP BUILD
 cat > app/build.gradle <<EOF
 plugins {
     id 'com.android.application'
@@ -190,24 +179,23 @@ dependencies {
     implementation 'com.google.android.material:material:1.11.0'
     implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
     implementation 'androidx.swiperefreshlayout:swiperefreshlayout:1.1.0'
+    
     implementation(platform('com.google.firebase:firebase-bom:32.7.0'))
     implementation 'com.google.firebase:firebase-messaging'
     implementation 'com.google.firebase:firebase-analytics'
+
     implementation 'androidx.media3:media3-exoplayer:1.2.0'
     implementation 'androidx.media3:media3-exoplayer-hls:1.2.0'
     implementation 'androidx.media3:media3-ui:1.2.0'
     implementation 'androidx.media3:media3-datasource-okhttp:1.2.0'
+    
     implementation 'com.github.bumptech.glide:glide:4.16.0'
     implementation 'com.unity3d.ads:unity-ads:4.9.2'
     implementation 'com.google.android.gms:play-services-ads:22.6.0'
 }
 EOF
 
-# ------------------------------------------------------------------
-# 8. MANIFEST
-# ------------------------------------------------------------------
-echo "📜 [8/16] XML & Manifest..."
-
+# 8. MANIFEST & XML
 cat > app/src/main/res/xml/network_security_config.xml <<EOF
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
@@ -252,7 +240,7 @@ cat > app/src/main/AndroidManifest.xml <<EOF
         android:usesCleartextTraffic="true"
         android:theme="@style/AppTheme">
         
-        <meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="ca-app-pub-3940256099942544~3347511713"/>
+        <meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="$ADMOB_APP_ID"/>
 
         <activity android:name=".MainActivity" 
             android:exported="true" 
@@ -278,10 +266,8 @@ cat > app/src/main/AndroidManifest.xml <<EOF
 </manifest>
 EOF
 
-# ------------------------------------------------------------------
-# 9. ADS MANAGER (FIXED: WATERFALL HYBRID LOGIC)
-# ------------------------------------------------------------------
-echo "☕ [9/16] Java: AdsManager (Hybrid Waterfall)..."
+# 9. ADS MANAGER (SEÇİMLİ SİSTEM)
+echo "☕ [9/16] Java: AdsManager (Freedom Logic)..."
 cat > "app/src/main/java/com/base/app/AdsManager.java" <<EOF
 package com.base.app;
 import android.app.Activity;
@@ -300,91 +286,109 @@ public class AdsManager {
     private static boolean bannerActive = false;
     private static boolean interActive = false;
     private static String provider = "UNITY"; 
+    
+    // Panelden gelen kimlikler
     private static String unityGameId = "";
     private static String unityBannerId = "";
     private static String unityInterId = "";
     private static String admobBannerId = "";
     private static String admobInterId = "";
+    
     private static InterstitialAd mAdMobInter;
+    private static boolean isUnityInitialized = false;
 
     public static void init(Activity activity, JSONObject config) {
         try {
             if (config == null) return;
+            
             isEnabled = config.optBoolean("enabled", false);
-            provider = config.optString("provider", "UNITY");
+            provider = config.optString("provider", "UNITY"); // ADMOB, UNITY, BOTH
+            
+            unityGameId = config.optString("unity_game_id");
+            unityBannerId = config.optString("unity_banner_id");
+            unityInterId = config.optString("unity_inter_id");
+            admobBannerId = config.optString("admob_banner_id");
+            admobInterId = config.optString("admob_inter_id");
+            
             bannerActive = config.optBoolean("banner_active");
             interActive = config.optBoolean("inter_active");
             frequency = config.optInt("inter_freq", 3);
             
             if (!isEnabled) return;
 
-            // Initialize Unity if needed
-            if (provider.equals("UNITY") || provider.equals("BOTH")) {
-                unityGameId = config.optString("unity_game_id");
-                unityBannerId = config.optString("unity_banner_id");
-                unityInterId = config.optString("unity_inter_id");
-                if (!unityGameId.isEmpty()) {
-                    UnityAds.initialize(activity.getApplicationContext(), unityGameId, false, null);
-                }
+            // ADMOB BAŞLAT (Eğer seçiliyse veya Hibritse)
+            if (provider.equals("ADMOB") || provider.equals("BOTH")) {
+                activity.runOnUiThread(() -> {
+                    MobileAds.initialize(activity, s -> loadAdMobInter(activity));
+                });
             }
             
-            // Initialize AdMob if needed
-            if (provider.equals("ADMOB") || provider.equals("BOTH")) {
-                admobBannerId = config.optString("admob_banner_id");
-                admobInterId = config.optString("admob_inter_id");
-                activity.runOnUiThread(() -> {
-                    MobileAds.initialize(activity, s -> loadInter(activity));
-                });
+            // UNITY BAŞLAT (Eğer seçiliyse veya Hibritse)
+            if (provider.equals("UNITY") || provider.equals("BOTH")) {
+                if (!unityGameId.isEmpty()) {
+                    UnityAds.initialize(activity.getApplicationContext(), unityGameId, false, new IUnityAdsInitializationListener() {
+                        @Override public void onInitializationComplete() { isUnityInitialized = true; }
+                        @Override public void onInitializationFailed(UnityAds.UnityAdsInitializationError e, String m) { isUnityInitialized = false; }
+                    });
+                }
             }
         } catch (Exception e) { e.printStackTrace(); }
     }
 
-    private static void loadInter(Activity activity) {
-        if (!interActive) return;
-        
-        // Load AdMob First
-        if ((provider.equals("ADMOB") || provider.equals("BOTH")) && !admobInterId.isEmpty()) {
-            AdRequest adRequest = new AdRequest.Builder().build();
-            InterstitialAd.load(activity, admobInterId, adRequest, new InterstitialAdLoadCallback() {
-                public void onAdLoaded(@NonNull InterstitialAd interstitialAd) { mAdMobInter = interstitialAd; }
-                public void onAdFailedToLoad(@NonNull LoadAdError loadAdError) { 
-                    mAdMobInter = null; 
-                    // Fallback to Unity immediately if AdMob fails
-                    if(provider.equals("BOTH")) loadUnityInter(activity);
-                }
-            });
-        } 
-        // If only Unity, load it
-        else if (provider.equals("UNITY")) {
-            loadUnityInter(activity);
-        }
-    }
-    
-    private static void loadUnityInter(Activity act) {
-        if(!unityInterId.isEmpty() && UnityAds.isInitialized()) {
-            UnityAds.load(unityInterId, new IUnityAdsLoadListener() {
-                public void onUnityAdsAdLoaded(String id) {}
-                public void onUnityAdsFailedToLoad(String id, UnityAds.UnityAdsLoadError e, String m) {}
-            });
-        }
+    private static void loadAdMobInter(Activity activity) {
+        if (!interActive || admobInterId.isEmpty()) return;
+        AdRequest adRequest = new AdRequest.Builder().build();
+        InterstitialAd.load(activity, admobInterId, adRequest, new InterstitialAdLoadCallback() {
+            public void onAdLoaded(@NonNull InterstitialAd i) { mAdMobInter = i; }
+            public void onAdFailedToLoad(@NonNull LoadAdError e) { mAdMobInter = null; }
+        });
     }
 
     public static void showBanner(Activity activity, ViewGroup container) {
         if (!isEnabled || !bannerActive) return;
         container.removeAllViews();
         
-        // Priority to AdMob Banner
-        if ((provider.equals("ADMOB") || provider.equals("BOTH")) && !admobBannerId.isEmpty()) {
-            AdView adView = new AdView(activity);
-            adView.setAdSize(AdSize.BANNER);
-            adView.setAdUnitId(admobBannerId);
-            container.addView(adView);
-            adView.loadAd(new AdRequest.Builder().build());
-        } 
-        else if ((provider.equals("UNITY") || provider.equals("BOTH")) && !unityBannerId.isEmpty()) {
-            BannerView bannerView = new BannerView(activity, unityBannerId, new UnityBannerSize(320, 50));
-            bannerView.load();
-            container.addView(bannerView);
+        // 1. SADECE ADMOB
+        if (provider.equals("ADMOB") && !admobBannerId.isEmpty()) {
+            loadAdMobBanner(activity, container);
+        }
+        // 2. SADECE UNITY
+        else if (provider.equals("UNITY") && !unityBannerId.isEmpty()) {
+            loadUnityBanner(activity, container);
+        }
+        // 3. HİBRİT (Önce AdMob, Hata verirse Unity)
+        else if (provider.equals("BOTH")) {
+            if(!admobBannerId.isEmpty()){
+                AdView adView = new AdView(activity);
+                adView.setAdSize(AdSize.BANNER);
+                adView.setAdUnitId(admobBannerId);
+                adView.setAdListener(new AdListener() {
+                    @Override public void onAdFailedToLoad(@NonNull LoadAdError e) {
+                        container.removeAllViews();
+                        loadUnityBanner(activity, container); // Fallback
+                    }
+                });
+                container.addView(adView);
+                adView.loadAd(new AdRequest.Builder().build());
+            } else {
+                loadUnityBanner(activity, container);
+            }
+        }
+    }
+    
+    private static void loadAdMobBanner(Activity act, ViewGroup cont) {
+        AdView adView = new AdView(act);
+        adView.setAdSize(AdSize.BANNER);
+        adView.setAdUnitId(admobBannerId);
+        cont.addView(adView);
+        adView.loadAd(new AdRequest.Builder().build());
+    }
+    
+    private static void loadUnityBanner(Activity act, ViewGroup cont) {
+        if(isUnityInitialized) {
+            BannerView b = new BannerView(act, unityBannerId, new UnityBannerSize(320, 50));
+            b.load();
+            cont.addView(b);
         }
     }
 
@@ -394,39 +398,57 @@ public class AdsManager {
         if (counter >= frequency) {
             counter = 0;
             
-            // Try AdMob first
-            if (mAdMobInter != null) {
-                mAdMobInter.show(activity);
-                mAdMobInter = null;
-                loadInter(activity); // Reload for next time
-                onComplete.run();
-                return;
+            // 1. SADECE ADMOB
+            if (provider.equals("ADMOB")) {
+                if (mAdMobInter != null) {
+                    mAdMobInter.setFullScreenContentCallback(new FullScreenContentCallback() {
+                        public void onAdDismissedFullScreenContent() { mAdMobInter = null; loadAdMobInter(activity); onComplete.run(); }
+                        public void onAdFailedToShowFullScreenContent(AdError e) { mAdMobInter = null; onComplete.run(); }
+                    });
+                    mAdMobInter.show(activity);
+                } else { onComplete.run(); }
             }
             
-            // Try Unity
-            if ((provider.equals("UNITY") || provider.equals("BOTH")) && !unityInterId.isEmpty()) {
-                UnityAds.show(activity, unityInterId, new IUnityAdsShowListener() {
-                    public void onUnityAdsShowComplete(String id, UnityAds.UnityAdsShowCompletionState s) { onComplete.run(); loadUnityInter(activity); }
-                    public void onUnityAdsShowFailure(String id, UnityAds.UnityAdsShowError e, String m) { onComplete.run(); }
-                    public void onUnityAdsShowStart(String id) {}
-                    public void onUnityAdsShowClick(String id) {}
-                });
-                return;
+            // 2. SADECE UNITY
+            else if (provider.equals("UNITY")) {
+                showUnityInter(activity, onComplete);
             }
             
-            // If nothing works
-            onComplete.run();
-        } else { 
-            onComplete.run(); 
-        }
+            // 3. HİBRİT (AdMob dene, yoksa Unity)
+            else if (provider.equals("BOTH")) {
+                if (mAdMobInter != null) {
+                    mAdMobInter.setFullScreenContentCallback(new FullScreenContentCallback() {
+                        public void onAdDismissedFullScreenContent() { mAdMobInter = null; loadAdMobInter(activity); onComplete.run(); }
+                        public void onAdFailedToShowFullScreenContent(AdError e) { mAdMobInter = null; showUnityInter(activity, onComplete); }
+                    });
+                    mAdMobInter.show(activity);
+                } else {
+                    showUnityInter(activity, onComplete);
+                }
+            }
+            else { onComplete.run(); }
+        } else { onComplete.run(); }
+    }
+    
+    private static void showUnityInter(Activity act, Runnable cb) {
+        if (isUnityInitialized && !unityInterId.isEmpty()) {
+            UnityAds.load(unityInterId, new IUnityAdsLoadListener() {
+                public void onUnityAdsAdLoaded(String id) {
+                    UnityAds.show(act, id, new IUnityAdsShowListener() {
+                        public void onUnityAdsShowComplete(String i, UnityAds.UnityAdsShowCompletionState s) { cb.run(); }
+                        public void onUnityAdsShowFailure(String i, UnityAds.UnityAdsShowError e, String m) { cb.run(); }
+                        public void onUnityAdsShowStart(String i) {}
+                        public void onUnityAdsShowClick(String i) {}
+                    });
+                }
+                public void onUnityAdsFailedToLoad(String id, UnityAds.UnityAdsLoadError e, String m) { cb.run(); }
+            });
+        } else { cb.run(); }
     }
 }
 EOF
 
-# ------------------------------------------------------------------
-# 10. FIREBASE
-# ------------------------------------------------------------------
-echo "🔥 [10/16] Java: FCM..."
+# 10. FCM
 cat > "app/src/main/java/com/base/app/MyFirebaseMessagingService.java" <<EOF
 package com.base.app;
 import android.app.NotificationChannel;
@@ -441,32 +463,23 @@ import com.google.firebase.messaging.FirebaseMessagingService;
 import com.google.firebase.messaging.RemoteMessage;
 
 public class MyFirebaseMessagingService extends FirebaseMessagingService {
-    @Override
     public void onMessageReceived(RemoteMessage remoteMessage) {
-        if (remoteMessage.getNotification() != null) {
-            sendNotification(remoteMessage.getNotification().getTitle(), remoteMessage.getNotification().getBody());
-        } else if (remoteMessage.getData().size() > 0) {
-            String title = remoteMessage.getData().get("title");
-            String body = remoteMessage.getData().get("body");
-            if(title != null && body != null) sendNotification(title, body);
-        }
+        if (remoteMessage.getNotification() != null) sendNotification(remoteMessage.getNotification().getTitle(), remoteMessage.getNotification().getBody());
+        else if (remoteMessage.getData().size() > 0) sendNotification(remoteMessage.getData().get("title"), remoteMessage.getData().get("body"));
     }
-    @Override
-    public void onNewToken(String token) {
-        getSharedPreferences("TITAN_PREFS", MODE_PRIVATE).edit().putString("fcm_token", token).apply();
-    }
+    public void onNewToken(String token) { getSharedPreferences("TITAN_PREFS", MODE_PRIVATE).edit().putString("fcm_token", token).apply(); }
     private void sendNotification(String title, String messageBody) {
+        if(title==null) return;
         Intent intent = new Intent(this, MainActivity.class);
         intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
         PendingIntent pendingIntent = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_ONE_SHOT | PendingIntent.FLAG_IMMUTABLE);
-        String channelId = "TitanChannel";
-        NotificationCompat.Builder notificationBuilder = new NotificationCompat.Builder(this, channelId)
+        NotificationCompat.Builder notificationBuilder = new NotificationCompat.Builder(this, "TitanChannel")
                 .setSmallIcon(android.R.drawable.ic_dialog_info)
                 .setContentTitle(title).setContentText(messageBody).setAutoCancel(true)
                 .setSound(RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)).setContentIntent(pendingIntent);
         NotificationManager notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            NotificationChannel channel = new NotificationChannel(channelId, "Genel Bildirimler", NotificationManager.IMPORTANCE_DEFAULT);
+            NotificationChannel channel = new NotificationChannel("TitanChannel", "Genel", NotificationManager.IMPORTANCE_DEFAULT);
             notificationManager.createNotificationChannel(channel);
         }
         notificationManager.notify(0, notificationBuilder.build());
@@ -474,10 +487,7 @@ public class MyFirebaseMessagingService extends FirebaseMessagingService {
 }
 EOF
 
-# ------------------------------------------------------------------
-# 11. MAIN ACTIVITY (REFRESH FIX & BUTTONS)
-# ------------------------------------------------------------------
-echo "📱 [11/16] Java: MainActivity (Refresh Fix)..."
+# 11. MAIN ACTIVITY (HEADER + REDIRECT FIX)
 cat > "app/src/main/java/com/base/app/MainActivity.java" <<EOF
 package com.base.app;
 
@@ -509,9 +519,9 @@ public class MainActivity extends Activity {
     private RelativeLayout root;
     private ScrollView sv;
     
-    private String hColor="#2196F3", tColor="#FFFFFF", bColor="#F0F0F0", fColor="#FF9800", menuType="LIST";
-    private String listType="CLASSIC", listItemBg="#FFFFFF", listIconShape="SQUARE", listBorderColor="#DDDDDD";
-    private int listRadius=0, listBorderWidth=0;
+    private String hColor, tColor, bColor, fColor, menuType;
+    private String listType, listItemBg, listIconShape, listBorderColor;
+    private int listRadius, listBorderWidth;
     private String playerConfigStr="", telegramUrl="", whatsappUrl="";
     private JSONObject featureConfig;
 
@@ -560,54 +570,22 @@ public class MainActivity extends Activity {
         titleTxt.setTypeface(null, Typeface.BOLD);
         headerLayout.addView(titleTxt, new LinearLayout.LayoutParams(0, -2, 1.0f));
 
-        // Telegram Button
-        tgBtn = new ImageView(this);
-        tgBtn.setImageResource(android.R.drawable.ic_dialog_email);
-        tgBtn.setPadding(15,0,15,0);
-        tgBtn.setVisibility(View.GONE);
-        headerLayout.addView(tgBtn);
-
-        // WhatsApp Button
-        waBtn = new ImageView(this);
-        waBtn.setImageResource(android.R.drawable.ic_menu_call);
-        waBtn.setPadding(15,0,15,0);
-        waBtn.setVisibility(View.GONE);
-        headerLayout.addView(waBtn);
-
-        // Share Button
-        shareBtn = new ImageView(this);
-        shareBtn.setImageResource(android.R.drawable.ic_menu_share);
-        shareBtn.setPadding(20,0,20,0);
-        shareBtn.setOnClickListener(v -> shareApp());
-        headerLayout.addView(shareBtn);
-
-        // REFRESH BUTTON (FIXED)
-        refreshBtn = new ImageView(this);
-        refreshBtn.setImageResource(android.R.drawable.ic_popup_sync);
+        tgBtn = new ImageView(this); tgBtn.setImageResource(android.R.drawable.ic_dialog_email); tgBtn.setPadding(15,0,15,0); tgBtn.setVisibility(View.GONE); headerLayout.addView(tgBtn);
+        waBtn = new ImageView(this); waBtn.setImageResource(android.R.drawable.ic_menu_call); waBtn.setPadding(15,0,15,0); waBtn.setVisibility(View.GONE); headerLayout.addView(waBtn);
+        shareBtn = new ImageView(this); shareBtn.setImageResource(android.R.drawable.ic_menu_share); shareBtn.setPadding(20,0,20,0); shareBtn.setOnClickListener(v -> shareApp()); headerLayout.addView(shareBtn);
+        
+        refreshBtn = new ImageView(this); refreshBtn.setImageResource(android.R.drawable.ic_popup_sync);
         refreshBtn.setOnClickListener(v -> {
             Toast.makeText(this, "Yenileniyor...", Toast.LENGTH_SHORT).show();
-            // Eski view'leri temizle
             container.removeAllViews();
-            currentRow = null;
             new Fetch().execute(CONFIG_URL);
         });
         headerLayout.addView(refreshBtn);
 
-        RelativeLayout.LayoutParams hp = new RelativeLayout.LayoutParams(-1,-2);
-        hp.addRule(RelativeLayout.ALIGN_PARENT_TOP);
-        root.addView(headerLayout, hp);
-
-        sv = new ScrollView(this);
-        sv.setId(View.generateViewId());
-        sv.setVisibility(View.GONE);
-        container = new LinearLayout(this);
-        container.setOrientation(LinearLayout.VERTICAL);
-        container.setPadding(20,20,20,150); 
-        sv.addView(container);
-        
-        RelativeLayout.LayoutParams sp = new RelativeLayout.LayoutParams(-1,-1);
-        sp.addRule(RelativeLayout.BELOW, headerLayout.getId());
-        root.addView(sv, sp);
+        RelativeLayout.LayoutParams hp = new RelativeLayout.LayoutParams(-1,-2); hp.addRule(RelativeLayout.ALIGN_PARENT_TOP); root.addView(headerLayout, hp);
+        sv = new ScrollView(this); sv.setId(View.generateViewId()); sv.setVisibility(View.GONE);
+        container = new LinearLayout(this); container.setOrientation(LinearLayout.VERTICAL); container.setPadding(20,20,20,150); sv.addView(container);
+        RelativeLayout.LayoutParams sp = new RelativeLayout.LayoutParams(-1,-1); sp.addRule(RelativeLayout.BELOW, headerLayout.getId()); root.addView(sv, sp);
     }
 
     private void syncToken(String token) {
@@ -616,31 +594,14 @@ public class MainActivity extends Activity {
                 String baseUrl = CONFIG_URL.contains("api.php") ? CONFIG_URL.substring(0, CONFIG_URL.indexOf("api.php")) : CONFIG_URL.substring(0, CONFIG_URL.lastIndexOf("/") + 1);
                 URL url = new URL(baseUrl + "update_token.php");
                 HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-                conn.setRequestMethod("POST"); conn.setDoOutput(true); conn.setConnectTimeout(10000); 
+                conn.setRequestMethod("POST"); conn.setDoOutput(true);
                 String data = "fcm_token=" + URLEncoder.encode(token, "UTF-8") + "&package_name=" + URLEncoder.encode(getPackageName(), "UTF-8");
                 OutputStream os = conn.getOutputStream(); os.write(data.getBytes()); os.flush(); os.close();
-                conn.getResponseCode(); conn.disconnect();
             } catch (Exception e) {}
         }).start();
     }
 
-    private void shareApp() {
-        startActivity(Intent.createChooser(new Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, titleTxt.getText() + " İndir: https://play.google.com/store/apps/details?id=" + getPackageName()), "Paylaş"));
-    }
-
-    private void checkRateUs() {
-        SharedPreferences prefs = getSharedPreferences("TITAN_PREFS", MODE_PRIVATE);
-        int count = prefs.getInt("launch_count", 0) + 1;
-        prefs.edit().putInt("launch_count", count).apply();
-        if (featureConfig == null) return;
-        JSONObject rate = featureConfig.optJSONObject("rate_us");
-        if (rate != null && rate.optBoolean("active", false)) {
-            int freq = rate.optInt("freq", 5);
-            if (count % freq == 0) {
-                new AlertDialog.Builder(this).setTitle("Bizi Değerlendir").setMessage("Uygulamamızı beğendiysen 5 yıldız verir misin?").setPositiveButton("Şimdi Puanla", (d, w) -> { try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=" + getPackageName()))); } catch(Exception e){} }).setNegativeButton("Daha Sonra", null).show();
-            }
-        }
-    }
+    private void shareApp() { startActivity(Intent.createChooser(new Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, titleTxt.getText() + " İndir: https://play.google.com/store/apps/details?id=" + getPackageName()), "Paylaş")); }
 
     private void renderBottomNav(JSONArray modules) {
         try {
@@ -662,13 +623,9 @@ public class MainActivity extends Activity {
                 } catch(Exception e){}
                 return true;
             });
-            RelativeLayout.LayoutParams lp = new RelativeLayout.LayoutParams(-1, -2);
-            lp.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM);
-            root.addView(bnv, lp);
-            RelativeLayout.LayoutParams sp = (RelativeLayout.LayoutParams) sv.getLayoutParams();
-            sp.addRule(RelativeLayout.ABOVE, bnv.getId());
-            sv.setLayoutParams(sp);
-        } catch(Exception e) { e.printStackTrace(); }
+            RelativeLayout.LayoutParams lp = new RelativeLayout.LayoutParams(-1, -2); lp.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM); root.addView(bnv, lp);
+            RelativeLayout.LayoutParams sp = (RelativeLayout.LayoutParams) sv.getLayoutParams(); sp.addRule(RelativeLayout.ABOVE, bnv.getId()); sv.setLayoutParams(sp);
+        } catch(Exception e) {}
     }
 
     private void addBtn(String txt, String type, String url, String cont, String ua, String ref, String org) {
@@ -677,16 +634,12 @@ public class MainActivity extends Activity {
         String hStr = h.toString();
         View v = null;
         if(menuType.equals("GRID")) {
-            if(currentRow == null || currentRow.getChildCount() >= 2) {
-                currentRow = new LinearLayout(this); currentRow.setOrientation(0); currentRow.setWeightSum(2); container.addView(currentRow);
-            }
+            if(currentRow == null || currentRow.getChildCount() >= 2) { currentRow = new LinearLayout(this); currentRow.setOrientation(0); currentRow.setWeightSum(2); container.addView(currentRow); }
             Button b = new Button(this); b.setText(txt); b.setTextColor(Color.parseColor(tColor)); setFocusBg(b);
             LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(0, 200, 1.0f); p.setMargins(10,10,10,10); b.setLayoutParams(p);
-            b.setOnClickListener(x -> AdsManager.checkInter(this, () -> open(type, url, cont, hStr)));
-            currentRow.addView(b); return;
+            b.setOnClickListener(x -> AdsManager.checkInter(this, () -> open(type, url, cont, hStr))); currentRow.addView(b); return;
         } else if(menuType.equals("CARD")) {
-            TextView t = new TextView(this); t.setText(txt); t.setTextSize(22); t.setGravity(17); t.setTextColor(Color.parseColor(tColor));
-            t.setPadding(50,150,50,150); setFocusBg(t);
+            TextView t = new TextView(this); t.setText(txt); t.setTextSize(22); t.setGravity(17); t.setTextColor(Color.parseColor(tColor)); t.setPadding(50,150,50,150); setFocusBg(t);
             LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-1, -2); p.setMargins(0,0,0,30); t.setLayoutParams(p);
             v = t; v.setOnClickListener(x -> AdsManager.checkInter(this, () -> open(type, url, cont, hStr)));
         } else {
@@ -705,16 +658,9 @@ public class MainActivity extends Activity {
     }
 
     private void open(String t, String u, String c, String h) {
-        if(t.equals("WEB") || t.equals("HTML")) {
-            Intent i = new Intent(this, WebViewActivity.class); i.putExtra("WEB_URL", u); i.putExtra("HTML_DATA", c); startActivity(i);
-        } else if(t.equals("SINGLE_STREAM")) {
-            Intent i = new Intent(this, PlayerActivity.class); i.putExtra("VIDEO_URL", u); i.putExtra("HEADERS_JSON", h); i.putExtra("PLAYER_CONFIG", playerConfigStr); startActivity(i);
-        } else {
-            Intent i = new Intent(this, ChannelListActivity.class); i.putExtra("LIST_URL", u); i.putExtra("LIST_CONTENT", c); i.putExtra("TYPE", t);
-            i.putExtra("HEADER_COLOR", hColor); i.putExtra("BG_COLOR", bColor); i.putExtra("TEXT_COLOR", tColor); i.putExtra("FOCUS_COLOR", fColor);
-            i.putExtra("PLAYER_CONFIG", playerConfigStr); i.putExtra("L_TYPE", listType); i.putExtra("L_BG", listItemBg); i.putExtra("L_RAD", listRadius); i.putExtra("L_ICON", listIconShape); i.putExtra("L_BORDER_W", listBorderWidth); i.putExtra("L_BORDER_C", listBorderColor);
-            startActivity(i);
-        }
+        if(t.equals("WEB") || t.equals("HTML")) { Intent i = new Intent(this, WebViewActivity.class); i.putExtra("WEB_URL", u); i.putExtra("HTML_DATA", c); startActivity(i); } 
+        else if(t.equals("SINGLE_STREAM")) { Intent i = new Intent(this, PlayerActivity.class); i.putExtra("VIDEO_URL", u); i.putExtra("HEADERS_JSON", h); i.putExtra("PLAYER_CONFIG", playerConfigStr); startActivity(i); } 
+        else { Intent i = new Intent(this, ChannelListActivity.class); i.putExtra("LIST_URL", u); i.putExtra("LIST_CONTENT", c); i.putExtra("TYPE", t); i.putExtra("HEADER_COLOR", hColor); i.putExtra("BG_COLOR", bColor); i.putExtra("TEXT_COLOR", tColor); i.putExtra("FOCUS_COLOR", fColor); i.putExtra("PLAYER_CONFIG", playerConfigStr); i.putExtra("L_TYPE", listType); i.putExtra("L_BG", listItemBg); i.putExtra("L_RAD", listRadius); i.putExtra("L_ICON", listIconShape); i.putExtra("L_BORDER_W", listBorderWidth); i.putExtra("L_BORDER_C", listBorderColor); startActivity(i); }
     }
 
     class Fetch extends AsyncTask<String,Void,String> {
@@ -755,14 +701,14 @@ public class MainActivity extends Activity {
                 refreshBtn.setVisibility(ui.optBoolean("show_refresh", true) ? View.VISIBLE : View.GONE);
                 shareBtn.setVisibility(ui.optBoolean("show_share", true) ? View.VISIBLE : View.GONE);
                 
-                if(ui.optBoolean("show_telegram", false) && !telegramUrl.isEmpty()) {
-                    tgBtn.setVisibility(View.VISIBLE);
-                    tgBtn.setOnClickListener(v -> { try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(telegramUrl))); } catch(Exception e){} });
+                // HEADER BUTTON LOGIC
+                if(ui.optBoolean("show_telegram", false) && !telegramUrl.isEmpty()) { 
+                    tgBtn.setVisibility(View.VISIBLE); 
+                    tgBtn.setOnClickListener(v -> { try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(telegramUrl))); } catch(Exception e){} }); 
                 }
-                
-                if(ui.optBoolean("show_whatsapp", false) && !whatsappUrl.isEmpty()) {
-                    waBtn.setVisibility(View.VISIBLE);
-                    waBtn.setOnClickListener(v -> { try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(whatsappUrl))); } catch(Exception e){} });
+                if(ui.optBoolean("show_whatsapp", false) && !whatsappUrl.isEmpty()) { 
+                    waBtn.setVisibility(View.VISIBLE); 
+                    waBtn.setOnClickListener(v -> { try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(whatsappUrl))); } catch(Exception e){} }); 
                 }
 
                 container.removeAllViews(); currentRow = null;
@@ -787,10 +733,7 @@ public class MainActivity extends Activity {
 }
 EOF
 
-# ------------------------------------------------------------------
-# 12. WEBVIEW ACTIVITY (SWIPE FIX)
-# ------------------------------------------------------------------
-echo "🌐 [12/16] Java: WebViewActivity..."
+# 12. WEBVIEW ACTIVITY (UNIVERSAL REDIRECTS)
 cat > "app/src/main/java/com/base/app/WebViewActivity.java" <<EOF
 package com.base.app;
 
@@ -868,16 +811,11 @@ public class WebViewActivity extends Activity {
                 super.onPageFinished(view, url);
                 swipe.setRefreshing(false);
             }
-            
-            @Override
-            public void onReceivedError(WebView view, int errorCode, String description, String failingUrl) {
-                super.onReceivedError(view, errorCode, description, failingUrl);
-                swipe.setRefreshing(false);
-            }
 
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, String url) {
-                if (url.startsWith("http")) return false; 
+                // UNIVERSAL REDIRECT LOGIC
+                if (url.startsWith("http://") || url.startsWith("https://")) return false; 
                 try {
                     Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
                     startActivity(intent);
@@ -911,10 +849,7 @@ public class WebViewActivity extends Activity {
 }
 EOF
 
-# ------------------------------------------------------------------
 # 13. CHANNEL LIST
-# ------------------------------------------------------------------
-echo "📋 [13/16] Java: ChannelListActivity..."
 cat > "app/src/main/java/com/base/app/ChannelListActivity.java" <<EOF
 package com.base.app;
 import android.app.Activity;
@@ -1045,10 +980,7 @@ public class ChannelListActivity extends Activity {
 }
 EOF
 
-# ------------------------------------------------------------------
-# 14. PLAYER ACTIVITY (SENSOR & FULLSCREEN)
-# ------------------------------------------------------------------
-echo "🎥 [14/16] Java: PlayerActivity..."
+# 14. PLAYER ACTIVITY (SENSOR & CUTOUT)
 cat > "app/src/main/java/com/base/app/PlayerActivity.java" <<EOF
 package com.base.app;
 
@@ -1191,8 +1123,5 @@ public class PlayerActivity extends Activity {
 }
 EOF
 
-# ------------------------------------------------------------------
 # 15. SONUÇ
-# ------------------------------------------------------------------
-echo "✅ [16/16] TITAN APEX V8500 OLUŞTURULDU."
-echo "🚀 Hybrid Ads, Refresh Fix ve Sensor Rotation uygulandı."
+echo "✅ [16/16] TITAN APEX V13000 OLUŞTURULDU."
