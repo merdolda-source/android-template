@@ -2,13 +2,13 @@
 set -e
 
 # ==============================================================================
-# TITAN APEX V16000 - GOOGLE SERVICES FIX EDITION
+# TITAN APEX V17000 - COMPILATION FIX EDITION
 # ==============================================================================
-# HATA ÇÖZÜMÜ: google-services.json artık her seferinde sıfırdan oluşturulur.
-# "No matching client found" hatası %100 giderilmiştir.
+# 1. HATA DÜZELTMESİ: Eksik importlar (AsyncTask, Typeface) eklendi.
+# 2. HATA DÜZELTMESİ: renderBottomNav fonksiyonu eklendi.
+# 3. FULL ÖZELLİK: Hibrit Reklam + Panel Yönetimi + Sensör Player.
 # ==============================================================================
 
-# --- PARAMETRELER ---
 PACKAGE_NAME=$1
 APP_NAME=$2
 CONFIG_URL=$3
@@ -17,7 +17,7 @@ VERSION_CODE=$5
 VERSION_NAME=$6
 PANEL_ADMOB_ID=$7
 
-# AdMob App ID Kontrolü
+# AdMob ID Kontrolü
 if [ -n "$PANEL_ADMOB_ID" ] && [ "$PANEL_ADMOB_ID" != "null" ]; then
     ADMOB_APP_ID="$PANEL_ADMOB_ID"
 else
@@ -25,9 +25,8 @@ else
 fi
 
 echo "=========================================="
-echo "   🚀 TITAN APEX V16000 (GS FIX) BAŞLIYOR"
+echo "   🚀 TITAN APEX V17000 (FIXED)"
 echo "   📦 Paket: $PACKAGE_NAME"
-echo "   💰 AdMob: $ADMOB_APP_ID"
 echo "=========================================="
 
 # 1. SİSTEM
@@ -42,8 +41,8 @@ rm -rf app/src/main/res/mipmap*
 rm -rf app/src/main/res/values*
 rm -rf app/src/main/java/com/base/app/*
 rm -rf .gradle app/build build
-# google-services.json'u da siliyoruz ki sıfırdan temiz oluşturalım
-rm -f app/google-services.json 
+# Google Services JSON'u temizle (Yenisi oluşturulacak)
+rm -f app/google-services.json
 
 mkdir -p "app/src/main/java/com/base/app"
 mkdir -p "app/src/main/res/mipmap-xxxhdpi"
@@ -68,45 +67,31 @@ else
 fi
 rm -f "$TEMP_ICON"
 
-# 4. GRADLE SETTINGS
+# 4. GRADLE
 cat > settings.gradle <<EOF
 pluginManagement {
-    repositories {
-        google()
-        mavenCentral()
-        gradlePluginPortal()
-    }
+    repositories { google(); mavenCentral(); gradlePluginPortal() }
 }
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
-    repositories {
-        google()
-        mavenCentral()
-        maven { url 'https://jitpack.io' }
-    }
+    repositories { google(); mavenCentral(); maven { url 'https://jitpack.io' } }
 }
 rootProject.name = "TitanApp"
 include ':app'
 EOF
 
-# 5. ROOT BUILD
 cat > build.gradle <<EOF
 buildscript {
-    repositories {
-        google()
-        mavenCentral()
-    }
+    repositories { google(); mavenCentral() }
     dependencies {
         classpath 'com.android.tools.build:gradle:8.2.1'
         classpath 'com.google.gms:google-services:4.4.1'
     }
 }
-task clean(type: Delete) {
-    delete rootProject.buildDir
-}
+task clean(type: Delete) { delete rootProject.buildDir }
 EOF
 
-# 6. APP BUILD
+# 5. APP BUILD
 cat > app/build.gradle <<EOF
 plugins {
     id 'com.android.application'
@@ -116,7 +101,6 @@ plugins {
 android {
     namespace 'com.base.app'
     compileSdk 34
-
     defaultConfig {
         applicationId "$PACKAGE_NAME"
         minSdk 24
@@ -125,7 +109,6 @@ android {
         versionName "$VERSION_NAME"
         multiDexEnabled true
     }
-
     signingConfigs {
         release {
             storeFile file("keystore.jks")
@@ -134,7 +117,6 @@ android {
             keyPassword System.getenv("SIGNING_KEY_PASSWORD")
         }
     }
-
     buildTypes {
         release {
             minifyEnabled true
@@ -143,11 +125,7 @@ android {
             signingConfig signingConfigs.release
         }
     }
-    
-    compileOptions {
-        sourceCompatibility JavaVersion.VERSION_1_8
-        targetCompatibility JavaVersion.VERSION_1_8
-    }
+    compileOptions { sourceCompatibility 1.8; targetCompatibility 1.8; }
 }
 
 dependencies {
@@ -155,68 +133,33 @@ dependencies {
     implementation 'com.google.android.material:material:1.11.0'
     implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
     implementation 'androidx.swiperefreshlayout:swiperefreshlayout:1.1.0'
-    
-    // Firebase
     implementation(platform('com.google.firebase:firebase-bom:32.7.0'))
     implementation 'com.google.firebase:firebase-messaging'
     implementation 'com.google.firebase:firebase-analytics'
-
-    // Player
     implementation 'androidx.media3:media3-exoplayer:1.2.0'
     implementation 'androidx.media3:media3-exoplayer-hls:1.2.0'
     implementation 'androidx.media3:media3-ui:1.2.0'
     implementation 'androidx.media3:media3-datasource-okhttp:1.2.0'
-    
-    // Image & Ads
     implementation 'com.github.bumptech.glide:glide:4.16.0'
     implementation 'com.unity3d.ads:unity-ads:4.9.2'
     implementation 'com.google.android.gms:play-services-ads:23.0.0'
 }
 EOF
 
-# 7. JSON SERVICES (BU KISIM DÜZELTİLDİ)
-# Eski dosyayı silip, GÜNCEL paket adıyla sıfırdan oluşturuyoruz.
-echo "🔧 JSON Dosyası Oluşturuluyor: $PACKAGE_NAME için..."
+# 6. JSON (Fix)
 cat > app/google-services.json <<EOF
 {
-  "project_info": {
-    "project_number": "123456789012",
-    "project_id": "dummy-project-id",
-    "storage_bucket": "dummy-project-id.appspot.com"
-  },
-  "client": [
-    {
-      "client_info": {
-        "mobilesdk_app_id": "1:123456789012:android:321abc456def7890",
-        "android_client_info": {
-          "package_name": "$PACKAGE_NAME"
-        }
-      },
-      "oauth_client": [],
-      "api_key": [
-        {
-          "current_key": "dummy_api_key_for_build_process"
-        }
-      ],
-      "services": {
-        "appinvite_service": {
-          "other_platform_oauth_client": []
-        }
-      }
-    }
-  ],
-  "configuration_version": "1"
+  "project_info": { "project_number": "000000000000", "project_id": "dummy", "storage_bucket": "dummy.appspot.com" },
+  "client": [ {
+      "client_info": { "mobilesdk_app_id": "1:000000000000:android:0000000000000000", "android_client_info": { "package_name": "$PACKAGE_NAME" } },
+      "api_key": [ { "current_key": "dummy_key" } ]
+  } ]
 }
 EOF
 
-# 8. MANIFEST & XML
+# 7. MANIFEST & XML
 cat > app/src/main/res/xml/network_security_config.xml <<EOF
-<?xml version="1.0" encoding="utf-8"?>
-<network-security-config>
-    <base-config cleartextTrafficPermitted="true">
-        <trust-anchors><certificates src="system" /></trust-anchors>
-    </base-config>
-</network-security-config>
+<?xml version="1.0" encoding="utf-8"?><network-security-config><base-config cleartextTrafficPermitted="true"><trust-anchors><certificates src="system" /></trust-anchors></base-config></network-security-config>
 EOF
 
 cat > app/src/main/res/values/styles.xml <<EOF
@@ -238,50 +181,32 @@ EOF
 
 cat > app/src/main/AndroidManifest.xml <<EOF
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <uses-permission android:name="com.google.android.gms.permission.AD_ID"/>
 
-    <application
-        android:allowBackup="true"
-        android:label="$APP_NAME"
-        android:icon="@mipmap/ic_launcher"
+    <application android:allowBackup="true" android:label="$APP_NAME" android:icon="@mipmap/ic_launcher"
         android:networkSecurityConfig="@xml/network_security_config"
-        android:usesCleartextTraffic="true"
-        android:theme="@style/AppTheme">
+        android:usesCleartextTraffic="true" android:theme="@style/AppTheme">
         
         <meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="$ADMOB_APP_ID"/>
 
-        <activity android:name=".MainActivity" 
-            android:exported="true" 
-            android:screenOrientation="portrait">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
+        <activity android:name=".MainActivity" android:exported="true" android:screenOrientation="portrait">
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
         </activity>
         
         <activity android:name=".WebViewActivity" android:configChanges="orientation|screenSize|keyboardHidden"/>
         <activity android:name=".ChannelListActivity" />
-        <activity android:name=".PlayerActivity"
-            android:configChanges="orientation|screenSize|keyboardHidden|smallestScreenSize|screenLayout"
-            android:screenOrientation="sensor"
-            android:theme="@style/PlayerTheme" />
-            
-        <service android:name=".MyFirebaseMessagingService" android:exported="false">
-            <intent-filter>
-                <action android:name="com.google.firebase.MESSAGING_EVENT" />
-            </intent-filter>
-        </service>
+        <activity android:name=".PlayerActivity" android:configChanges="orientation|screenSize|keyboardHidden|smallestScreenSize|screenLayout" android:screenOrientation="sensor" android:theme="@style/PlayerTheme" />
+        <service android:name=".MyFirebaseMessagingService" android:exported="false"><intent-filter><action android:name="com.google.firebase.MESSAGING_EVENT" /></intent-filter></service>
     </application>
 </manifest>
 EOF
 
-# 9. ADS MANAGER
+# 8. ADS MANAGER
 cat > "app/src/main/java/com/base/app/AdsManager.java" <<EOF
 package com.base.app;
 import android.app.Activity;
@@ -301,11 +226,8 @@ public class AdsManager {
     private static boolean interActive = false;
     private static String provider = "UNITY"; 
     
-    private static String unityGameId = "";
-    private static String unityBannerId = "";
-    private static String unityInterId = "";
-    private static String admobBannerId = "";
-    private static String admobInterId = "";
+    private static String unityGameId = "", unityBannerId = "", unityInterId = "";
+    private static String admobBannerId = "", admobInterId = "";
     
     private static InterstitialAd mAdMobInter;
     private static boolean isUnityInitialized = false;
@@ -371,13 +293,8 @@ public class AdsManager {
         if (counter >= frequency) {
             counter = 0;
             if (mAdMobInter != null) {
-                mAdMobInter.show(activity);
-                mAdMobInter = null;
-                loadAdMobInter(activity);
-                onComplete.run();
-                return;
-            }
-            if ((provider.equals("UNITY") || provider.equals("BOTH")) && !unityInterId.isEmpty() && isUnityInitialized) {
+                mAdMobInter.show(activity); mAdMobInter = null; loadAdMobInter(activity); onComplete.run();
+            } else if ((provider.equals("UNITY") || provider.equals("BOTH")) && !unityInterId.isEmpty() && isUnityInitialized) {
                 UnityAds.show(activity, unityInterId, new IUnityAdsShowListener() {
                     public void onUnityAdsShowComplete(String i, UnityAds.UnityAdsShowCompletionState s) { onComplete.run(); }
                     public void onUnityAdsShowFailure(String i, UnityAds.UnityAdsShowError e, String m) { onComplete.run(); }
@@ -385,9 +302,220 @@ public class AdsManager {
                     public void onUnityAdsShowClick(String i) {}
                 });
                 return;
+            } else onComplete.run();
+        } else onComplete.run();
+    }
+}
+EOF
+
+# 9. MAIN ACTIVITY (FIXED IMPORT ERRORS)
+echo "📱 [9/16] MainActivity with Fixes..."
+cat > "app/src/main/java/com/base/app/MainActivity.java" <<EOF
+package com.base.app;
+
+import android.app.Activity;
+import android.content.Intent;
+import android.os.Bundle;
+import android.view.Gravity;
+import android.view.View;
+import android.widget.*;
+import android.graphics.Color;
+import android.graphics.Typeface; // FIXED
+import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.StateListDrawable; // FIXED
+import android.net.Uri;
+import org.json.*;
+import java.io.*;
+import java.net.*;
+import java.util.*;
+import android.os.AsyncTask; // FIXED
+import com.bumptech.glide.Glide;
+import com.google.firebase.messaging.FirebaseMessaging;
+import com.google.android.material.bottomnavigation.BottomNavigationView; // FIXED
+
+public class MainActivity extends Activity {
+    private String CONFIG_URL = "$CONFIG_URL"; 
+    private LinearLayout container, headerLayout, currentRow;
+    private TextView titleTxt; 
+    private ImageView splash, refreshBtn, shareBtn, tgBtn, waBtn;
+    private RelativeLayout root;
+    private ScrollView sv;
+    private String hColor="#2196F3", tColor="#FFFFFF", bColor="#F0F0F0", fColor="#FF9800", menuType="LIST";
+    private String playerConfigStr="", telegramUrl="", whatsappUrl="";
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        FirebaseMessaging.getInstance().getToken().addOnCompleteListener(task -> {
+            if (task.isSuccessful() && task.getResult() != null) {
+                String token = task.getResult();
+                getSharedPreferences("TITAN_PREFS", MODE_PRIVATE).edit().putString("fcm_token", token).apply();
+                syncToken(token);
             }
-            onComplete.run();
-        } else { onComplete.run(); }
+        });
+        root = new RelativeLayout(this);
+        splash = new ImageView(this);
+        splash.setScaleType(ImageView.ScaleType.CENTER_CROP);
+        splash.setBackgroundColor(Color.WHITE);
+        root.addView(splash, new RelativeLayout.LayoutParams(-1,-1));
+        
+        setupMainUI();
+        setContentView(root);
+        new Fetch().execute(CONFIG_URL);
+    }
+
+    private void setupMainUI() {
+        headerLayout = new LinearLayout(this);
+        headerLayout.setId(View.generateViewId());
+        headerLayout.setPadding(30,30,30,30);
+        headerLayout.setGravity(Gravity.CENTER_VERTICAL);
+        headerLayout.setElevation(10f);
+        headerLayout.setVisibility(View.GONE);
+        titleTxt = new TextView(this);
+        titleTxt.setTextSize(20);
+        titleTxt.setTypeface(null, Typeface.BOLD); // Typeface FIXED
+        headerLayout.addView(titleTxt, new LinearLayout.LayoutParams(0, -2, 1.0f));
+
+        tgBtn = new ImageView(this); tgBtn.setImageResource(android.R.drawable.ic_dialog_email); tgBtn.setPadding(15,0,15,0); tgBtn.setVisibility(View.GONE); headerLayout.addView(tgBtn);
+        waBtn = new ImageView(this); waBtn.setImageResource(android.R.drawable.ic_menu_call); waBtn.setPadding(15,0,15,0); waBtn.setVisibility(View.GONE); headerLayout.addView(waBtn);
+        shareBtn = new ImageView(this); shareBtn.setImageResource(android.R.drawable.ic_menu_share); shareBtn.setPadding(20,0,20,0); shareBtn.setOnClickListener(v -> shareApp()); headerLayout.addView(shareBtn);
+        refreshBtn = new ImageView(this); refreshBtn.setImageResource(android.R.drawable.ic_popup_sync);
+        refreshBtn.setOnClickListener(v -> {
+            Toast.makeText(this, "Yenileniyor...", Toast.LENGTH_SHORT).show();
+            container.removeAllViews(); currentRow = null;
+            new Fetch().execute(CONFIG_URL);
+        });
+        headerLayout.addView(refreshBtn);
+
+        RelativeLayout.LayoutParams hp = new RelativeLayout.LayoutParams(-1,-2); hp.addRule(RelativeLayout.ALIGN_PARENT_TOP); root.addView(headerLayout, hp);
+        sv = new ScrollView(this); sv.setId(View.generateViewId()); sv.setVisibility(View.GONE);
+        container = new LinearLayout(this); container.setOrientation(LinearLayout.VERTICAL); container.setPadding(20,20,20,150); sv.addView(container);
+        RelativeLayout.LayoutParams sp = new RelativeLayout.LayoutParams(-1,-1); sp.addRule(RelativeLayout.BELOW, headerLayout.getId()); root.addView(sv, sp);
+    }
+
+    private void syncToken(String token) {
+        new Thread(() -> {
+            try {
+                URL url = new URL(CONFIG_URL.split("api.php")[0]+"update_token.php");
+                HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                conn.setRequestMethod("POST"); conn.setDoOutput(true);
+                conn.getOutputStream().write(("fcm_token=" + token + "&package_name=" + getPackageName()).getBytes());
+                conn.getResponseCode();
+            } catch (Exception e) {}
+        }).start();
+    }
+
+    private void shareApp() { startActivity(Intent.createChooser(new Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, "Indir: https://play.google.com/store/apps/details?id=" + getPackageName()), "Paylaş")); }
+
+    // FIXED: renderBottomNav Method Added
+    private void renderBottomNav(JSONArray modules) {
+        try {
+            BottomNavigationView bnv = new BottomNavigationView(this);
+            bnv.setId(View.generateViewId());
+            bnv.setBackgroundColor(Color.WHITE);
+            int limit = Math.min(modules.length(), 5);
+            for(int i=0; i<limit; i++) {
+                JSONObject m = modules.getJSONObject(i);
+                bnv.getMenu().add(0, i, 0, m.getString("title")).setIcon(android.R.drawable.ic_menu_view);
+            }
+            bnv.setOnNavigationItemSelectedListener(item -> {
+                try {
+                    JSONObject m = modules.getJSONObject(item.getItemId());
+                    JSONObject h = new JSONObject();
+                    if(m.has("ua")) h.put("User-Agent", m.getString("ua"));
+                    open(m.getString("type"), m.optString("url"), m.optString("content"), h.toString());
+                } catch(Exception e){}
+                return true;
+            });
+            RelativeLayout.LayoutParams lp = new RelativeLayout.LayoutParams(-1, -2);
+            lp.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM);
+            root.addView(bnv, lp);
+            RelativeLayout.LayoutParams sp = (RelativeLayout.LayoutParams) sv.getLayoutParams();
+            sp.addRule(RelativeLayout.ABOVE, bnv.getId());
+            sv.setLayoutParams(sp);
+        } catch(Exception e) {}
+    }
+
+    private void addBtn(String txt, String type, String url, String cont, String ua, String ref, String org) {
+        JSONObject h = new JSONObject();
+        try { if(ua!=null)h.put("User-Agent",ua); if(ref!=null)h.put("Referer",ref); if(org!=null)h.put("Origin",org); } catch(Exception e){}
+        String hStr = h.toString();
+        View v = null;
+        if(menuType.equals("GRID")) {
+            if(currentRow == null || currentRow.getChildCount() >= 2) { currentRow = new LinearLayout(this); currentRow.setOrientation(0); currentRow.setWeightSum(2); container.addView(currentRow); }
+            Button b = new Button(this); b.setText(txt); b.setTextColor(Color.parseColor(tColor)); setFocusBg(b);
+            LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(0, 200, 1.0f); p.setMargins(10,10,10,10); b.setLayoutParams(p);
+            b.setOnClickListener(x -> AdsManager.checkInter(this, () -> open(type, url, cont, hStr))); currentRow.addView(b); return;
+        } else {
+            Button b = new Button(this); b.setText(txt); b.setPadding(40,40,40,40); b.setTextColor(Color.parseColor(tColor)); setFocusBg(b);
+            LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-1, -2); p.setMargins(0,0,0,20); b.setLayoutParams(p);
+            v = b; v.setOnClickListener(x -> AdsManager.checkInter(this, () -> open(type, url, cont, hStr)));
+        }
+        if(v != null) container.addView(v);
+    }
+
+    private void setFocusBg(View v) {
+        GradientDrawable d = new GradientDrawable(); d.setColor(Color.parseColor(hColor)); d.setCornerRadius(20);
+        GradientDrawable f = new GradientDrawable(); f.setColor(Color.parseColor(fColor)); f.setCornerRadius(20); f.setStroke(5, Color.WHITE);
+        
+        // StateListDrawable FIXED
+        StateListDrawable s = new StateListDrawable(); 
+        s.addState(new int[]{android.R.attr.state_focused}, f); 
+        s.addState(new int[]{android.R.attr.state_pressed}, f); 
+        s.addState(new int[]{}, d);
+        
+        v.setBackground(s); v.setFocusable(true); v.setClickable(true);
+    }
+
+    private void open(String t, String u, String c, String h) {
+        if(t.equals("WEB") || t.equals("HTML")) { Intent i = new Intent(this, WebViewActivity.class); i.putExtra("WEB_URL", u); i.putExtra("HTML_DATA", c); startActivity(i); } 
+        else if(t.equals("SINGLE_STREAM")) { Intent i = new Intent(this, PlayerActivity.class); i.putExtra("VIDEO_URL", u); i.putExtra("HEADERS_JSON", h); i.putExtra("PLAYER_CONFIG", playerConfigStr); startActivity(i); } 
+        else { Intent i = new Intent(this, ChannelListActivity.class); i.putExtra("LIST_URL", u); i.putExtra("LIST_CONTENT", c); i.putExtra("TYPE", t); i.putExtra("HEADER_COLOR", hColor); i.putExtra("BG_COLOR", bColor); i.putExtra("TEXT_COLOR", tColor); i.putExtra("FOCUS_COLOR", fColor); i.putExtra("PLAYER_CONFIG", playerConfigStr); i.putExtra("L_TYPE", "CLASSIC"); i.putExtra("L_BG", "#FFFFFF"); i.putExtra("L_RAD", 0); i.putExtra("L_ICON", "SQUARE"); i.putExtra("L_BORDER_W", 0); i.putExtra("L_BORDER_C", "#DDDDDD"); startActivity(i); }
+    }
+
+    class Fetch extends AsyncTask<String,Void,String> { // AsyncTask FIXED
+        protected String doInBackground(String... u) {
+            try { URL url = new URL(u[0]); HttpURLConnection c = (HttpURLConnection)url.openConnection(); BufferedReader r = new BufferedReader(new InputStreamReader(c.getInputStream())); StringBuilder s = new StringBuilder(); String l; while((l=r.readLine())!=null)s.append(l); return s.toString(); } catch(Exception e){ return null; }
+        }
+        protected void onPostExecute(String s) {
+            if(s==null) return;
+            try {
+                JSONObject j = new JSONObject(s);
+                JSONObject ui = j.optJSONObject("ui_config");
+                hColor = ui.optString("header_color"); bColor = ui.optString("bg_color"); tColor = ui.optString("text_color"); fColor = ui.optString("focus_color"); menuType = ui.optString("menu_type", "LIST");
+                playerConfigStr = j.optString("player_config", "{}"); telegramUrl = ui.optString("telegram_url"); whatsappUrl = ui.optString("whatsapp_url");
+                String spl = ui.optString("splash_image");
+                if(!spl.isEmpty()){
+                    if(!spl.startsWith("http")) spl = CONFIG_URL.substring(0, CONFIG_URL.lastIndexOf("/") + 1) + spl;
+                    Glide.with(MainActivity.this).load(spl).into(splash);
+                }
+                if(ui.optString("startup_mode").equals("DIRECT")) {
+                    String dType = ui.optString("direct_type"); String dUrl = ui.optString("direct_url");
+                    if(dType.equals("WEB")) { Intent i = new Intent(MainActivity.this, WebViewActivity.class); i.putExtra("WEB_URL", dUrl); startActivity(i); } else { open(dType, dUrl, "", ""); }
+                    finish(); return;
+                }
+                titleTxt.setText(ui.optString("custom_header_text").isEmpty() ? j.optString("app_name") : ui.optString("custom_header_text"));
+                titleTxt.setTextColor(Color.parseColor(tColor));
+                headerLayout.setBackgroundColor(Color.parseColor(hColor)); 
+                ((View)container.getParent()).setBackgroundColor(Color.parseColor(bColor));
+                if(ui.optBoolean("show_header", true)) headerLayout.setVisibility(View.VISIBLE);
+                refreshBtn.setVisibility(ui.optBoolean("show_refresh", true) ? View.VISIBLE : View.GONE);
+                shareBtn.setVisibility(ui.optBoolean("show_share", true) ? View.VISIBLE : View.GONE);
+                if(ui.optBoolean("show_telegram", false) && !telegramUrl.isEmpty()) { tgBtn.setVisibility(View.VISIBLE); tgBtn.setOnClickListener(v -> { try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(telegramUrl))); } catch(Exception e){} }); }
+                if(ui.optBoolean("show_whatsapp", false) && !whatsappUrl.isEmpty()) { waBtn.setVisibility(View.VISIBLE); waBtn.setOnClickListener(v -> { try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(whatsappUrl))); } catch(Exception e){} }); }
+                container.removeAllViews(); currentRow = null;
+                JSONArray m = j.getJSONArray("modules");
+                if(menuType.equals("BOTTOM")) renderBottomNav(m); // renderBottomNav CALL FIXED
+                else {
+                    for(int i=0; i<m.length(); i++) {
+                        JSONObject o = m.getJSONObject(i);
+                        addBtn(o.getString("title"), o.getString("type"), o.optString("url"), o.optString("content"), o.optString("ua"), o.optString("ref"), o.optString("org"));
+                    }
+                }
+                new android.os.Handler().postDelayed(() -> { splash.setVisibility(View.GONE); sv.setVisibility(View.VISIBLE); }, ui.optInt("splash_duration", 3000));
+                AdsManager.init(MainActivity.this, j.optJSONObject("ads_config"));
+            } catch(Exception e){}
+        }
     }
 }
 EOF
@@ -412,13 +540,13 @@ public class MyFirebaseMessagingService extends FirebaseMessagingService {
         else if (remoteMessage.getData().size() > 0) sendNotification(remoteMessage.getData().get("title"), remoteMessage.getData().get("body"));
     }
     public void onNewToken(String token) { getSharedPreferences("TITAN_PREFS", MODE_PRIVATE).edit().putString("fcm_token", token).apply(); }
-    private void sendNotification(String title, String messageBody) {
+    private void sendNotification(String title, String body) {
         Intent intent = new Intent(this, MainActivity.class);
         intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
         PendingIntent pendingIntent = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_ONE_SHOT | PendingIntent.FLAG_IMMUTABLE);
         NotificationCompat.Builder notificationBuilder = new NotificationCompat.Builder(this, "TitanChannel")
                 .setSmallIcon(android.R.drawable.ic_dialog_info)
-                .setContentTitle(title).setContentText(messageBody).setAutoCancel(true)
+                .setContentTitle(title).setContentText(body).setAutoCancel(true)
                 .setSound(RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)).setContentIntent(pendingIntent);
         NotificationManager notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -430,198 +558,7 @@ public class MyFirebaseMessagingService extends FirebaseMessagingService {
 }
 EOF
 
-# 11. MAIN ACTIVITY
-cat > "app/src/main/java/com/base/app/MainActivity.java" <<EOF
-package com.base.app;
-import android.app.Activity;
-import android.content.Intent;
-import android.os.Bundle;
-import android.view.*;
-import android.widget.*;
-import android.graphics.Color;
-import android.graphics.drawable.GradientDrawable;
-import android.net.Uri;
-import org.json.*;
-import java.io.*;
-import java.net.*;
-import java.util.*;
-import com.bumptech.glide.Glide;
-import com.google.firebase.messaging.FirebaseMessaging;
-
-public class MainActivity extends Activity {
-    private String CONFIG_URL = "$CONFIG_URL"; 
-    private LinearLayout container, headerLayout, currentRow;
-    private TextView titleTxt; 
-    private ImageView splash, refreshBtn, shareBtn, tgBtn, waBtn;
-    private RelativeLayout root;
-    private ScrollView sv;
-    private String hColor, tColor, bColor, fColor, menuType;
-    private String playerConfigStr="", telegramUrl="", whatsappUrl="";
-
-    @Override
-    protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        FirebaseMessaging.getInstance().getToken().addOnCompleteListener(task -> {
-            if (task.isSuccessful() && task.getResult() != null) {
-                String token = task.getResult();
-                getSharedPreferences("TITAN_PREFS", MODE_PRIVATE).edit().putString("fcm_token", token).apply();
-                syncToken(token);
-            }
-        });
-        root = new RelativeLayout(this);
-        splash = new ImageView(this);
-        splash.setScaleType(ImageView.ScaleType.CENTER_CROP);
-        splash.setBackgroundColor(Color.WHITE);
-        root.addView(splash, new RelativeLayout.LayoutParams(-1,-1));
-        setupMainUI();
-        setContentView(root);
-        new Fetch().execute(CONFIG_URL);
-    }
-
-    private void setupMainUI() {
-        headerLayout = new LinearLayout(this);
-        headerLayout.setId(View.generateViewId());
-        headerLayout.setPadding(30,30,30,30);
-        headerLayout.setGravity(Gravity.CENTER_VERTICAL);
-        headerLayout.setElevation(10f);
-        headerLayout.setVisibility(View.GONE);
-        
-        titleTxt = new TextView(this);
-        titleTxt.setTextSize(20);
-        titleTxt.setTypeface(null, Typeface.BOLD);
-        headerLayout.addView(titleTxt, new LinearLayout.LayoutParams(0, -2, 1.0f));
-
-        tgBtn = new ImageView(this); tgBtn.setImageResource(android.R.drawable.ic_dialog_email); tgBtn.setPadding(15,0,15,0); tgBtn.setVisibility(View.GONE); headerLayout.addView(tgBtn);
-        waBtn = new ImageView(this); waBtn.setImageResource(android.R.drawable.ic_menu_call); waBtn.setPadding(15,0,15,0); waBtn.setVisibility(View.GONE); headerLayout.addView(waBtn);
-        shareBtn = new ImageView(this); shareBtn.setImageResource(android.R.drawable.ic_menu_share); shareBtn.setPadding(20,0,20,0); shareBtn.setOnClickListener(v -> shareApp()); headerLayout.addView(shareBtn);
-        refreshBtn = new ImageView(this); refreshBtn.setImageResource(android.R.drawable.ic_popup_sync);
-        refreshBtn.setOnClickListener(v -> {
-            Toast.makeText(this, "Yenileniyor...", Toast.LENGTH_SHORT).show();
-            container.removeAllViews(); currentRow = null;
-            new Fetch().execute(CONFIG_URL);
-        });
-        headerLayout.addView(refreshBtn);
-
-        RelativeLayout.LayoutParams hp = new RelativeLayout.LayoutParams(-1,-2); hp.addRule(RelativeLayout.ALIGN_PARENT_TOP); root.addView(headerLayout, hp);
-        sv = new ScrollView(this); sv.setId(View.generateViewId()); sv.setVisibility(View.GONE);
-        container = new LinearLayout(this); container.setOrientation(LinearLayout.VERTICAL); container.setPadding(20,20,20,150); sv.addView(container);
-        RelativeLayout.LayoutParams sp = new RelativeLayout.LayoutParams(-1,-1); sp.addRule(RelativeLayout.BELOW, headerLayout.getId()); root.addView(sv, sp);
-    }
-
-    private void syncToken(String token) {
-        new Thread(() -> {
-            try {
-                String baseUrl = CONFIG_URL.contains("api.php") ? CONFIG_URL.substring(0, CONFIG_URL.indexOf("api.php")) : CONFIG_URL.substring(0, CONFIG_URL.lastIndexOf("/") + 1);
-                URL url = new URL(baseUrl + "update_token.php");
-                HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-                conn.setRequestMethod("POST"); conn.setDoOutput(true);
-                String data = "fcm_token=" + URLEncoder.encode(token, "UTF-8") + "&package_name=" + URLEncoder.encode(getPackageName(), "UTF-8");
-                OutputStream os = conn.getOutputStream(); os.write(data.getBytes()); os.flush(); os.close();
-            } catch (Exception e) {}
-        }).start();
-    }
-
-    private void shareApp() { startActivity(Intent.createChooser(new Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, titleTxt.getText() + " İndir: https://play.google.com/store/apps/details?id=" + getPackageName()), "Paylaş")); }
-
-    private void addBtn(String txt, String type, String url, String cont, String ua, String ref, String org) {
-        JSONObject h = new JSONObject();
-        try { if(ua!=null)h.put("User-Agent",ua); if(ref!=null)h.put("Referer",ref); if(org!=null)h.put("Origin",org); } catch(Exception e){}
-        String hStr = h.toString();
-        View v = null;
-        if(menuType.equals("GRID")) {
-            if(currentRow == null || currentRow.getChildCount() >= 2) { currentRow = new LinearLayout(this); currentRow.setOrientation(0); currentRow.setWeightSum(2); container.addView(currentRow); }
-            Button b = new Button(this); b.setText(txt); b.setTextColor(Color.parseColor(tColor)); setFocusBg(b);
-            LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(0, 200, 1.0f); p.setMargins(10,10,10,10); b.setLayoutParams(p);
-            b.setOnClickListener(x -> AdsManager.checkInter(this, () -> open(type, url, cont, hStr))); currentRow.addView(b); return;
-        } else {
-            Button b = new Button(this); b.setText(txt); b.setPadding(40,40,40,40); b.setTextColor(Color.parseColor(tColor)); setFocusBg(b);
-            LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-1, -2); p.setMargins(0,0,0,20); b.setLayoutParams(p);
-            v = b; v.setOnClickListener(x -> AdsManager.checkInter(this, () -> open(type, url, cont, hStr)));
-        }
-        if(v != null) container.addView(v);
-    }
-
-    private void setFocusBg(View v) {
-        GradientDrawable d = new GradientDrawable(); d.setColor(Color.parseColor(hColor)); d.setCornerRadius(20);
-        GradientDrawable f = new GradientDrawable(); f.setColor(Color.parseColor(fColor)); f.setCornerRadius(20); f.setStroke(5, Color.WHITE);
-        StateListDrawable s = new StateListDrawable(); s.addState(new int[]{android.R.attr.state_focused}, f); s.addState(new int[]{android.R.attr.state_pressed}, f); s.addState(new int[]{}, d);
-        v.setBackground(s); v.setFocusable(true); v.setClickable(true);
-    }
-
-    private void open(String t, String u, String c, String h) {
-        if(t.equals("WEB") || t.equals("HTML")) { Intent i = new Intent(this, WebViewActivity.class); i.putExtra("WEB_URL", u); i.putExtra("HTML_DATA", c); startActivity(i); } 
-        else if(t.equals("SINGLE_STREAM")) { Intent i = new Intent(this, PlayerActivity.class); i.putExtra("VIDEO_URL", u); i.putExtra("HEADERS_JSON", h); i.putExtra("PLAYER_CONFIG", playerConfigStr); startActivity(i); } 
-        else { Intent i = new Intent(this, ChannelListActivity.class); i.putExtra("LIST_URL", u); i.putExtra("LIST_CONTENT", c); i.putExtra("TYPE", t); i.putExtra("HEADER_COLOR", hColor); i.putExtra("BG_COLOR", bColor); i.putExtra("TEXT_COLOR", tColor); i.putExtra("FOCUS_COLOR", fColor); i.putExtra("PLAYER_CONFIG", playerConfigStr); i.putExtra("L_TYPE", "CLASSIC"); i.putExtra("L_BG", "#FFFFFF"); i.putExtra("L_RAD", 0); i.putExtra("L_ICON", "SQUARE"); i.putExtra("L_BORDER_W", 0); i.putExtra("L_BORDER_C", "#DDDDDD"); startActivity(i); }
-    }
-
-    class Fetch extends AsyncTask<String,Void,String> {
-        protected String doInBackground(String... u) {
-            try { URL url = new URL(u[0]); HttpURLConnection c = (HttpURLConnection)url.openConnection(); BufferedReader r = new BufferedReader(new InputStreamReader(c.getInputStream())); StringBuilder s = new StringBuilder(); String l; while((l=r.readLine())!=null)s.append(l); return s.toString(); } catch(Exception e){ return null; }
-        }
-        protected void onPostExecute(String s) {
-            if(s==null) return;
-            try {
-                JSONObject j = new JSONObject(s);
-                JSONObject ui = j.optJSONObject("ui_config");
-                
-                hColor = ui.optString("header_color"); bColor = ui.optString("bg_color"); tColor = ui.optString("text_color"); fColor = ui.optString("focus_color"); menuType = ui.optString("menu_type", "LIST");
-                playerConfigStr = j.optString("player_config", "{}"); telegramUrl = ui.optString("telegram_url"); whatsappUrl = ui.optString("whatsapp_url");
-                
-                String spl = ui.optString("splash_image");
-                if(!spl.isEmpty()){
-                    if(!spl.startsWith("http")) spl = CONFIG_URL.substring(0, CONFIG_URL.lastIndexOf("/") + 1) + spl;
-                    Glide.with(MainActivity.this).load(spl).into(splash);
-                }
-
-                if(ui.optString("startup_mode").equals("DIRECT")) {
-                    String dType = ui.optString("direct_type"); String dUrl = ui.optString("direct_url");
-                    if(dType.equals("WEB")) { Intent i = new Intent(MainActivity.this, WebViewActivity.class); i.putExtra("WEB_URL", dUrl); startActivity(i); } 
-                    else { open(dType, dUrl, "", ""); }
-                    finish(); return;
-                }
-
-                titleTxt.setText(ui.optString("custom_header_text").isEmpty() ? j.optString("app_name") : ui.optString("custom_header_text"));
-                titleTxt.setTextColor(Color.parseColor(tColor));
-                headerLayout.setBackgroundColor(Color.parseColor(hColor)); 
-                ((View)container.getParent()).setBackgroundColor(Color.parseColor(bColor));
-                
-                if(ui.optBoolean("show_header", true)) headerLayout.setVisibility(View.VISIBLE);
-                
-                refreshBtn.setVisibility(ui.optBoolean("show_refresh", true) ? View.VISIBLE : View.GONE);
-                shareBtn.setVisibility(ui.optBoolean("show_share", true) ? View.VISIBLE : View.GONE);
-                
-                if(ui.optBoolean("show_telegram", false) && !telegramUrl.isEmpty()) { 
-                    tgBtn.setVisibility(View.VISIBLE); 
-                    tgBtn.setOnClickListener(v -> { try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(telegramUrl))); } catch(Exception e){} }); 
-                }
-                if(ui.optBoolean("show_whatsapp", false) && !whatsappUrl.isEmpty()) { 
-                    waBtn.setVisibility(View.VISIBLE); 
-                    waBtn.setOnClickListener(v -> { try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(whatsappUrl))); } catch(Exception e){} }); 
-                }
-
-                container.removeAllViews(); currentRow = null;
-                JSONArray m = j.getJSONArray("modules");
-                if(menuType.equals("BOTTOM")) renderBottomNav(m);
-                else {
-                    for(int i=0; i<m.length(); i++) {
-                        JSONObject o = m.getJSONObject(i);
-                        addBtn(o.getString("title"), o.getString("type"), o.optString("url"), o.optString("content"), o.optString("ua"), o.optString("ref"), o.optString("org"));
-                    }
-                }
-                
-                new android.os.Handler().postDelayed(() -> {
-                    splash.setVisibility(View.GONE);
-                    sv.setVisibility(View.VISIBLE);
-                }, ui.optInt("splash_duration", 3000));
-
-                AdsManager.init(MainActivity.this, j.optJSONObject("ads_config"));
-            } catch(Exception e){}
-        }
-    }
-}
-EOF
-
-# 12. WEBVIEW
+# 11. WEBVIEW
 cat > "app/src/main/java/com/base/app/WebViewActivity.java" <<EOF
 package com.base.app;
 import android.app.Activity;
@@ -665,7 +602,7 @@ public class WebViewActivity extends Activity {
 }
 EOF
 
-# 13. CHANNEL LIST
+# 12. CHANNEL LIST
 cat > "app/src/main/java/com/base/app/ChannelListActivity.java" <<EOF
 package com.base.app;
 import android.app.Activity;
@@ -780,7 +717,7 @@ public class ChannelListActivity extends Activity {
 }
 EOF
 
-# 14. PLAYER ACTIVITY
+# 13. PLAYER ACTIVITY
 cat > "app/src/main/java/com/base/app/PlayerActivity.java" <<EOF
 package com.base.app;
 
@@ -791,7 +728,9 @@ import android.os.Bundle;
 import android.view.*;
 import android.widget.*;
 import androidx.media3.common.MediaItem;
+import androidx.media3.datasource.DefaultHttpDataSource;
 import androidx.media3.exoplayer.ExoPlayer;
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory;
 import androidx.media3.ui.PlayerView;
 import androidx.media3.ui.AspectRatioFrameLayout;
 import org.json.JSONObject;
@@ -805,30 +744,41 @@ public class PlayerActivity extends Activity {
     protected void onCreate(Bundle s) {
         super.onCreate(s);
         requestWindowFeature(Window.FEATURE_NO_TITLE);
-        getWindow().setFlags(1024,1024);
+        getWindow().setFlags(1024,1024); // Fullscreen
         
-        FrameLayout r = new FrameLayout(this); r.setBackgroundColor(0xFF000000);
-        pv = new PlayerView(this); pv.setShowNextButton(false); pv.setShowPreviousButton(false); r.addView(pv);
-        spin = new ProgressBar(this); FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(-2,-2); lp.gravity=17; r.addView(spin, lp);
+        FrameLayout r = new FrameLayout(this);
+        r.setBackgroundColor(0xFF000000);
+        pv = new PlayerView(this);
+        pv.setShowNextButton(false); pv.setShowPreviousButton(false);
+        r.addView(pv);
+        spin = new ProgressBar(this);
+        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(-2,-2); lp.gravity=17;
+        r.addView(spin, lp);
         setContentView(r);
         
         try {
             JSONObject c = new JSONObject(getIntent().getStringExtra("PLAYER_CONFIG"));
-            if (c.optBoolean("auto_rotate", true)) setRequestedOrientation(4);
+            if (c.optBoolean("auto_rotate", true)) setRequestedOrientation(4); // SENSOR
             if (c.optBoolean("enable_overlay", false)) {
-                TextView o = new TextView(this); o.setText(c.optString("watermark_text", ""));
+                TextView o = new TextView(this);
+                o.setText(c.optString("watermark_text", ""));
                 o.setTextColor(Color.parseColor(c.optString("watermark_color", "#FFFFFF")));
-                o.setTextSize(18); o.setPadding(40, 40, 40, 40); o.setBackgroundColor(Color.parseColor("#40000000"));
+                o.setTextSize(18); o.setPadding(40, 40, 40, 40);
+                o.setBackgroundColor(Color.parseColor("#40000000"));
                 FrameLayout.LayoutParams p = new FrameLayout.LayoutParams(-2, -2);
                 String pos = c.optString("watermark_pos", "top_left");
-                if(pos.equals("top_right")) p.gravity = 53; else if(pos.equals("bottom_left")) p.gravity = 83; else if(pos.equals("bottom_right")) p.gravity = 85; else p.gravity = 51;
+                if(pos.equals("top_right")) p.gravity = 53;
+                else if(pos.equals("bottom_left")) p.gravity = 83;
+                else if(pos.equals("bottom_right")) p.gravity = 85;
+                else p.gravity = 51;
                 r.addView(o, p);
             }
         } catch (Exception e) {}
         
         String vid = getIntent().getStringExtra("VIDEO_URL");
         if(vid!=null) {
-            pl = new ExoPlayer.Builder(this).build(); pv.setPlayer(pl);
+            pl = new ExoPlayer.Builder(this).build();
+            pv.setPlayer(pl);
             pl.setMediaItem(MediaItem.fromUri(Uri.parse(vid)));
             pl.prepare(); pl.play();
             pl.addListener(new androidx.media3.common.Player.Listener(){
@@ -840,4 +790,4 @@ public class PlayerActivity extends Activity {
 }
 EOF
 
-echo "✅ TITAN APEX V16000 (GS FIX) TAMAMLANDI."
+echo "✅ TITAN APEX V17000 (COMPILATION FIXED) TAMAMLANDI."
